@@ -1,0 +1,35 @@
+{
+  "name": "axum-leptos-htmx-wc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build:ts && bun run build:css",
+    "build:ts": "bun build web/main.ts --outdir static --minify --target browser",
+    "build:css": "tailwindcss -i static/styles.css -o static/app.css --minify",
+    "dev": "bun run dev:ts & bun run dev:css",
+    "dev:ts": "bun build web/main.ts --outdir static --target browser --watch",
+    "dev:css": "tailwindcss -i static/styles.css -o static/app.css --watch",
+    "check": "bun x tsc --noEmit",
+    "lint": "bun x eslint web/ --ext .ts",
+    "format": "bun x prettier --write web/"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.0",
+    "highlight.js": "^11.10.0",
+    "marked": "^15.0.0",
+    "marked-highlight": "^2.2.0",
+    "mermaid": "^11.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/dompurify": "^3.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.7.0"
+  }
+}
