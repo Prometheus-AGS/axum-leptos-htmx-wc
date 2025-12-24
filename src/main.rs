@@ -177,7 +177,6 @@ fn html_shell(title: &str, content: &str) -> String {
                 </a>
                 <div class="flex items-center gap-1 md:gap-2">
                     <nav class="flex items-center gap-1" hx-boost="true">
-                        <a href="/" class="px-3 py-2 rounded-xl text-sm text-textSecondary hover:text-textPrimary hover:bg-surface transition-all">Chat</a>
                         <a href="/about" class="px-3 py-2 rounded-xl text-sm text-textSecondary hover:text-textPrimary hover:bg-surface transition-all">About</a>
                     </nav>
                     <theme-switcher></theme-switcher>
@@ -226,6 +225,35 @@ fn chat_content() -> &'static str {
                         x-bind:is-estimate="$store.chat.tokenUsage.isEstimate"
                         model-id="gpt-4o">
                     </token-counter>
+                    <button
+                        type="button"
+                        class="p-2 rounded-xl hover:bg-surface transition-colors"
+                        aria-label="Start new chat"
+                        title="Start new chat"
+                        x-on:click="
+                            // Clear session and start fresh
+                            $store.chat.sessionId = null;
+                            $store.chat.tokenUsage = {
+                                input: 0,
+                                output: 0,
+                                total: 0,
+                                limit: 128000,
+                                isEstimate: true,
+                                cost: 0
+                            };
+                            
+                            // Create new conversation in PGlite
+                            const chatStream = document.querySelector('chat-stream');
+                            if (chatStream) {
+                                chatStream.createNewConversation();
+                            }
+                        "
+                    >
+                        <svg class="h-5 w-5 text-textPrimary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5v14"/>
+                            <path d="M5 12h14"/>
+                        </svg>
+                    </button>
                 </div>
             </header>
             
@@ -249,12 +277,16 @@ fn chat_content() -> &'static str {
                         chatStream.addUserMessage(msg);
                     }
                     
-                    // Set session_id from Alpine store if exists
+                    // Set session_id from Alpine store if exists (or remove if empty)
                     const Alpine = window.Alpine;
+                    const sessionInput = this.querySelector('[name=session_id]');
                     if (Alpine) {
                         const chatStore = Alpine.store('chat');
                         if (chatStore && chatStore.sessionId) {
-                            this.querySelector('[name=session_id]').value = chatStore.sessionId;
+                            sessionInput.value = chatStore.sessionId;
+                        } else {
+                            // Remove session_id field if no session exists (let server create new one)
+                            sessionInput.value = '';
                         }
                     }
                 "
@@ -422,8 +454,15 @@ async fn api_chat(
     );
 
     let session = if let Some(id) = &req.session_id {
-        tracing::debug!(session_id = %id, "Using existing session");
-        state.sessions.get_or_create(id)
+        // Only use existing session if ID is not empty
+        if !id.is_empty() {
+            tracing::debug!(session_id = %id, "Using existing session");
+            state.sessions.get_or_create(id)
+        } else {
+            let session = state.sessions.create();
+            tracing::debug!(session_id = %session.id(), "Created new session (empty ID provided)");
+            session
+        }
     } else {
         let session = state.sessions.create();
         tracing::debug!(session_id = %session.id(), "Created new session");

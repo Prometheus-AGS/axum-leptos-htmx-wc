@@ -249,8 +249,20 @@ async function initialize(): Promise<void> {
   // Initialize Alpine store
   await initializeAlpineStore();
   
-  // Start Alpine.js
-  window.Alpine.start();
+  // Start Alpine.js (check if already initialized)
+  try {
+    if (typeof window.Alpine.store === 'function') {
+      // Alpine is already initialized
+      console.log("[app] Alpine.js already initialized");
+    } else {
+      // Start Alpine
+      window.Alpine.start();
+      console.log("[app] Alpine.js started");
+    }
+  } catch (e) {
+    // Alpine not loaded yet or error
+    console.warn("[app] Alpine.js initialization check failed:", e);
+  }
   
   console.log("[app] Application initialized");
 }

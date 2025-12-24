@@ -129,6 +129,46 @@ export class ChatStream extends HTMLElement {
   }
 
   /**
+   * Create a new conversation and clear the UI.
+   */
+  async createNewConversation(): Promise<void> {
+    try {
+      // Create new conversation in PGlite
+      const newConversation = await pgliteStore.createConversation("New Conversation");
+      this.conversationId = newConversation.id;
+      
+      // Clear UI state
+      this.state.items = [];
+      this.state.streamingText = "";
+      this.state.streamingThinking = "";
+      this.state.streamingReasoning = "";
+      this.state.toolCalls.clear();
+      this.state.citations = [];
+      this.state.status = "idle";
+      
+      // Reset current turn
+      this.currentTurn = this.createEmptyTurn();
+      
+      // Render empty transcript
+      this.renderTranscript();
+      
+      // Notify sidebar to refresh
+      window.dispatchEvent(new CustomEvent('conversation-updated', { 
+        detail: { conversationId: this.conversationId } 
+      }));
+      
+      // Dispatch conversation-changed event
+      window.dispatchEvent(new CustomEvent('conversation-changed', {
+        detail: { conversationId: this.conversationId }
+      }));
+      
+      console.log("[chat-stream] Created new conversation:", this.conversationId);
+    } catch (error) {
+      console.error("[chat-stream] Failed to create new conversation:", error);
+    }
+  }
+
+  /**
    * Load a conversation from PGlite and render its history.
    */
   async loadConversation(id: string): Promise<void> {
