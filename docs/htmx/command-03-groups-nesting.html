@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Command Palette (03) — Groups + Nesting</title>
+
+  <!-- HTMX via CDN for a drop-in HTMX artifact. [5] -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 55%);
+      --on-surface: hsl(var(--primary-hue) 15% 92%);
+      --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+      --surface-container-lowest: hsl(var(--primary-hue) 15% 9%);
+      --surface-container-low: hsl(var(--primary-hue) 14% 12%);
+      --surface-container: hsl(var(--primary-hue) 14% 14%);
+      --surface-container-high: hsl(var(--primary-hue) 14% 17%);
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --r-xl: 20px;
+      --r-lg: 16px;
+      --r-md: 12px;
+      --transition-fast: 150ms cubic-bezier(.4,0,.2,1);
+      --transition-base: 300ms cubic-bezier(.4,0,.2,1);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; padding:22px; font-family: var(--sans); background: radial-gradient(circle at top left, var(--surface-container-lowest) 0, #000 100%); color: var(--on-surface);}    
+    .wrap{max-width:980px; margin:0 auto;}
+    .zone{background: var(--surface-container-low); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 16px;}
+
+    .head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+    h1{font-size:16px; margin:0;}
+    .sub{margin:6px 0 0 0; color:var(--on-surface-variant); font-size:13px; line-height:1.4;}
+    .pill{font-family: var(--mono); font-size:11px; color:var(--on-surface-variant); background: color-mix(in srgb, var(--surface-container-high) 70%, transparent); padding:3px 8px; border-radius:999px; white-space:nowrap;}
+
+    .palette{margin-top: 14px; background: var(--surface-container); border-radius: var(--r-xl); padding: 12px;}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .btn{height: 36px; padding: 0 12px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--on-surface); border:0; cursor:pointer; font-size:12px;}
+
+    .crumbs{margin-top:10px; display:flex; gap:8px; align-items:center; color: var(--on-surface-variant); font-size:12px;}
+    .crumb{font-family: var(--mono); font-size:11px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--surface-container-high) 70%, transparent);}
+
+    .results{margin-top: 10px; border-radius: var(--r-lg); background: var(--surface-container-low); padding: 8px; max-height: 380px; overflow:auto;}
+    .groupTitle{font-size:11px; color: var(--on-surface-variant); font-family: var(--mono); padding: 10px 10px 6px 10px;}
+    .sep{height:1px; background: color-mix(in srgb, var(--surface-container-high) 70%, transparent); margin: 10px 6px; border-radius:999px;}
+
+    .item{display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 10px; border-radius: var(--r-md); background: transparent; cursor:pointer; transition: background var(--transition-base), transform var(--transition-fast); user-select:none;}
+    .item:hover{background: var(--surface-container-high); transform: translateY(-1px);}
+    .left{display:flex; align-items:center; gap:10px; min-width:0;}
+    .icon{width:26px;height:26px;border-radius:10px;background: color-mix(in srgb, var(--primary) 14%, transparent); display:grid; place-items:center; font-weight:800; color: var(--primary);}
+    .label{font-size:13px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .desc{font-size:12px; color: var(--on-surface-variant); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .right{font-family: var(--mono); font-size:11px; color: var(--on-surface-variant);}
+
+    .out{margin-top: 12px; background: var(--surface-container); border-radius: var(--r-xl); padding: 12px; color: var(--on-surface-variant); font-size: 12px; min-height: 48px;}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="zone">
+      <div class="head">
+        <div>
+          <h1>Command (03) — Groups + Nesting</h1>
+          <p class="sub">
+            Demonstrates grouped sections, separators, and nested navigation using scoped HTMX swaps (update only the results panel). [27]
+          </p>
+        </div>
+        <div class="pill">Nested menu</div>
+      </div>
+
+      <div class="palette">
+        <div class="row">
+          <button class="btn" hx-get="/fake/nav?to=root" hx-target="#results" hx-swap="innerHTML">Root</button>
+          <button class="btn" hx-get="/fake/nav?to=settings" hx-target="#results" hx-swap="innerHTML">Settings</button>
+          <button class="btn" hx-get="/fake/nav?to=projects" hx-target="#results" hx-swap="innerHTML">Projects</button>
+        </div>
+
+        <div class="crumbs" id="crumbs">
+          <span>Path:</span> <span class="crumb">root</span>
+        </div>
+
+        <div class="results" id="results"></div>
+      </div>
+
+      <div class="out" id="out">No command executed yet.</div>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(s){
+      return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+    }
+
+    function setCrumbs(parts){
+      const el = document.getElementById('crumbs');
+      el.innerHTML = `<span>Path:</span> ` + parts.map(p => `<span class="crumb">${escapeHtml(p)}</span>`).join(' <span style="color:var(--on-surface-variant)">/</span> ');
+    }
+
+    // Pre-rendered views to simulate nested command screens.
+    function viewRoot(){
+      setCrumbs(['root']);
+      return `
+        <div class="groupTitle">General</div>
+        ${item('help.docs','Open Docs','Help center and references','?','↩︎')}
+        ${itemNav('settings','Settings…','Configure the application','S','→')}
+        <div class="sep"></div>
+        <div class="groupTitle">Work</div>
+        ${itemNav('projects','Projects…','Open recent projects','P','→')}
+      `;
+    }
+
+    function viewSettings(){
+      setCrumbs(['root','settings']);
+      return `
+        <div class="groupTitle">Appearance</div>
+        ${item('theme.dark','Theme: Dark','Use dark surfaces','A','D')}
+        ${item('theme.light','Theme: Light','Use light surfaces','A','L')}
+        <div class="sep"></div>
+        <div class="groupTitle">Account</div>
+        ${item('acct.profile','Profile','Open your profile','U','P')}
+        ${item('acct.signout','Sign out','End your session','U','S')}
+      `;
+    }
+
+    function viewProjects(){
+      setCrumbs(['root','projects']);
+      return `
+        <div class="groupTitle">Recent Projects</div>
+        ${item('proj.open:alpha','Open Alpha','Switch context to Alpha','P','1')}
+        ${item('proj.open:beta','Open Beta','Switch context to Beta','P','2')}
+        ${item('proj.open:gamma','Open Gamma','Switch context to Gamma','P','3')}
+      `;
+    }
+
+    function item(id,label,desc,icon,shortcut){
+      return `
+        <div class="item" role="button" tabindex="0"
+             hx-post="/fake/run" hx-vals='{"id":"${escapeHtml(id)}"}' hx-target="#out" hx-swap="innerHTML">
+          <div class="left">
+            <div class="icon" aria-hidden="true">${escapeHtml(icon)}</div>
+            <div style="min-width:0">
+              <div class="label">${escapeHtml(label)}</div>
+              <div class="desc">${escapeHtml(desc)}</div>
+            </div>
+          </div>
+          <div class="right">${escapeHtml(shortcut)}</div>
+        </div>
+      `;
+    }
+
+    function itemNav(to,label,desc,icon,shortcut){
+      return `
+        <div class="item" role="button" tabindex="0"
+             hx-get="/fake/nav?to=${encodeURIComponent(to)}" hx-target="#results" hx-swap="innerHTML">
+          <div class="left">
+            <div class="icon" aria-hidden="true">${escapeHtml(icon)}</div>
+            <div style="min-width:0">
+              <div class="label">${escapeHtml(label)}</div>
+              <div class="desc">${escapeHtml(desc)}</div>
+            </div>
+          </div>
+          <div class="right">${escapeHtml(shortcut)}</div>
+        </div>
+      `;
+    }
+
+    function render(to){
+      if(to === 'settings') return viewSettings();
+      if(to === 'projects') return viewProjects();
+      return viewRoot();
+    }
+
+    document.getElementById('results').innerHTML = render('root');
+
+    document.body.addEventListener('htmx:configRequest', (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if(!path || !path.startsWith('/fake/')) return;
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute('hx-target');
+      const target = targetSel ? document.querySelector(targetSel) : null;
+
+      setTimeout(() => {
+        if(path.startsWith('/fake/nav')){
+          const url = new URL('http://x' + path);
+          const to = url.searchParams.get('to') || 'root';
+          if(target) target.innerHTML = render(to);
+        }
+        if(path.startsWith('/fake/run')){
+          const vals = JSON.parse(elt.getAttribute('hx-vals') || '{}');
+          const id = vals.id || 'unknown';
+          if(target) target.innerHTML = `<div><strong style="color:var(--on-surface)">Ran</strong> <span style="font-family:var(--mono)">${escapeHtml(id)}</span></div>`;
+        }
+      }, 120);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      const el = document.activeElement;
+      if(el && el.classList?.contains('item')) el.click();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HTMX Context Menu (single file, all variations)</title>
+
+  <!-- HTMX runtime (CDN is expected/allowed for HTMX artifacts) -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <!-- Optional: Alpine is useful for local UI state in HTMX artifacts (open/close, keyboard, etc.) -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    /* =========================
+       Material-ish "zone" tokens
+       ========================= */
+    :root{
+      --hue: 220;
+      --bg: hsl(var(--hue) 20% 98%);
+      --surface: hsl(var(--hue) 20% 96%);
+      --surface-2: hsl(var(--hue) 20% 94%);
+      --surface-3: hsl(var(--hue) 20% 92%);
+      --text: hsl(var(--hue) 25% 14%);
+      --muted: hsl(var(--hue) 10% 42%);
+      --border: hsl(var(--hue) 15% 86%);
+      --shadow: 0 18px 45px rgba(0,0,0,.12), 0 2px 10px rgba(0,0,0,.10);
+
+      --radius: 14px;
+      --radius-sm: 10px;
+
+      --danger: hsl(0 72% 48%);
+      --danger-bg: hsl(0 72% 96%);
+      --ok: hsl(150 45% 35%);
+      --warn: hsl(35 85% 45%);
+
+      --focus: hsl(210 90% 55%);
+      --item-h: 40px;
+      --pad: 10px;
+      --gap: 6px;
+
+      --z-menu: 9999;
+    }
+
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg: hsl(var(--hue) 15% 9%);
+        --surface: hsl(var(--hue) 14% 12%);
+        --surface-2: hsl(var(--hue) 14% 14%);
+        --surface-3: hsl(var(--hue) 14% 17%);
+        --text: hsl(var(--hue) 20% 92%);
+        --muted: hsl(var(--hue) 10% 68%);
+        --border: hsl(var(--hue) 12% 25%);
+        --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+
+        --danger: hsl(0 70% 64%);
+        --danger-bg: hsla(0 70% 20% / .35);
+        --focus: hsl(210 90% 65%);
+      }
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page{
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .card{
+      background: linear-gradient(180deg, var(--surface), var(--surface-2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 1px 0 rgba(0,0,0,.04);
+    }
+
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+    .spacer{flex:1}
+    .pill{
+      font-size:12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--muted);
+    }
+
+    .demo-grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .demo-target{
+      position: relative;
+      min-height: 130px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 14px;
+      user-select: none;
+      overflow: hidden;
+    }
+    .demo-target strong{display:block; margin-bottom:6px}
+    .demo-target p{margin:0; color: var(--muted); font-size: 13px; line-height: 1.35}
+
+    .hint{
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+
+    /* =========================
+       Context menu styling
+       ========================= */
+    .cm-root{position:fixed; inset:0; pointer-events:none; z-index: var(--z-menu);}
+    .cm-backdrop{
+      position:absolute; inset:0;
+      background: transparent;
+      pointer-events:auto;
+    }
+
+    .cm{
+      position:absolute;
+      width: min(320px, calc(100vw - 24px));
+      background: linear-gradient(180deg, var(--surface), var(--surface-2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: var(--pad);
+      pointer-events:auto;
+
+      transform-origin: top left;
+    }
+
+    .cm[hidden]{display:none !important}
+
+    .cm-header{
+      display:flex; align-items:center; gap:10px;
+      padding: 6px 8px 10px 8px;
+    }
+    .cm-title{font-size: 13px; font-weight: 650}
+    .cm-subtitle{font-size: 12px; color: var(--muted); margin-left:auto}
+
+    .cm-search{
+      padding: 0 6px 10px 6px;
+    }
+    .cm-search input{
+      width:100%;
+      height: 36px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-3);
+      color: var(--text);
+      padding: 0 12px;
+      outline:none;
+    }
+    .cm-search input:focus{
+      border-color: color-mix(in srgb, var(--focus) 70%, var(--border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+    }
+
+    .cm-section{padding: 4px 6px}
+    .cm-label{
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      padding: 8px 8px 6px 8px;
+    }
+
+    .cm-sep{
+      height: 1px;
+      background: var(--border);
+      margin: 8px 6px;
+      border-radius: 999px;
+    }
+
+    .cm-item{
+      width:100%;
+      height: var(--item-h);
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      border-radius: 12px;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      text-align:left;
+      font: inherit;
+    }
+
+    .cm-item:hover{
+      background: var(--surface-3);
+    }
+
+    .cm-item:focus{
+      outline:none;
+      border-color: color-mix(in srgb, var(--focus) 70%, var(--border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+    }
+
+    .cm-item[aria-disabled="true"],
+    .cm-item:disabled{
+      opacity: .5;
+      cursor: not-allowed;
+    }
+    .cm-item[aria-disabled="true"]:hover,
+    .cm-item:disabled:hover{
+      background: transparent;
+    }
+
+    .cm-icon{
+      width: 18px;
+      height: 18px;
+      display:inline-grid;
+      place-items:center;
+      color: var(--muted);
+      flex: 0 0 18px;
+    }
+
+    .cm-item--danger{
+      color: var(--danger);
+    }
+    .cm-item--danger:hover{
+      background: color-mix(in srgb, var(--danger-bg) 70%, transparent);
+    }
+
+    .cm-text{display:flex; flex-direction:column; gap:2px; min-width:0; flex:1}
+    .cm-primary{font-size: 13px; font-weight: 560; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .cm-secondary{font-size: 12px; color: var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+    .cm-kbd{
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 8px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .cm-check{
+      width: 18px; height: 18px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface-3);
+      display:grid;
+      place-items:center;
+      flex: 0 0 18px;
+      color: var(--ok);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .cm-radio{
+      width: 18px; height: 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-3);
+      display:grid;
+      place-items:center;
+      flex: 0 0 18px;
+    }
+    .cm-radio > span{
+      width: 10px; height: 10px;
+      border-radius: 999px;
+      background: var(--focus);
+      display:block;
+    }
+
+    /* Small helper "button" for demo */
+    .btn{
+      display:inline-flex; align-items:center; gap:8px;
+      height: 40px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      cursor:pointer;
+      font: inherit;
+    }
+    .btn:hover{background: var(--surface-3)}
+  </style>
+</head>
+
+<body x-data="ContextMenuDemo()" x-init="init()">
+  <div class="page">
+    <div class="card">
+      <div class="row">
+        <div>
+          <div style="font-weight:700">Context Menu (HTMX + Alpine) — one file, all variations</div>
+          <div class="hint">Right-click (or long-press on touch) any demo target below.</div>
+        </div>
+        <div class="spacer"></div>
+        <span class="pill">HTMX fragment is “data”; host can inject + then run htmx.process (and Alpine.initTree) on subtree as needed. [15]</span>
+      </div>
+
+      <div class="demo-grid">
+        <div class="demo-target"
+             @contextmenu.prevent="open($event, 'basic')"
+             @pointerdown="maybeOpenOnLongPress($event, 'basic')">
+          <strong>Basic</strong>
+          <p>Standard items, icons, separators, and shortcuts.</p>
+        </div>
+
+        <div class="demo-target"
+             @contextmenu.prevent="open($event, 'disabled')"
+             @pointerdown="maybeOpenOnLongPress($event, 'disabled')">
+          <strong>Disabled + danger</strong>
+          <p>Disabled options and a destructive action style.</p>
+        </div>
+
+        <div class="demo-target"
+             @contextmenu.prevent="open($event, 'checkboxes')"
+             @pointerdown="maybeOpenOnLongPress($event, 'checkboxes')">
+          <strong>Checkbox items</strong>
+          <p>Toggle states (checked/unchecked) in the menu.</p>
+        </div>
+
+        <div class="demo-target"
+             @contextmenu.prevent="open($event, 'radio')"
+             @pointerdown="maybeOpenOnLongPress($event, 'radio')">
+          <strong>Radio group</strong>
+          <p>Single-select “view mode” group.</p>
+        </div>
+
+        <div class="demo-target"
+             @contextmenu.prevent="open($event, 'withSearch')"
+             @pointerdown="maybeOpenOnLongPress($event, 'withSearch')">
+          <strong>With search + HTMX fetch</strong>
+          <p>Demonstrates hx-get/hx-target/hx-swap to load a “dynamic” section.</p>
+        </div>
+
+        <div class="demo-target"
+             @contextmenu.prevent="open($event, 'nestedLike')"
+             @pointerdown="maybeOpenOnLongPress($event, 'nestedLike')">
+          <strong>“Submenu-like”</strong>
+          <p>Shows a pattern: click an item to swap in a secondary panel (no true submenu needed).</p>
+        </div>
+      </div>
+
+      <div class="hint">
+        Note: This file is intentionally a single artifact that includes styles + all variations in one place, even though HTMX artifacts are often injected/hosted and then enhanced via <code>htmx.process</code> and optionally <code>Alpine.initTree</code>. [15]
+      </div>
+
+      <div style="margin-top:12px">
+        <button class="btn" type="button" @click="openCentered('withSearch')">Open “With search” centered</button>
+        <button class="btn" type="button" @click="openCentered('basic')">Open “Basic” centered</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================
+       Context Menu Root (single instance)
+       ========================= -->
+  <div class="cm-root" x-ref="root">
+    <div class="cm-backdrop" x-show="isOpen" @click="close()" @contextmenu.prevent="close()"></div>
+
+    <!-- MENU: BASIC -->
+    <div class="cm" x-ref="menu_basic" x-show="isOpen && activeVariant==='basic'" x-transition.opacity
+         :style="menuStyle" role="menu" aria-label="Context menu (basic)"
+         @keydown.escape.prevent.stop="close()"
+         @keydown.window.escape="close()">
+      <div class="cm-header">
+        <div class="cm-title">Actions</div>
+        <div class="cm-subtitle" x-text="anchorLabel"></div>
+      </div>
+
+      <div class="cm-section">
+        <button class="cm-item" role="menuitem"
+                hx-post="/fake/copy" hx-swap="none"
+                @click="notify('copy')">
+          <span class="cm-icon">⧉</span>
+          <span class="cm-text">
+            <span class="cm-primary">Copy</span>
+            <span class="cm-secondary">Copy selection to clipboard</span>
+          </span>
+          <span class="cm-kbd">⌘C</span>
+        </button>
+
+        <button class="cm-item" role="menuitem"
+                hx-post="/fake/rename" hx-swap="none"
+                @click="notify('rename')">
+          <span class="cm-icon">✎</span>
+          <span class="cm-text">
+            <span class="cm-primary">Rename</span>
+            <span class="cm-secondary">Edit title in-place</span>
+          </span>
+          <span class="cm-kbd">F2</span>
+        </button>
+
+        <button class="cm-item" role="menuitem"
+                hx-post="/fake/duplicate" hx-swap="none"
+                @click="notify('duplicate')">
+          <span class="cm-icon">⎘</span>
+          <span class="cm-text">
+            <span class="cm-primary">Duplicate</span>
+            <span class="cm-secondary">Create a copy</span>
+          </span>
+          <span class="cm-kbd">⌘D</span>
+        </button>
+      </div>
+
+      <div class="cm-sep"></div>
+
+      <div class="cm-section">
+        <button class="cm-item" role="menuitem"
+                hx-post="/fake/open" hx-swap="none"
+                @click="notify('open')">
+          <span class="cm-icon">↗</span>
+          <span class="cm-text">
+            <span class="cm-primary">Open</span>
+            <span class="cm-secondary">Open in new view</span>
+          </span>
+          <span class="cm-kbd">⏎</span>
+        </button>
+
+        <button class="cm-item cm-item--danger" role="menuitem"
+                hx-delete="/fake/delete" hx-swap="none"
+                @click="notify('delete')">
+          <span class="cm-icon">🗑</span>
+          <span class="cm-text">
+            <span class="cm-primary">Delete</span>
+            <span class="cm-secondary">Move to trash</span>
+          </span>
+          <span class="cm-kbd">⌫</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MENU: DISABLED + DANGER -->
+    <div class="cm" x-ref="menu_disabled" x-show="isOpen && activeVariant==='disabled'" x-transition.opacity
+         :style="menuStyle" role="menu" aria-label="Context menu (disabled)">
+      <div class="cm-header">
+        <div class="cm-title">Actions</div>
+        <div class="cm-subtitle" x-text="anchorLabel"></div>
+      </div>
+
+      <div class="cm-section">
+        <button class="cm-item" role="menuitem"
+                hx-post="/fake/share" hx-swap="none"
+                @click="notify('share')">
+          <span class="cm-icon">⤴</span>
+          <span class="cm-text">
+            <span class="cm-primary">Share…</span>
+            <span class="cm-secondary">Invite collaborators</span>
+          </span>
+          <span class="cm-kbd">⌘⇧S</span>
+        </button>
+
+        <button class="cm-item" role="menuitem" aria-disabled="true" disabled>
+          <span class="cm-icon">⟲</span>
+          <span class="cm-text">
+            <span class="cm-primary">Re-run</span>
+            <span class="cm-secondary">Not available for this item</span>
+          </span>
+          <span class="cm-kbd">R</span>
+        </button>
+
+        <button class="cm-item" role="menuitem" aria-disabled="true" disabled>
+          <span class="cm-icon">⭳</span>
+          <span class="cm-text">
+            <span class="cm-primary">Download</span>
+            <span class="cm-secondary">Requires export permission</span>
+          </span>
+          <span class="cm-kbd">⌘E</span>
+        </button>
+      </div>
+
+      <div class="cm-sep"></div>
+
+      <div class="cm-section">
+        <button class="cm-item cm-item--danger" role="menuitem"
+                hx-delete="/fake/delete" hx-swap="none"
+                @click="notify('delete')">
+          <span class="cm-icon">⚠</span>
+          <span class="cm-text">
+            <span class="cm-primary">Delete permanently</span>
+            <span class="cm-secondary">Cannot be undone</span>
+          </span>
+          <span class="cm-kbd">⇧⌫</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MENU: CHECKBOXES -->
+    <div class="cm" x-ref="menu_checkboxes" x-show="isOpen && activeVariant==='checkboxes'" x-transition.opacity
+         :style="menuStyle" role="menu" aria-label="Context menu (checkboxes)">
+      <div class="cm-header">
+        <div class="cm-title">View</div>
+        <div class="cm-subtitle" x-text="anchorLabel"></div>
+      </div>
+
+      <div class="cm-section">
+        <button class="cm-item" role="menuitemcheckbox"
+                :aria-checked="prefs.showLineNumbers"
+                @click="prefs.showLineNumbers = !prefs.showLineNumbers; notify('toggle:lineNumbers')">
+          <span class="cm-check" x-text="prefs.showLineNumbers ? '✓' : ''"></span>
+          <span class="cm-text">
+            <span class="cm-primary">Show line numbers</span>
+            <span class="cm-secondary">Left gutter markers</span>
+          </span>
+          <span class="cm-kbd">⌥L</span>
+        </button>
+
+        <button class="cm-item" role="menuitemcheckbox"
+                :aria-checked="prefs.wrapLines"
+                @click="prefs.wrapLines = !prefs.wrapLines; notify('toggle:wrapLines')">
+          <span class="cm-check" x-text="prefs.wrapLines ? '✓' : ''"></span>
+          <span class="cm-text">
+            <span class="cm-primary">Wrap long lines</span>
+            <span class="cm-secondary">Avoid horizontal scroll</span>
+          </span>
+          <span class="cm-kbd">⌥W</span>
+        </button>
+
+        <button class="cm-item" role="menuitemcheckbox"
+                :aria-checked="prefs.compactMode"
+                @click="prefs.compactMode = !prefs.compactMode; notify('toggle:compact')">
+          <span class="cm-check" x-text="prefs.compactMode ? '✓' : ''"></span>
+          <span class="cm-text">
+            <span class="cm-primary">Compact mode</span>
+            <span class="cm-secondary">Tighter spacing</span>
+          </span>
+          <span class="cm-kbd">⌥C</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MENU: RADIO -->
+    <div class="cm" x-ref="menu_radio" x-show="isOpen && activeVariant==='radio'" x-transition.opacity
+         :style="menuStyle" role="menu" aria-label="Context menu (radio)">
+      <div class="cm-header">
+        <div class="cm-title">Layout</div>
+        <div class="cm-subtitle" x-text="anchorLabel"></div>
+      </div>
+
+      <div class="cm-label">View mode</div>
+
+      <div class="cm-section" role="group" aria-label="View mode">
+        <button class="cm-item" role="menuitemradio" :aria-checked="prefs.viewMode==='list'"
+                @click="prefs.viewMode='list'; notify('view:list')">
+          <span class="cm-radio">
+            <span x-show="prefs.viewMode==='list'"></span>
+          </span>
+          <span class="cm-text">
+            <span class="cm-primary">List</span>
+            <span class="cm-secondary">Single column</span>
+          </span>
+          <span class="cm-kbd">1</span>
+        </button>
+
+        <button class="cm-item" role="menuitemradio" :aria-checked="prefs.viewMode==='grid'"
+                @click="prefs.viewMode='grid'; notify('view:grid')">
+          <span class="cm-radio">
+            <span x-show="prefs.viewMode==='grid'"></span>
+          </span>
+          <span class="cm-text">
+            <span class="cm-primary">Grid</span>
+            <span class="cm-secondary">Cards</span>
+          </span>
+          <span class="cm-kbd">2</span>
+        </button>
+
+        <button class="cm-item" role="menuitemradio" :aria-checked="prefs.viewMode==='split'"
+                @click="prefs.viewMode='split'; notify('view:split')">
+          <span class="cm-radio">
+            <span x-show="prefs.viewMode==='split'"></span>
+          </span>
+          <span class="cm-text">
+            <span class="cm-primary">Split</span>
+            <span class="cm-secondary">Inspector panel</span>
+          </span>
+          <span class="cm-kbd">3</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MENU: WITH SEARCH + HTMX FETCH -->
+    <div class="cm" x-ref="menu_withSearch" x-show="isOpen && activeVariant==='withSearch'" x-transition.opacity
+         :style="menuStyle" role="menu" aria-label="Context menu (with search)">
+      <div class="cm-header">
+        <div class="cm-title">Command palette</div>
+        <div class="cm-subtitle" x-text="anchorLabel"></div>
+      </div>
+
+      <div class="cm-search">
+        <input type="text" placeholder="Filter actions…" x-model="filter" @keydown.escape.stop="close()">
+      </div>
+
+      <div class="cm-section">
+        <button class="cm-item" role="menuitem"
+                :disabled="!matches('Open')"
+                hx-get="/fake/actions/open" hx-target="#cm-dynamic" hx-swap="innerHTML"
+                @click="notify('open')">
+          <span class="cm-icon">↗</span>
+          <span class="cm-text">
+            <span class="cm-primary">Open</span>
+            <span class="cm-secondary">Loads dynamic panel via HTMX</span>
+          </span>
+          <span class="cm-kbd">O</span>
+        </button>
+
+        <button class="cm-item" role="menuitem"
+                :disabled="!matches('Inspect')"
+                hx-get="/fake/actions/inspect" hx-target="#cm-dynamic" hx-swap="innerHTML"
+                @click="notify('inspect')">
+          <span class="cm-icon">ⓘ</span>
+          <span class="cm-text">
+            <span class="cm-primary">Inspect</span>
+            <span class="cm-secondary">Loads details</span>
+          </span>
+          <span class="cm-kbd">I</span>
+        </button>
+
+        <button class="cm-item cm-item--danger" role="menuitem"
+                :disabled="!matches('Delete')"
+                hx-get="/fake/actions/delete-confirm" hx-target="#cm-dynamic" hx-swap="innerHTML"
+                @click="notify('delete:confirm')">
+          <span class="cm-icon">🗑</span>
+          <span class="cm-text">
+            <span class="cm-primary">Delete…</span>
+            <span class="cm-secondary">Loads confirmation UI</span>
+          </span>
+          <span class="cm-kbd">⌫</span>
+        </button>
+      </div>
+
+      <div class="cm-sep"></div>
+
+      <div class="cm-label">Dynamic section (simulated)</div>
+
+      <!-- We can’t actually serve /fake/* here, so we simulate HTMX responses by intercepting requests in JS below. -->
+      <div id="cm-dynamic" class="cm-section">
+        <div style="font-size:12px;color:var(--muted);padding:8px">
+          Click an action above to load content into this section via HTMX swap.
+        </div>
+      </div>
+    </div>
+
+    <!-- MENU: “SUBMENU-LIKE” (swap panel) -->
+    <div class="cm" x-ref="menu_nestedLike" x-show="isOpen && activeVariant==='nestedLike'" x-transition.opacity
+         :style="menuStyle" role="menu" aria-label="Context menu (nested-like)">
+      <div class="cm-header">
+        <div class="cm-title">More</div>
+        <div class="cm-subtitle" x-text="anchorLabel"></div>
+      </div>
+
+      <template x-if="nestedPanel==='root'">
+        <div class="cm-section">
+          <button class="cm-item" role="menuitem" @click="nestedPanel='sort'">
+            <span class="cm-icon">⇅</span>
+            <span class="cm-text">
+              <span class="cm-primary">Sort…</span>
+              <span class="cm-secondary">Open secondary panel</span>
+            </span>
+            <span class="cm-kbd">→</span>
+          </button>
+
+          <button class="cm-item" role="menuitem" @click="nestedPanel='export'">
+            <span class="cm-icon">⭳</span>
+            <span class="cm-text">
+              <span class="cm-primary">Export…</span>
+              <span class="cm-secondary">Open secondary panel</span>
+            </span>
+            <span class="cm-kbd">→</span>
+          </button>
+
+          <button class="cm-item" role="menuitem" @click="notify('settings')">
+            <span class="cm-icon">⚙</span>
+            <span class="cm-text">
+              <span class="cm-primary">Settings</span>
+              <span class="cm-secondary">Immediate action</span>
+            </span>
+            <span class="cm-kbd">S</span>
+          </button>
+        </div>
+      </template>
+
+      <template x-if="nestedPanel==='sort'">
+        <div>
+          <div class="cm-section">
+            <button class="cm-item" role="menuitem" @click="nestedPanel='root'">
+              <span class="cm-icon">←</span>
+              <span class="cm-text">
+                <span class="cm-primary">Back</span>
+                <span class="cm-secondary">Return to main menu</span>
+              </span>
+              <span class="cm-kbd">Esc</span>
+            </button>
+          </div>
+
+          <div class="cm-sep"></div>
+
+          <div class="cm-label">Sort by</div>
+          <div class="cm-section">
+            <button class="cm-item" role="menuitemradio" :aria-checked="prefs.sortBy==='name'"
+                    @click="prefs.sortBy='name'; notify('sort:name'); close()">
+              <span class="cm-radio"><span x-show="prefs.sortBy==='name'"></span></span>
+              <span class="cm-text"><span class="cm-primary">Name</span><span class="cm-secondary">A → Z</span></span>
+              <span class="cm-kbd">N</span>
+            </button>
+
+            <button class="cm-item" role="menuitemradio" :aria-checked="prefs.sortBy==='date'"
+                    @click="prefs.sortBy='date'; notify('sort:date'); close()">
+              <span class="cm-radio"><span x-show="prefs.sortBy==='date'"></span></span>
+              <span class="cm-text"><span class="cm-primary">Date</span><span class="cm-secondary">Newest first</span></span>
+              <span class="cm-kbd">D</span>
+            </button>
+
+            <button class="cm-item" role="menuitemradio" :aria-checked="prefs.sortBy==='size'"
+                    @click="prefs.sortBy='size'; notify('sort:size'); close()">
+              <span class="cm-radio"><span x-show="prefs.sortBy==='size'"></span></span>
+              <span class="cm-text"><span class="cm-primary">Size</span><span class="cm-secondary">Largest first</span></span>
+              <span class="cm-kbd">Z</span>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="nestedPanel==='export'">
+        <div>
+          <div class="cm-section">
+            <button class="cm-item" role="menuitem" @click="nestedPanel='root'">
+              <span class="cm-icon">←</span>
+              <span class="cm-text">
+                <span class="cm-primary">Back</span>
+                <span class="cm-secondary">Return to main menu</span>
+              </span>
+              <span class="cm-kbd">Esc</span>
+            </button>
+          </div>
+
+          <div class="cm-sep"></div>
+
+          <div class="cm-label">Export format</div>
+          <div class="cm-section">
+            <button class="cm-item" role="menuitem"
+                    hx-post="/fake/export?fmt=json" hx-swap="none"
+                    @click="notify('export:json'); close()">
+              <span class="cm-icon">{ }</span>
+              <span class="cm-text"><span class="cm-primary">JSON</span><span class="cm-secondary">Machine readable</span></span>
+              <span class="cm-kbd">J</span>
+            </button>
+
+            <button class="cm-item" role="menuitem"
+                    hx-post="/fake/export?fmt=csv" hx-swap="none"
+                    @click="notify('export:csv'); close()">
+              <span class="cm-icon">⌁</span>
+              <span class="cm-text"><span class="cm-primary">CSV</span><span class="cm-secondary">Spreadsheets</span></span>
+              <span class="cm-kbd">C</span>
+            </button>
+
+            <button class="cm-item" role="menuitem"
+                    hx-post="/fake/export?fmt=pdf" hx-swap="none"
+                    @click="notify('export:pdf'); close()">
+              <span class="cm-icon">⎙</span>
+              <span class="cm-text"><span class="cm-primary">PDF</span><span class="cm-secondary">Print-ready</span></span>
+              <span class="cm-kbd">P</span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    // This is a single-file demo artifact. In your real app, you might inject this
+    // HTML as a fragment and then call htmx.process + Alpine.initTree on the subtree,
+    // which is a documented integration pattern. [15]
+    function ContextMenuDemo(){
+      return {
+        isOpen: false,
+        activeVariant: 'basic',
+        anchorLabel: '',
+        filter: '',
+        nestedPanel: 'root',
+        prefs: {
+          showLineNumbers: true,
+          wrapLines: false,
+          compactMode: false,
+          viewMode: 'list',
+          sortBy: 'date'
+        },
+        pos: { x: 0, y: 0 },
+
+        init(){
+          // Close on scroll/resize
+          window.addEventListener('scroll', () => { if(this.isOpen) this.close(); }, { passive: true });
+          window.addEventListener('resize', () => { if(this.isOpen) this.close(); });
+
+          // Basic focus handling: when menu opens, focus first enabled item
+          this.$watch('isOpen', (v) => {
+            if(v){
+              this.$nextTick(() => this.focusFirstItem());
+            }
+          });
+
+          // Intercept /fake/* HTMX requests so this file remains runnable without a backend.
+          document.body.addEventListener('htmx:configRequest', (evt) => {
+            const url = evt.detail.path || evt.detail.requestConfig?.path;
+            if(!url) return;
+            if(url.startsWith('/fake/')){
+              evt.preventDefault();
+              // Provide a fake response with a small delay to emulate request.
+              const target = evt.detail.elt?.getAttribute('hx-target');
+              setTimeout(() => {
+                const html = this.fakeResponse(url);
+                if(target){
+                  const node = document.querySelector(target);
+                  if(node) node.innerHTML = html;
+                }
+              }, 180);
+            }
+          });
+        },
+
+        fakeResponse(url){
+          if(url.startsWith('/fake/actions/open')){
+            return `
+              <div style="padding:8px; font-size:12px">
+                <div style="font-weight:650; margin-bottom:6px">Open</div>
+                <div style="color:var(--muted); margin-bottom:10px">Loaded via HTMX swap.</div>
+                <button class="cm-item" style="height:38px" onclick="alert('Open in new tab')">
+                  <span class="cm-icon">↗</span>
+                  <span class="cm-text"><span class="cm-primary">Open in new tab</span></span>
+                </button>
+              </div>`;
+          }
+          if(url.startsWith('/fake/actions/inspect')){
+            return `
+              <div style="padding:8px; font-size:12px">
+                <div style="font-weight:650; margin-bottom:6px">Inspect</div>
+                <div style="color:var(--muted)">This could be server-rendered details.</div>
+              </div>`;
+          }
+          if(url.startsWith('/fake/actions/delete-confirm')){
+            return `
+              <div style="padding:8px; font-size:12px">
+                <div style="font-weight:650; margin-bottom:6px; color:var(--danger)">Confirm delete</div>
+                <div style="color:var(--muted); margin-bottom:10px">This is a dangerous action.</div>
+                <div style="display:flex; gap:8px">
+                  <button class="btn" style="height:36px" onclick="alert('Cancelled')">Cancel</button>
+                  <button class="btn" style="height:36px; border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: color-mix(in srgb, var(--danger-bg) 65%, transparent); color: var(--danger)"
+                          onclick="alert('Deleted')">
+                    Delete
+                  </button>
+                </div>
+              </div>`;
+          }
+          return `<div style="padding:8px; font-size:12px; color:var(--muted)">Loaded: ${url}</div>`;
+        },
+
+        matches(label){
+          const q = (this.filter || '').trim().toLowerCase();
+          if(!q) return true;
+          return label.toLowerCase().includes(q);
+        },
+
+        get menuStyle(){
+          // Keep menu within viewport.
+          const menuW = 320;
+          const menuH = 340; // rough clamp
+          const pad = 10;
+          const maxX = window.innerWidth - pad;
+          const maxY = window.innerHeight - pad;
+
+          let x = this.pos.x;
+          let y = this.pos.y;
+
+          if(x + menuW > maxX) x = Math.max(pad, maxX - menuW);
+          if(y + menuH > maxY) y = Math.max(pad, maxY - menuH);
+
+          return `left:${x}px; top:${y}px;`;
+        },
+
+        open(evt, variant){
+          this.activeVariant = variant;
+          this.isOpen = true;
+          this.filter = '';
+          this.nestedPanel = 'root';
+          this.anchorLabel = this.describeAnchor(evt);
+          this.pos = { x: evt.clientX, y: evt.clientY };
+        },
+
+        openCentered(variant){
+          this.activeVariant = variant;
+          this.isOpen = true;
+          this.filter = '';
+          this.nestedPanel = 'root';
+          this.anchorLabel = 'Centered';
+          this.pos = { x: Math.floor(window.innerWidth/2 - 140), y: Math.floor(window.innerHeight/2 - 140) };
+        },
+
+        close(){
+          this.isOpen = false;
+        },
+
+        focusFirstItem(){
+          const menu = this.getActiveMenuEl();
+          if(!menu) return;
+          const items = Array.from(menu.querySelectorAll('.cm-item'));
+          const first = items.find(el => !el.disabled && el.getAttribute('aria-disabled') !== 'true');
+          if(first) first.focus();
+        },
+
+        getActiveMenuEl(){
+          const map = {
+            basic: this.$refs.menu_basic,
+            disabled: this.$refs.menu_disabled,
+            checkboxes: this.$refs.menu_checkboxes,
+            radio: this.$refs.menu_radio,
+            withSearch: this.$refs.menu_withSearch,
+            nestedLike: this.$refs.menu_nestedLike,
+          };
+          return map[this.activeVariant];
+        },
+
+        describeAnchor(evt){
+          // Keep it simple for the demo.
+          return 'Right-click';
+        },
+
+        notify(action){
+          // placeholder: in your system you might dispatch standardized events
+          // (the references emphasize consistent event handling). [2][6]
+          console.log('[context-menu]', action);
+          // For demo: close after most actions except checkbox toggles and nested panels.
+          if(!String(action).startsWith('toggle:') && !String(action).startsWith('view:')){
+            // keep open for radio/checkbox demo
+          }
+        },
+
+        // Long-press support on touch devices
+        _lpTimer: null,
+        maybeOpenOnLongPress(evt, variant){
+          if(evt.pointerType !== 'touch') return;
+          clearTimeout(this._lpTimer);
+          const startX = evt.clientX, startY = evt.clientY;
+
+          const cancel = () => clearTimeout(this._lpTimer);
+          const move = (e) => {
+            if(Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) cancel();
+          };
+
+          window.addEventListener('pointerup', cancel, { once: true });
+          window.addEventListener('pointercancel', cancel, { once: true });
+          window.addEventListener('pointermove', move, { once: true });
+
+          this._lpTimer = setTimeout(() => {
+            this.open({ clientX: startX, clientY: startY }, variant);
+          }, 520);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

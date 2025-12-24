@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>shadcn/ui Sonner — HTMX Variations (single file)</title>
+
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    :root{
+      --bg: #0b1220;
+      --panel: #0f172a;
+      --panel2: #0b1324;
+      --border: rgba(148,163,184,.18);
+      --text: #e5e7eb;
+      --muted: rgba(226,232,240,.72);
+      --accent: #60a5fa;
+      --accentSoft: rgba(96,165,250,.16);
+      --danger: #f87171;
+      --ok: #34d399;
+      --warn: #fbbf24;
+
+      --r: 14px;
+      --r2: 12px;
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{ box-sizing:border-box }
+    body{
+      margin:0; font-family: var(--sans);
+      background: radial-gradient(circle at top left, #0b1220 0, #0b1220 40%, #000 100%);
+      color: var(--text);
+      padding: 22px;
+    }
+    .wrap{ max-width: 1100px; margin: 0 auto; }
+    .card{
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    h1{ font-size: 16px; margin:0 0 6px 0; }
+    .sub{ color: var(--muted); font-size: 13px; line-height: 1.4; margin-bottom: 14px; }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .panel{
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: rgba(15,23,42,.55);
+      padding: 12px;
+    }
+    .titleRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 10px; }
+    .title{ font-size: 13px; font-weight: 650; }
+    .pill{
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      color: var(--text);
+      cursor:pointer;
+      font-size: 12px;
+      text-decoration:none;
+    }
+    .btn:hover{ background: rgba(148,163,184,.13); }
+    .btnPrimary{
+      border-color: rgba(96,165,250,.45);
+      background: rgba(96,165,250,.16);
+    }
+    .btnDanger{
+      border-color: rgba(248,113,113,.45);
+      background: rgba(248,113,113,.14);
+      color: var(--danger);
+    }
+    .out{
+      margin-top: 10px;
+      border: 1px dashed rgba(148,163,184,.25);
+      border-radius: var(--r);
+      padding: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 56px;
+    }
+    .mono{ font-family: var(--mono); font-size: 12px; }
+    .indicator{
+      display:none;
+      align-items:center;
+      gap:8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .htmx-request.indicator{ display:flex; }
+    .dot{
+      width:10px;height:10px;border-radius:999px;
+      background: rgba(96,165,250,.75);
+      box-shadow: 0 0 0 3px rgba(96,165,250,.18);
+    }
+
+    /* --- Toast/Sonner-like UI --- */
+    .toaster{
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: min(360px, calc(100vw - 32px));
+      z-index: 9999;
+      pointer-events: none;
+    }
+    .toast{
+      pointer-events: auto;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(2,6,23,.78);
+      box-shadow: var(--shadow);
+      padding: 12px 12px;
+      display:flex;
+      gap: 10px;
+      align-items:flex-start;
+      animation: in .14s ease-out;
+    }
+    @keyframes in {
+      from { transform: translateY(10px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .toast .icon{
+      width: 18px; height: 18px;
+      border-radius: 999px;
+      margin-top: 2px;
+      flex: 0 0 18px;
+      background: rgba(148,163,184,.18);
+    }
+    .toast.ok .icon{ background: rgba(52,211,153,.35); }
+    .toast.err .icon{ background: rgba(248,113,113,.35); }
+    .toast.warn .icon{ background: rgba(251,191,36,.35); }
+    .toast .body{ flex:1; min-width: 0; }
+    .toast .title{ font-size: 13px; font-weight: 650; margin: 0 0 2px 0; }
+    .toast .desc{ font-size: 12px; color: var(--muted); margin: 0; line-height: 1.35; }
+    .toast .x{
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+      margin-left: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Sonner (toast) — HTMX variations in one file</h1>
+      <div class="sub">
+        Implemented as an HTMX + HTML + vanilla JS artifact (recommended for this artifact type). [1]
+        Fake endpoints are intercepted so the demo remains drop-in and avoids backend errors. [7]
+      </div>
+
+      <div class="grid">
+
+        <!-- 1) hx-get toast -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">1) Simple notify (hx-get)</div>
+            <span class="pill">hx-get + hx-target + hx-swap</span>
+          </div>
+
+          <button class="btn btnPrimary"
+            hx-get="/fake/toast/info"
+            hx-target="#toast-sink"
+            hx-swap="beforeend"
+          >Trigger info toast</button>
+
+          <div class="out">
+            Target is an invisible sink that appends fragments; fragments dispatch toast events.
+            (Appending fragments is a standard HTMX swap pattern.) [27]
+          </div>
+        </div>
+
+        <!-- 2) hx-post + hx-vals + indicator + "loading -> success" -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">2) Submit + loading indicator (hx-post)</div>
+            <span class="pill">hx-post + hx-vals + hx-indicator</span>
+          </div>
+
+          <form
+            hx-post="/fake/toast/save"
+            hx-trigger="submit"
+            hx-target="#toast-sink"
+            hx-swap="beforeend"
+            hx-indicator="#ind-save"
+          >
+            <button class="btn btnPrimary" type="submit"
+              hx-vals='{"entity":"note","intent":"save"}'
+            >Save something</button>
+
+            <div class="row">
+              <div id="ind-save" class="indicator"><span class="dot"></span> Saving…</div>
+            </div>
+          </form>
+
+          <div class="out">
+            This demonstrates “form submits via HTMX POST” and server returns partial HTML fragments. [27]
+          </div>
+        </div>
+
+        <!-- 3) hx-put -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">3) Update (hx-put)</div>
+            <span class="pill">hx-put</span>
+          </div>
+
+          <button class="btn"
+            hx-put="/fake/toast/update"
+            hx-target="#toast-sink"
+            hx-swap="beforeend"
+          >Trigger update toast</button>
+
+          <div class="out">Uses PUT to illustrate update semantics.</div>
+        </div>
+
+        <!-- 4) hx-delete + OOB swap -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">4) Delete + OOB status (hx-delete)</div>
+            <span class="pill">hx-delete + out-of-band swap</span>
+          </div>
+
+          <button class="btn btnDanger"
+            hx-delete="/fake/toast/delete"
+            hx-target="#toast-sink"
+            hx-swap="beforeend"
+          >Delete item</button>
+
+          <div class="out" id="global-status">
+            <div class="mono">Global status: idle</div>
+          </div>
+
+          <div class="sub" style="margin:10px 0 0 0">
+            Out-of-band swaps are explicitly called out as a pattern in the materials. [29]
+          </div>
+        </div>
+
+      </div>
+
+      <!-- invisible sink for appended fragments -->
+      <div id="toast-sink" style="display:none"></div>
+
+      <div class="sub" style="margin-top:12px">
+        In a larger HTMX “app shell”, you’d typically swap panels into regions (sidebar/main/etc.) via HTMX. [9]
+      </div>
+    </div>
+  </div>
+
+  <!-- Toaster root -->
+  <div class="toaster" id="toaster" aria-live="polite" aria-relevant="additions"></div>
+
+  <script>
+    // Minimal toast system (Sonner-like behavior, but implemented locally for this HTMX artifact).
+    function pushToast({kind="info", title="Notice", desc="", ms=2400}) {
+      const toaster = document.getElementById("toaster");
+      const el = document.createElement("div");
+      el.className = "toast " + (kind === "ok" ? "ok" : kind === "err" ? "err" : kind === "warn" ? "warn" : "");
+      el.innerHTML = `
+        <div class="icon" aria-hidden="true"></div>
+        <div class="body">
+          <div class="title">${escapeHtml(title)}</div>
+          <div class="desc">${escapeHtml(desc)}</div>
+        </div>
+        <button class="x" type="button" aria-label="Dismiss">×</button>
+      `;
+      el.querySelector(".x").addEventListener("click", () => el.remove());
+      toaster.appendChild(el);
+      if (ms > 0) setTimeout(() => el.remove(), ms);
+    }
+
+    // Intercept /fake/* requests so the file runs standalone and avoids backend errors. [7]
+    document.body.addEventListener("htmx:configRequest", (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if (!path || !path.startsWith("/fake/")) return;
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute("hx-target");
+
+      const respondAppend = (html) => {
+        if (!targetSel) return;
+        const target = document.querySelector(targetSel);
+        if (!target) return;
+        target.insertAdjacentHTML("beforeend", html);
+
+        // Process any OOB swaps inside returned html
+        const tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        tmp.querySelectorAll("[hx-swap-oob]").forEach((oob) => {
+          const id = oob.getAttribute("id");
+          if (!id) return;
+          const dest = document.getElementById(id);
+          if (dest) dest.innerHTML = oob.innerHTML;
+        });
+
+        // Dispatch toast events if fragments include them
+        tmp.querySelectorAll("[data-toast]").forEach((node) => {
+          const kind = node.getAttribute("data-kind") || "info";
+          const title = node.getAttribute("data-title") || "Notice";
+          const desc = node.getAttribute("data-desc") || "";
+          pushToast({ kind, title, desc });
+        });
+      };
+
+      setTimeout(() => {
+        if (path === "/fake/toast/info") {
+          respondAppend(`<div data-toast data-kind="info" data-title="Hello" data-desc="Triggered via hx-get."></div>`);
+        } else if (path === "/fake/toast/save") {
+          // Simulate a “loading then success” sequence
+          pushToast({ kind:"warn", title:"Saving…", desc:"Please wait", ms: 1200 });
+          respondAppend(`<div data-toast data-kind="ok" data-title="Saved" data-desc="Triggered via hx-post."></div>`);
+        } else if (path === "/fake/toast/update") {
+          respondAppend(`<div data-toast data-kind="ok" data-title="Updated" data-desc="Triggered via hx-put."></div>`);
+        } else if (path === "/fake/toast/delete") {
+          respondAppend(`
+            <div data-toast data-kind="err" data-title="Deleted" data-desc="Triggered via hx-delete."></div>
+            <div id="global-status" hx-swap-oob="true"><div class="mono">Global status: last action = delete</div></div>
+          `);
+        } else {
+          respondAppend(`<div data-toast data-kind="warn" data-title="Unhandled" data-desc="${escapeHtml(path)}"></div>`);
+        }
+      }, 220);
+
+      function escapeHtml(s){
+        return String(s)
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+    });
+  </script>
+</body>
+</html>

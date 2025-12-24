@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hover Card — HTMX Variations (single file)</title>
+
+  <!-- HTMX included via CDN for portable HTMX artifacts. [5] -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    /* Borderless/zone-based surfaces + dynamic theming via CSS custom properties. [4][6] */
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 55%);
+      --on-surface: hsl(var(--primary-hue) 15% 92%);
+      --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+      --surface-container-lowest: hsl(var(--primary-hue) 15% 9%);
+      --surface-container-low: hsl(var(--primary-hue) 14% 12%);
+      --surface-container: hsl(var(--primary-hue) 14% 14%);
+      --surface-container-high: hsl(var(--primary-hue) 14% 17%);
+
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --r-lg: 16px;
+      --transition-fast: 150ms cubic-bezier(.4,0,.2,1);
+      --transition-base: 300ms cubic-bezier(.4,0,.2,1);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:22px;
+      font-family: var(--sans);
+      background: radial-gradient(circle at top left, var(--surface-container-lowest) 0, #000 100%);
+      color: var(--on-surface);
+    }
+
+    .wrap{max-width:1100px; margin:0 auto;}
+    .zone-card{
+      background: var(--surface-container-low);
+      border-radius: var(--r-lg);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      transition: background var(--transition-base);
+    }
+    .zone-card--elevated{ background: var(--surface-container); }
+
+    h1{font-size:16px; margin:0 0 6px 0;}
+    .sub{color:var(--on-surface-variant); font-size:13px; margin:0 0 14px 0; line-height:1.4;}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px;}
+
+    .panel{
+      background: var(--surface-container);
+      border-radius: var(--r-lg);
+      padding: 12px;
+    }
+    .titleRow{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;}
+    .title{font-size:13px; font-weight:650;}
+    .pill{
+      font-size:11px;
+      color: var(--on-surface-variant);
+      background: color-mix(in srgb, var(--surface-container-high) 70%, transparent);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-family: var(--mono);
+    }
+
+    /* Trigger */
+    .trigger{
+      display:inline-flex; align-items:center; gap:10px;
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: var(--surface-container-high);
+      color: var(--on-surface);
+      text-decoration:none;
+      transition: transform var(--transition-fast), background var(--transition-base);
+      user-select:none;
+    }
+    .trigger:hover{ transform: translateY(-1px); }
+    .avatar{width:28px;height:28px;border-radius:999px;background: color-mix(in srgb, var(--primary) 30%, #111); display:inline-block;}
+    .handle{font-size:13px; font-weight:650;}
+    .muted{color:var(--on-surface-variant); font-size:12px;}
+
+    /* Hover card surface */
+    .hc-wrap{position: relative; display:inline-block;}
+    .hc{
+      position:absolute;
+      min-width: 280px;
+      max-width: 340px;
+      padding: 12px;
+      border-radius: var(--r-lg);
+      background: var(--surface-container-high);
+      box-shadow: var(--shadow);
+      top: calc(100% + 10px);
+      left: 0;
+      opacity: 0;
+      transform: translateY(-4px) scale(.99);
+      pointer-events:none;
+      transition: opacity var(--transition-base), transform var(--transition-base);
+      z-index: 50;
+    }
+    .hc[data-side="top"]{ top: auto; bottom: calc(100% + 10px); }
+    .hc[data-align="center"]{ left: 50%; transform: translate(-50%, -4px) scale(.99); }
+    .hc[data-align="end"]{ left: auto; right: 0; }
+
+    .hc.open{
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events:auto;
+    }
+    .hcHeader{display:flex; gap:10px; align-items:center;}
+    .hcBody{margin-top:10px; font-size:12px; color: var(--on-surface-variant); line-height:1.35;}
+    .hcActions{margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;}
+
+    .btn{
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--primary) 16%, transparent);
+      color: var(--on-surface);
+      border: 0;
+      cursor:pointer;
+      transition: transform var(--transition-fast);
+      font-size:12px;
+    }
+    .btn:hover{ transform: translateY(-1px); }
+
+    .indicator{display:none; align-items:center; gap:8px; font-size:12px; color: var(--on-surface-variant); margin-top:10px;}
+    .htmx-request.indicator{display:flex;}
+    .dot{width:10px;height:10px;border-radius:999px;background: color-mix(in srgb, var(--primary) 70%, #000); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);}
+
+    .out{
+      margin-top:10px;
+      padding:10px;
+      border-radius: var(--r-lg);
+      background: var(--surface-container-low);
+      color: var(--on-surface-variant);
+      font-size:12px;
+      min-height: 54px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="zone-card zone-card--elevated">
+      <h1>Hover Card — HTMX variations</h1>
+      <p class="sub">
+        Standalone HTMX artifact with zone-based surfaces and CSS token theming. [4][6]
+      </p>
+
+      <div class="grid">
+
+        <!-- 1) Basic hover (no HTMX) -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">1) Basic hover open/close</div>
+            <div class="pill">pure JS</div>
+          </div>
+
+          <div class="hc-wrap" onmouseenter="HC.open(this)" onmouseleave="HC.close(this)">
+            <a class="trigger" href="javascript:void(0)">
+              <span class="avatar"></span>
+              <span>
+                <div class="handle">@shadcn</div>
+                <div class="muted">Hover me</div>
+              </span>
+            </a>
+
+            <div class="hc" data-side="bottom" data-align="start" aria-live="polite">
+              <div class="hcHeader">
+                <span class="avatar"></span>
+                <div>
+                  <div class="handle">@shadcn</div>
+                  <div class="muted">UI components</div>
+                </div>
+              </div>
+              <div class="hcBody">Basic hover card content (static).</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2) Hover triggers HTMX fetch into card -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">2) Hover loads content (hx-get)</div>
+            <div class="pill">hx-get + hx-trigger</div>
+          </div>
+
+          <div class="hc-wrap"
+               onmouseenter="HC.open(this); htmx.trigger(this.querySelector('[data-hx]'),'mouseenter')"
+               onmouseleave="HC.close(this)">
+            <a class="trigger" href="javascript:void(0)">
+              <span class="avatar"></span>
+              <span>
+                <div class="handle">@octocat</div>
+                <div class="muted">Fetch on hover</div>
+              </span>
+            </a>
+
+            <div class="hc" data-side="bottom" data-align="start">
+              <div class="hcHeader">
+                <span class="avatar"></span>
+                <div>
+                  <div class="handle">@octocat</div>
+                  <div class="muted">Profile preview</div>
+                </div>
+              </div>
+
+              <div class="indicator" id="ind-hc"><span class="dot"></span> Loading…</div>
+
+              <div class="hcBody" id="hc-body"><div class="muted">Hover to load.</div></div>
+
+              <!-- The element that actually performs HTMX request -->
+              <div data-hx
+                   hx-get="/fake/hovercard/profile"
+                   hx-trigger="mouseenter once"
+                   hx-target="#hc-body"
+                   hx-swap="innerHTML"
+                   hx-indicator="#ind-hc"></div>
+            </div>
+          </div>
+
+          <div class="out">
+            This keeps the artifact lean by fetching content on demand instead of embedding large datasets. [4]
+          </div>
+        </div>
+
+        <!-- 3) Placement variations -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">3) Side + align variations</div>
+            <div class="pill">top + center/end</div>
+          </div>
+
+          <div style="display:flex; gap:14px; flex-wrap:wrap">
+            <div class="hc-wrap" onmouseenter="HC.open(this)" onmouseleave="HC.close(this)">
+              <a class="trigger" href="javascript:void(0)"><span class="avatar"></span><span><div class="handle">Top</div><div class="muted">side=top</div></span></a>
+              <div class="hc" data-side="top" data-align="start"><div class="hcBody">Appears above trigger.</div></div>
+            </div>
+
+            <div class="hc-wrap" onmouseenter="HC.open(this)" onmouseleave="HC.close(this)">
+              <a class="trigger" href="javascript:void(0)"><span class="avatar"></span><span><div class="handle">End</div><div class="muted">align=end</div></span></a>
+              <div class="hc" data-side="bottom" data-align="end"><div class="hcBody">Aligned to end (right edge).</div></div>
+            </div>
+
+            <div class="hc-wrap" onmouseenter="HC.open(this)" onmouseleave="HC.close(this)">
+              <a class="trigger" href="javascript:void(0)"><span class="avatar"></span><span><div class="handle">Center</div><div class="muted">align=center</div></span></a>
+              <div class="hc" data-side="bottom" data-align="center"><div class="hcBody">Centered under trigger.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4) Actions in card (hx-post) -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">4) Actions (hx-post)</div>
+            <div class="pill">hx-post</div>
+          </div>
+
+          <div class="hc-wrap" onmouseenter="HC.open(this)" onmouseleave="HC.close(this)">
+            <a class="trigger" href="javascript:void(0)">
+              <span class="avatar"></span>
+              <span>
+                <div class="handle">@follow-me</div>
+                <div class="muted">Click inside card</div>
+              </span>
+            </a>
+
+            <div class="hc" data-side="bottom" data-align="start">
+              <div class="hcHeader">
+                <span class="avatar"></span>
+                <div>
+                  <div class="handle">@follow-me</div>
+                  <div class="muted">Actions demo</div>
+                </div>
+              </div>
+
+              <div class="hcActions">
+                <button class="btn" hx-post="/fake/hovercard/follow" hx-target="#follow-out" hx-swap="innerHTML">Follow</button>
+                <button class="btn" hx-post="/fake/hovercard/message" hx-target="#follow-out" hx-swap="innerHTML">Message</button>
+              </div>
+
+              <div id="follow-out" class="hcBody">No action yet.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const HC = {
+      open(root){
+        const card = root.querySelector(".hc");
+        if(card) card.classList.add("open");
+      },
+      close(root){
+        const card = root.querySelector(".hc");
+        if(card) card.classList.remove("open");
+      }
+    };
+
+    // Fake backend for standalone demo; real server should return HTML fragments. [4]
+    document.body.addEventListener("htmx:configRequest", (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if(!path || !path.startsWith("/fake/")) return;
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute("hx-target");
+      const target = targetSel ? document.querySelector(targetSel) : null;
+
+      setTimeout(() => {
+        if(path === "/fake/hovercard/profile"){
+          if(target) target.innerHTML = `
+            <div><strong style="color:var(--on-surface)">Octocat</strong></div>
+            <div class="muted">GitHub mascot • 2.1M followers</div>
+            <div class="muted" style="margin-top:6px">Loaded via HTMX on hover.</div>
+          `;
+        } else if(path === "/fake/hovercard/follow"){
+          if(target) target.innerHTML = `<div><strong>Followed.</strong> <span class="muted">(hx-post)</span></div>`;
+        } else if(path === "/fake/hovercard/message"){
+          if(target) target.innerHTML = `<div><strong>Message sent.</strong> <span class="muted">(hx-post)</span></div>`;
+        } else {
+          if(target) target.innerHTML = `<div class="muted">Unhandled: ${escapeHtml(path)}</div>`;
+        }
+      }, 220);
+
+      function escapeHtml(s){
+        return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+      }
+    });
+  </script>
+</body>
+</html>

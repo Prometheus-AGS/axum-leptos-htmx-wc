@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Command Palette (01) — Core</title>
+
+  <!-- HTMX via CDN for a drop-in HTMX artifact. [5] -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    /* Borderless/zone-based surfaces + token theming. [4][6] */
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 55%);
+      --on-surface: hsl(var(--primary-hue) 15% 92%);
+      --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+      --surface-container-lowest: hsl(var(--primary-hue) 15% 9%);
+      --surface-container-low: hsl(var(--primary-hue) 14% 12%);
+      --surface-container: hsl(var(--primary-hue) 14% 14%);
+      --surface-container-high: hsl(var(--primary-hue) 14% 17%);
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --r-xl: 20px;
+      --r-lg: 16px;
+      --r-md: 12px;
+      --transition-fast: 150ms cubic-bezier(.4,0,.2,1);
+      --transition-base: 300ms cubic-bezier(.4,0,.2,1);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:22px;
+      font-family: var(--sans);
+      background: radial-gradient(circle at top left, var(--surface-container-lowest) 0, #000 100%);
+      color: var(--on-surface);
+    }
+
+    .wrap{max-width:980px; margin:0 auto;}
+    .zone{
+      background: var(--surface-container-low);
+      border-radius: var(--r-xl);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+    h1{font-size:16px; margin:0;}
+    .sub{margin:6px 0 0 0; color:var(--on-surface-variant); font-size:13px; line-height:1.4;}
+    .pill{font-family: var(--mono); font-size:11px; color:var(--on-surface-variant); background: color-mix(in srgb, var(--surface-container-high) 70%, transparent); padding:3px 8px; border-radius:999px; white-space:nowrap;}
+
+    .palette{
+      margin-top: 14px;
+      background: var(--surface-container);
+      border-radius: var(--r-xl);
+      padding: 12px;
+    }
+
+    .inputRow{
+      display:flex; align-items:center; gap:10px;
+      background: var(--surface-container-high);
+      border-radius: 999px;
+      padding: 10px 12px;
+    }
+    .kbd{font-family: var(--mono); font-size:11px; color:var(--on-surface-variant); padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--surface-container) 70%, transparent);}
+    .search{
+      flex:1;
+      border:0;
+      outline:none;
+      background: transparent;
+      color: var(--on-surface);
+      font-size: 13px;
+    }
+    .search::placeholder{color: color-mix(in srgb, var(--on-surface-variant) 80%, transparent)}
+
+    .metaRow{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px;}
+    .hint{font-size:12px; color: var(--on-surface-variant);}
+
+    .results{
+      margin-top: 10px;
+      border-radius: var(--r-lg);
+      background: var(--surface-container-low);
+      padding: 8px;
+      max-height: 360px;
+      overflow:auto;
+    }
+
+    .groupTitle{font-size:11px; color: var(--on-surface-variant); font-family: var(--mono); padding: 10px 10px 6px 10px;}
+
+    .item{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding: 10px;
+      border-radius: var(--r-md);
+      background: transparent;
+      cursor:pointer;
+      transition: background var(--transition-base), transform var(--transition-fast);
+      user-select:none;
+    }
+    .item:hover{background: var(--surface-container-high); transform: translateY(-1px);}
+
+    .left{display:flex; align-items:center; gap:10px; min-width:0;}
+    .icon{width:26px;height:26px;border-radius:10px;background: color-mix(in srgb, var(--primary) 14%, transparent); display:grid; place-items:center; font-weight:800; color: var(--primary);}
+    .label{font-size:13px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .desc{font-size:12px; color: var(--on-surface-variant); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+    .right{display:flex; align-items:center; gap:8px;}
+    .shortcut{font-family: var(--mono); font-size:11px; color: var(--on-surface-variant);}
+
+    .empty{padding: 16px; color: var(--on-surface-variant); font-size: 12px; text-align:center;}
+
+    .out{
+      margin-top: 12px;
+      background: var(--surface-container);
+      border-radius: var(--r-xl);
+      padding: 12px;
+      color: var(--on-surface-variant);
+      font-size: 12px;
+      min-height: 48px;
+    }
+
+    .indicator{display:none; align-items:center; gap:8px; font-size:12px; color: var(--on-surface-variant);}
+    .htmx-request.indicator{display:flex;}
+    .dot{width:10px;height:10px;border-radius:999px;background: color-mix(in srgb, var(--primary) 70%, #000); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="zone">
+      <div class="head">
+        <div>
+          <h1>Command (01) — Core</h1>
+          <p class="sub">
+            Core command palette: query input + grouped results + empty state + click-to-run. [4]
+          </p>
+        </div>
+        <div class="pill">Standalone HTML + HTMX</div>
+      </div>
+
+      <div class="palette" role="dialog" aria-label="Command palette">
+        <div class="inputRow">
+          <span class="kbd">⌘K</span>
+          <input id="q" class="search" type="text" placeholder="Type a command…" autocomplete="off"
+                 hx-get="/fake/command/search"
+                 hx-trigger="keyup changed delay:120ms"
+                 hx-target="#results"
+                 hx-swap="innerHTML"
+                 hx-indicator="#ind" />
+          <div id="ind" class="indicator" aria-hidden="true"><span class="dot"></span> Searching…</div>
+        </div>
+
+        <div class="metaRow">
+          <div class="hint">Try: <span class="kbd">theme</span>, <span class="kbd">project</span>, <span class="kbd">help</span>, <span class="kbd">profile</span></div>
+          <div class="hint">Mouse-friendly; keyboard in file 02.</div>
+        </div>
+
+        <div class="results" id="results" aria-live="polite">
+          <!-- initial content rendered locally -->
+        </div>
+      </div>
+
+      <div class="out" id="out">No command executed yet.</div>
+    </div>
+  </div>
+
+  <script>
+    // --- Core data model (small demo set). In production, fetch on demand to stay lean. [4]
+    const COMMANDS = [
+      { id: 'theme.dark', group: 'Appearance', label: 'Theme: Dark', desc: 'Switch to dark theme tokens', icon: 'A', shortcut: 'D' },
+      { id: 'theme.light', group: 'Appearance', label: 'Theme: Light', desc: 'Switch to light theme tokens', icon: 'A', shortcut: 'L' },
+      { id: 'proj.open', group: 'Project', label: 'Open Project…', desc: 'Select and open a project', icon: 'P', shortcut: 'O' },
+      { id: 'proj.search', group: 'Project', label: 'Search in Project', desc: 'Find files and symbols', icon: 'P', shortcut: 'F' },
+      { id: 'help.docs', group: 'Help', label: 'Open Docs', desc: 'Open documentation', icon: '?', shortcut: 'H' },
+      { id: 'user.profile', group: 'Account', label: 'Profile', desc: 'Open your profile', icon: 'U', shortcut: '↩︎' },
+      { id: 'user.signout', group: 'Account', label: 'Sign out', desc: 'End your session', icon: 'U', shortcut: 'S' },
+    ];
+
+    function scoreMatch(q, text){
+      // Small fuzzy-ish matcher: in-order subsequence scoring.
+      // (Kept simple on purpose for demo; swap for real fuzzy on server if needed.) [4]
+      q = (q||'').toLowerCase().trim();
+      text = (text||'').toLowerCase();
+      if(!q) return 1;
+      let ti = 0;
+      for(const ch of q){
+        ti = text.indexOf(ch, ti);
+        if(ti === -1) return 0;
+        ti++;
+      }
+      return Math.max(0.2, q.length / Math.max(1, text.length));
+    }
+
+    function renderResults(items){
+      if(!items.length){
+        return `<div class="empty">No results.</div>`;
+      }
+      const byGroup = new Map();
+      for(const it of items){
+        if(!byGroup.has(it.group)) byGroup.set(it.group, []);
+        byGroup.get(it.group).push(it);
+      }
+      let html = '';
+      for(const [group, rows] of byGroup){
+        html += `<div class="groupTitle">${escapeHtml(group)}</div>`;
+        for(const it of rows){
+          html += `
+            <div class="item" role="button" tabindex="0"
+                 data-cmd="${escapeHtml(it.id)}"
+                 hx-post="/fake/command/run"
+                 hx-vals='{"id":"${escapeHtml(it.id)}"}'
+                 hx-target="#out"
+                 hx-swap="innerHTML">
+              <div class="left">
+                <div class="icon" aria-hidden="true">${escapeHtml(it.icon)}</div>
+                <div style="min-width:0">
+                  <div class="label">${escapeHtml(it.label)}</div>
+                  <div class="desc">${escapeHtml(it.desc)}</div>
+                </div>
+              </div>
+              <div class="right"><div class="shortcut">${escapeHtml(it.shortcut)}</div></div>
+            </div>
+          `;
+        }
+      }
+      return html;
+    }
+
+    function escapeHtml(s){
+      return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+    }
+
+    // Initial render.
+    document.getElementById('results').innerHTML = renderResults(COMMANDS);
+
+    // Fake backend: emulate server-rendered fragments (search + run). [4]
+    document.body.addEventListener('htmx:configRequest', (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if(!path || !path.startsWith('/fake/')) return;
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute('hx-target');
+      const target = targetSel ? document.querySelector(targetSel) : null;
+
+      setTimeout(() => {
+        if(path.startsWith('/fake/command/search')){
+          const q = document.getElementById('q')?.value || '';
+          const scored = COMMANDS
+            .map(c => ({ c, s: Math.max(scoreMatch(q, c.label), scoreMatch(q, c.desc), scoreMatch(q, c.id)) }))
+            .filter(x => x.s > 0)
+            .sort((a,b) => b.s - a.s)
+            .map(x => x.c);
+          if(target) target.innerHTML = renderResults(scored);
+        }
+        if(path.startsWith('/fake/command/run')){
+          // In real server: read request body. Here: use hx-vals attribute.
+          const vals = JSON.parse(elt.getAttribute('hx-vals') || '{}');
+          const id = vals.id || 'unknown';
+          if(target) target.innerHTML = `<div><span style="color:var(--on-surface)"><strong>Ran</strong></span> <span style="font-family:var(--mono)">${escapeHtml(id)}</span></div>`;
+        }
+      }, 140);
+    });
+
+    // Helpful: allow Enter key to click an item when focused.
+    document.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      const el = document.activeElement;
+      if(el && el.classList?.contains('item')){
+        el.click();
+      }
+    });
+  </script>
+</body>
+</html>

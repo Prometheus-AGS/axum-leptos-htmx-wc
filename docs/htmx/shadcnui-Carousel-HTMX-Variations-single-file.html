@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>shadcn/ui Carousel — HTMX Variations (single file)</title>
+
+  <!-- HTMX runtime (artifact style) -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <!-- Embla (the library shadcn/ui Carousel is built on) -->
+  <script src="https://unpkg.com/embla-carousel/embla-carousel.umd.js"></script>
+  <script src="https://unpkg.com/embla-carousel-autoplay/embla-carousel-autoplay.umd.js"></script>
+
+  <style>
+    :root{
+      --hue: 220;
+      --bg: hsl(var(--hue) 15% 9%);
+      --surface: hsl(var(--hue) 14% 12%);
+      --surface2: hsl(var(--hue) 14% 14%);
+      --surface3: hsl(var(--hue) 14% 17%);
+      --text: hsl(var(--hue) 20% 92%);
+      --muted: hsl(var(--hue) 10% 68%);
+      --border: hsl(var(--hue) 12% 25%);
+      --focus: hsl(210 90% 65%);
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --r: 14px;
+      --r2: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background: radial-gradient(circle at top left, #0b1220 0, #0b1220 40%, #000 100%);
+      color: var(--text);
+      padding: 22px;
+    }
+    .wrap{max-width: 1100px; margin: 0 auto;}
+    .card{
+      background: linear-gradient(180deg, var(--surface), var(--surface2));
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    h1{font-size:16px; margin:0 0 6px 0;}
+    .sub{color:var(--muted); font-size:13px; line-height:1.4; margin-bottom:14px;}
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .panel{
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: rgba(15,23,42,.55);
+      padding: 12px;
+    }
+    .titleRow{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 10px;}
+    .title{font-size: 13px; font-weight: 650;}
+    .pill{
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px;}
+
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      color: var(--text);
+      cursor:pointer;
+      font-size: 12px;
+      text-decoration:none;
+    }
+    .btn:hover{ background: rgba(148,163,184,.13); }
+    .btnPrimary{
+      border-color: color-mix(in srgb, var(--focus) 40%, var(--border));
+      background: color-mix(in srgb, var(--focus) 16%, transparent);
+    }
+    .mono{ font-family: var(--mono); font-size: 12px; }
+
+    /* ===== Carousel base (Embla) ===== */
+    .carousel{
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: rgba(2,6,23,.55);
+      padding: 12px;
+      overflow: hidden;
+    }
+    .embla{
+      position: relative;
+    }
+    .embla__viewport{
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    .embla__container{
+      display: flex;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: pan-y;
+      /* spacing uses negative margin like shadcn docs: -ml-[VALUE] [Spacing section] */
+      margin-left: calc(var(--slide-gap) * -1);
+    }
+    .embla__slide{
+      position: relative;
+      flex: 0 0 auto;
+      padding-left: var(--slide-gap); /* spacing uses pl-[VALUE] [Spacing section] */
+      min-width: 0;
+    }
+    .slideCard{
+      height: 140px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface2), var(--surface3));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+
+    /* SIZES variation: basis utilities in shadcn docs map to percentage basis here. [0] */
+    .basis-1\/2 { flex-basis: 50%; }
+    .basis-1\/3 { flex-basis: 33.3333%; }
+    .basis-1\/4 { flex-basis: 25%; }
+    .basis-full { flex-basis: 100%; }
+
+    /* ORIENTATION variation: vertical uses column container, and viewport touch-action changes. [0] */
+    .is-vertical .embla__container{
+      flex-direction: column;
+      margin-left: 0;
+      margin-top: calc(var(--slide-gap) * -1);
+    }
+    .is-vertical .embla__slide{
+      padding-left: 0;
+      padding-top: var(--slide-gap);
+    }
+    .is-vertical .embla__viewport{
+      touch-action: pan-x;
+    }
+
+    /* controls */
+    .controls{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      justify-content:space-between;
+      margin-top: 10px;
+    }
+    .nav{
+      display:flex; gap:8px; align-items:center;
+    }
+    .iconBtn{
+      width: 36px; height: 36px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      color: var(--text);
+      cursor:pointer;
+    }
+    .iconBtn:hover{ background: rgba(148,163,184,.13); }
+    .iconBtn:focus{
+      outline:none;
+      border-color: color-mix(in srgb, var(--focus) 60%, var(--border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
+    }
+    .status{
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* indicator (for HTMX “re-render carousel” demo) */
+    .indicator{display:none; align-items:center; gap:8px; font-size:12px; color:var(--muted);}
+    .htmx-request.indicator{display:flex;}
+    .dot{width:10px;height:10px;border-radius:999px;background:rgba(96,165,250,.75);box-shadow:0 0 0 3px rgba(96,165,250,.18);}
+
+    /* simulate a “zone” without heavy borders: surfaces + subtle separators are preferred. [1] */
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Carousel — HTMX variations (shadcn/ui concepts mapped to Embla)</h1>
+      <div class="sub">
+        shadcn/ui’s Carousel is built using Embla Carousel. [0]
+        This file represents all documented variations: sizes, spacing, orientation, plus options/API/events/plugins concepts. [0]
+        HTMX artifacts are intended to be HTML + vanilla JS in an isolated environment. [2]
+      </div>
+
+      <div class="grid">
+
+        <!-- A) Default carousel -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">A) Default</div>
+            <span class="pill">baseline</span>
+          </div>
+          <div class="carousel"
+               data-carousel
+               data-orientation="horizontal"
+               data-options='{"loop":false,"align":"start"}'
+               data-plugins='{"autoplay":false}'>
+            <div class="embla">
+              <div class="embla__viewport">
+                <div class="embla__container" style="--slide-gap: 12px;">
+                  <div class="embla__slide basis-full"><div class="slideCard">1</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">2</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">3</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">4</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">5</div></div>
+                </div>
+              </div>
+
+              <div class="controls">
+                <div class="nav">
+                  <button class="iconBtn" type="button" data-prev aria-label="Previous">‹</button>
+                  <button class="iconBtn" type="button" data-next aria-label="Next">›</button>
+                </div>
+                <div class="status mono" data-status>Slide 0 of 0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- B) Sizes variation -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">B) Sizes</div>
+            <span class="pill">basis utilities</span>
+          </div>
+          <div class="sub" style="margin:0 0 10px 0">
+            shadcn/ui docs: “To set the size of the items, use the <span class="mono">basis</span> utility class on the item.” [0]
+          </div>
+
+          <div class="carousel"
+               data-carousel
+               data-orientation="horizontal"
+               data-options='{"loop":true,"align":"start"}'
+               data-plugins='{"autoplay":false}'>
+            <div class="embla">
+              <div class="embla__viewport">
+                <div class="embla__container" style="--slide-gap: 12px;">
+                  <div class="embla__slide basis-1/2"><div class="slideCard">1/2</div></div>
+                  <div class="embla__slide basis-1/2"><div class="slideCard">1/2</div></div>
+                  <div class="embla__slide basis-1/3"><div class="slideCard">1/3</div></div>
+                  <div class="embla__slide basis-1/3"><div class="slideCard">1/3</div></div>
+                  <div class="embla__slide basis-1/4"><div class="slideCard">1/4</div></div>
+                  <div class="embla__slide basis-1/4"><div class="slideCard">1/4</div></div>
+                </div>
+              </div>
+
+              <div class="controls">
+                <div class="nav">
+                  <button class="iconBtn" type="button" data-prev aria-label="Previous">‹</button>
+                  <button class="iconBtn" type="button" data-next aria-label="Next">›</button>
+                </div>
+                <div class="status mono" data-status>Slide 0 of 0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- C) Spacing variation -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">C) Spacing</div>
+            <span class="pill">pl-[VALUE] + -ml-[VALUE]</span>
+          </div>
+          <div class="sub" style="margin:0 0 10px 0">
+            shadcn/ui docs: spacing uses <span class="mono">pl-[VALUE]</span> on items and <span class="mono">-ml-[VALUE]</span> on the container. [0]
+          </div>
+
+          <div class="row" style="margin:0 0 10px 0">
+            <!-- HTMX variation: clicking swaps in a carousel fragment with a different gap -->
+            <button class="btn"
+              hx-get="/fake/carousel/spacing?gap=8"
+              hx-target="#spacingHost"
+              hx-swap="innerHTML"
+              hx-indicator="#ind-space"
+            >Gap 8</button>
+            <button class="btn"
+              hx-get="/fake/carousel/spacing?gap=16"
+              hx-target="#spacingHost"
+              hx-swap="innerHTML"
+              hx-indicator="#ind-space"
+            >Gap 16</button>
+            <button class="btn btnPrimary"
+              hx-get="/fake/carousel/spacing?gap=24"
+              hx-target="#spacingHost"
+              hx-swap="innerHTML"
+              hx-indicator="#ind-space"
+            >Gap 24</button>
+
+            <div id="ind-space" class="indicator"><span class="dot"></span> Swapping…</div>
+          </div>
+
+          <div id="spacingHost">
+            <!-- default spacing 16 -->
+            <div class="carousel"
+                 data-carousel
+                 data-orientation="horizontal"
+                 data-options='{"loop":false,"align":"start"}'
+                 data-plugins='{"autoplay":false}'>
+              <div class="embla">
+                <div class="embla__viewport">
+                  <div class="embla__container" style="--slide-gap: 16px;">
+                    <div class="embla__slide basis-1/3"><div class="slideCard">1</div></div>
+                    <div class="embla__slide basis-1/3"><div class="slideCard">2</div></div>
+                    <div class="embla__slide basis-1/3"><div class="slideCard">3</div></div>
+                    <div class="embla__slide basis-1/3"><div class="slideCard">4</div></div>
+                    <div class="embla__slide basis-1/3"><div class="slideCard">5</div></div>
+                  </div>
+                </div>
+                <div class="controls">
+                  <div class="nav">
+                    <button class="iconBtn" type="button" data-prev aria-label="Previous">‹</button>
+                    <button class="iconBtn" type="button" data-next aria-label="Next">›</button>
+                  </div>
+                  <div class="status mono" data-status>Slide 0 of 0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- D) Orientation variation -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">D) Orientation</div>
+            <span class="pill">horizontal | vertical</span>
+          </div>
+          <div class="sub" style="margin:0 0 10px 0">
+            shadcn/ui docs: use the <span class="mono">orientation</span> prop to set carousel orientation. [0]
+          </div>
+
+          <div class="carousel"
+               data-carousel
+               data-orientation="vertical"
+               data-options='{"loop":true,"align":"start"}'
+               data-plugins='{"autoplay":false}'
+               style="max-height: 280px;">
+            <div class="embla is-vertical">
+              <div class="embla__viewport" style="max-height: 220px;">
+                <div class="embla__container" style="--slide-gap: 12px;">
+                  <div class="embla__slide basis-full"><div class="slideCard">1</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">2</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">3</div></div>
+                  <div class="embla__slide basis-full"><div class="slideCard">4</div></div>
+                </div>
+              </div>
+              <div class="controls">
+                <div class="nav">
+                  <button class="iconBtn" type="button" data-prev aria-label="Previous">‹</button>
+                  <button class="iconBtn" type="button" data-next aria-label="Next">›</button>
+                </div>
+                <div class="status mono" data-status>Slide 0 of 0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- E) Options + API + Events + Plugins (Autoplay) -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">E) Options + API + Events + Plugins</div>
+            <span class="pill">opts + setApi/events + plugins</span>
+          </div>
+          <div class="sub" style="margin:0 0 10px 0">
+            shadcn/ui docs: pass Embla options via <span class="mono">opts</span>, access API via <span class="mono">setApi</span>, listen to events, and add plugins via <span class="mono">plugins</span>. [0]
+          </div>
+
+          <div class="row" style="margin:0 0 10px 0">
+            <button class="btn btnPrimary" type="button" id="btn-autoplay">Toggle autoplay plugin</button>
+            <button class="btn" type="button" id="btn-loop">Toggle loop option</button>
+            <span class="pill mono" id="eventsLog">events: (none)</span>
+          </div>
+
+          <div class="carousel"
+               id="advancedCarousel"
+               data-carousel
+               data-orientation="horizontal"
+               data-options='{"loop":false,"align":"start"}'
+               data-plugins='{"autoplay":true}'>
+            <div class="embla">
+              <div class="embla__viewport">
+                <div class="embla__container" style="--slide-gap: 12px;">
+                  <div class="embla__slide basis-1/2"><div class="slideCard">A</div></div>
+                  <div class="embla__slide basis-1/2"><div class="slideCard">B</div></div>
+                  <div class="embla__slide basis-1/2"><div class="slideCard">C</div></div>
+                  <div class="embla__slide basis-1/2"><div class="slideCard">D</div></div>
+                </div>
+              </div>
+              <div class="controls">
+                <div class="nav">
+                  <button class="iconBtn" type="button" data-prev aria-label="Previous">‹</button>
+                  <button class="iconBtn" type="button" data-next aria-label="Next">›</button>
+                </div>
+                <div class="status mono" data-status>Slide 0 of 0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="sub" style="margin-top:12px">
+        Note: In a real app, you’d return carousel fragments from endpoints and swap them into regions (HTMX fragment pattern). [13]
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Embla wiring (vanilla JS) ---
+    const instances = new WeakMap();
+
+    function initCarousel(root){
+      const emblaRoot = root.querySelector(".embla");
+      const viewport = root.querySelector(".embla__viewport");
+      const prevBtn = root.querySelector("[data-prev]");
+      const nextBtn = root.querySelector("[data-next]");
+      const status = root.querySelector("[data-status]");
+
+      const options = safeJson(root.getAttribute("data-options")) || {};
+      const pluginsCfg = safeJson(root.getAttribute("data-plugins")) || {};
+      const useAutoplay = !!pluginsCfg.autoplay;
+
+      const plugins = [];
+      if (useAutoplay && window.EmblaCarouselAutoplay) {
+        plugins.push(window.EmblaCarouselAutoplay.Autoplay({ delay: 2200, stopOnInteraction: true }));
+      }
+
+      const embla = window.EmblaCarousel(viewport, options, plugins);
+
+      const updateStatus = () => {
+        if(!status) return;
+        const idx = embla.selectedScrollSnap() + 1;
+        const total = embla.scrollSnapList().length;
+        status.textContent = `Slide ${idx} of ${total}`;
+      };
+
+      const onSelect = () => updateStatus();
+      embla.on("select", onSelect);
+      embla.on("reInit", onSelect);
+
+      prevBtn?.addEventListener("click", () => embla.scrollPrev());
+      nextBtn?.addEventListener("click", () => embla.scrollNext());
+
+      updateStatus();
+
+      instances.set(root, { embla, options, pluginsCfg });
+    }
+
+    function destroyCarousel(root){
+      const inst = instances.get(root);
+      if(inst?.embla) inst.embla.destroy();
+      instances.delete(root);
+    }
+
+    function bootAll(scope=document){
+      scope.querySelectorAll("[data-carousel]").forEach((root) => {
+        destroyCarousel(root);
+        initCarousel(root);
+      });
+    }
+
+    function safeJson(s){
+      try { return JSON.parse(s); } catch { return null; }
+    }
+
+    // --- HTMX: after swap, re-init Embla inside swapped content ---
+    document.body.addEventListener("htmx:afterSwap", (evt) => {
+      bootAll(evt.target);
+    });
+
+    // Simulate /fake/* endpoints so this file runs without a backend. [2]
+    document.body.addEventListener("htmx:configRequest", (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if (!path || !path.startsWith("/fake/")) return;
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute("hx-target");
+      const target = targetSel ? document.querySelector(targetSel) : null;
+
+      setTimeout(() => {
+        if(path.startsWith("/fake/carousel/spacing")){
+          const url = new URL("http://x" + path);
+          const gap = url.searchParams.get("gap") || "16";
+          if (target) {
+            target.innerHTML = `
+              <div class="carousel"
+                   data-carousel
+                   data-orientation="horizontal"
+                   data-options='{"loop":false,"align":"start"}'
+                   data-plugins='{"autoplay":false}'>
+                <div class="embla">
+                  <div class="embla__viewport">
+                    <div class="embla__container" style="--slide-gap: ${gap}px;">
+                      <div class="embla__slide basis-1/3"><div class="slideCard">1</div></div>
+                      <div class="embla__slide basis-1/3"><div class="slideCard">2</div></div>
+                      <div class="embla__slide basis-1/3"><div class="slideCard">3</div></div>
+                      <div class="embla__slide basis-1/3"><div class="slideCard">4</div></div>
+                      <div class="embla__slide basis-1/3"><div class="slideCard">5</div></div>
+                    </div>
+                  </div>
+                  <div class="controls">
+                    <div class="nav">
+                      <button class="iconBtn" type="button" data-prev aria-label="Previous">‹</button>
+                      <button class="iconBtn" type="button" data-next aria-label="Next">›</button>
+                    </div>
+                    <div class="status mono" data-status>Slide 0 of 0</div>
+                  </div>
+                </div>
+              </div>
+            `;
+            bootAll(target);
+          }
+        }
+      }, 220);
+    });
+
+    // Advanced demo: options/plugins/events concepts from shadcn docs. [0]
+    (function(){
+      let autoplayOn = true;
+      let loopOn = false;
+      const log = document.getElementById("eventsLog");
+      const adv = document.getElementById("advancedCarousel");
+
+      function rebuild(){
+        if(!adv) return;
+
+        // update dataset (opts/plugins)
+        adv.setAttribute("data-options", JSON.stringify({ loop: loopOn, align: "start" }));
+        adv.setAttribute("data-plugins", JSON.stringify({ autoplay: autoplayOn }));
+
+        // rebuild instance
+        destroyCarousel(adv);
+        initCarousel(adv);
+
+        // events hook (api events) [0]
+        const inst = instances.get(adv);
+        if(inst?.embla){
+          inst.embla.on("select", () => {
+            log.textContent = `events: select (index=${inst.embla.selectedScrollSnap()})`;
+          });
+          inst.embla.on("reInit", () => {
+            log.textContent = `events: reInit`;
+          });
+        }
+      }
+
+      document.getElementById("btn-autoplay")?.addEventListener("click", () => {
+        autoplayOn = !autoplayOn;
+        rebuild();
+      });
+      document.getElementById("btn-loop")?.addEventListener("click", () => {
+        loopOn = !loopOn;
+        rebuild();
+      });
+    })();
+
+    // initial boot
+    bootAll();
+  </script>
+</body>
+</html>

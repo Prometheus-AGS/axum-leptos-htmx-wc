@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Command Palette (04) — Server Fragments + OOB</title>
+
+  <!-- HTMX via CDN for a drop-in HTMX artifact. [5] -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 55%);
+      --on-surface: hsl(var(--primary-hue) 15% 92%);
+      --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+      --surface-container-lowest: hsl(var(--primary-hue) 15% 9%);
+      --surface-container-low: hsl(var(--primary-hue) 14% 12%);
+      --surface-container: hsl(var(--primary-hue) 14% 14%);
+      --surface-container-high: hsl(var(--primary-hue) 14% 17%);
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --r-xl: 20px;
+      --r-lg: 16px;
+      --r-md: 12px;
+      --transition-fast: 150ms cubic-bezier(.4,0,.2,1);
+      --transition-base: 300ms cubic-bezier(.4,0,.2,1);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; padding:22px; font-family: var(--sans); background: radial-gradient(circle at top left, var(--surface-container-lowest) 0, #000 100%); color: var(--on-surface);}    
+    .wrap{max-width:980px; margin:0 auto;}
+    .zone{background: var(--surface-container-low); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 16px;}
+
+    .head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+    h1{font-size:16px; margin:0;}
+    .sub{margin:6px 0 0 0; color:var(--on-surface-variant); font-size:13px; line-height:1.4;}
+    .pill{font-family: var(--mono); font-size:11px; color:var(--on-surface-variant); background: color-mix(in srgb, var(--surface-container-high) 70%, transparent); padding:3px 8px; border-radius:999px; white-space:nowrap;}
+
+    .palette{margin-top: 14px; background: var(--surface-container); border-radius: var(--r-xl); padding: 12px;}
+    .inputRow{display:flex; align-items:center; gap:10px; background: var(--surface-container-high); border-radius: 999px; padding: 10px 12px;}
+    .search{flex:1; border:0; outline:none; background: transparent; color: var(--on-surface); font-size: 13px;}
+
+    .badge{font-family: var(--mono); font-size:11px; color: var(--on-surface-variant); padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--surface-container) 70%, transparent);}
+
+    .results{margin-top: 10px; border-radius: var(--r-lg); background: var(--surface-container-low); padding: 8px; max-height: 360px; overflow:auto;}
+
+    .item{display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 10px; border-radius: var(--r-md); background: transparent; cursor:pointer; transition: background var(--transition-base), transform var(--transition-fast); user-select:none;}
+    .item:hover{background: var(--surface-container-high); transform: translateY(-1px);}
+    .left{min-width:0;}
+    .label{font-size:13px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .desc{font-size:12px; color: var(--on-surface-variant); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+    .out{margin-top: 12px; background: var(--surface-container); border-radius: var(--r-xl); padding: 12px; color: var(--on-surface-variant); font-size: 12px; min-height: 48px;}
+
+    .srOnly{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="zone">
+      <div class="head">
+        <div>
+          <h1>Command (04) — Server fragments + OOB</h1>
+          <p class="sub">
+            Demonstrates server-style partials: results swap into <span style="font-family:var(--mono)">#results</span>, while a separate badge updates via <span style="font-family:var(--mono)">hx-swap-oob</span>. [27][29]
+          </p>
+        </div>
+        <div class="pill">hx-swap-oob</div>
+      </div>
+
+      <div class="palette">
+        <div class="inputRow">
+          <input id="q" class="search" type="text" autocomplete="off" placeholder="Type to search…"
+                 hx-get="/fake/search"
+                 hx-trigger="keyup changed delay:120ms"
+                 hx-target="#results"
+                 hx-swap="innerHTML" />
+          <div class="badge" id="countBadge">0 results</div>
+        </div>
+
+        <div class="srOnly" aria-live="polite" id="srStatus"></div>
+
+        <div class="results" id="results"></div>
+      </div>
+
+      <div class="out" id="out">No command executed yet.</div>
+    </div>
+  </div>
+
+  <script>
+    const ITEMS = [
+      { id: 'open.docs', label: 'Open Docs', desc: 'Go to documentation' },
+      { id: 'open.changelog', label: 'Open Changelog', desc: 'View release notes' },
+      { id: 'toggle.sidebar', label: 'Toggle Sidebar', desc: 'Show or hide navigation' },
+      { id: 'new.file', label: 'New File', desc: 'Create a new file' },
+      { id: 'new.folder', label: 'New Folder', desc: 'Create a new folder' },
+    ];
+
+    function escapeHtml(s){
+      return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+    }
+
+    function filter(q){
+      q = (q||'').toLowerCase().trim();
+      if(!q) return ITEMS;
+      return ITEMS.filter(it => (it.label + ' ' + it.desc + ' ' + it.id).toLowerCase().includes(q));
+    }
+
+    function resultsHtml(rows){
+      if(!rows.length) return `<div class="item" style="cursor:default"><div class="left"><div class="label">No results</div><div class="desc">Try another query.</div></div></div>`;
+      return rows.map(it => `
+        <div class="item" role="button" tabindex="0"
+             hx-post="/fake/run" hx-vals='{"id":"${escapeHtml(it.id)}"}' hx-target="#out" hx-swap="innerHTML">
+          <div class="left">
+            <div class="label">${escapeHtml(it.label)}</div>
+            <div class="desc">${escapeHtml(it.desc)}</div>
+          </div>
+          <div class="badge" style="opacity:.8">↵</div>
+        </div>
+      `).join('');
+    }
+
+    // Render initial.
+    document.getElementById('results').innerHTML = resultsHtml(ITEMS);
+    document.getElementById('countBadge').textContent = `${ITEMS.length} results`;
+
+    // Fake backend returning "partials" including OOB nodes. [29]
+    document.body.addEventListener('htmx:configRequest', (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if(!path || !path.startsWith('/fake/')) return;
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute('hx-target');
+      const target = targetSel ? document.querySelector(targetSel) : null;
+
+      setTimeout(() => {
+        if(path.startsWith('/fake/search')){
+          const q = document.getElementById('q').value;
+          const rows = filter(q);
+          const fragment = `
+            ${resultsHtml(rows)}
+            <div id="countBadge" hx-swap-oob="true">${rows.length} results</div>
+            <div id="srStatus" hx-swap-oob="true">${rows.length} results available</div>
+          `;
+          if(target) target.innerHTML = fragment;
+
+          // Apply OOB manually for standalone demo; HTMX would normally do this itself on real responses. [29]
+          const tmp = document.createElement('div');
+          tmp.innerHTML = fragment;
+          tmp.querySelectorAll('[hx-swap-oob]').forEach(oob => {
+            const id = oob.getAttribute('id');
+            if(!id) return;
+            const dest = document.getElementById(id);
+            if(dest) dest.innerHTML = oob.innerHTML;
+          });
+
+          // Clean target: only results, no embedded oob divs.
+          if(target) target.innerHTML = resultsHtml(rows);
+        }
+
+        if(path.startsWith('/fake/run')){
+          const vals = JSON.parse(elt.getAttribute('hx-vals') || '{}');
+          const id = vals.id || 'unknown';
+          if(target) target.innerHTML = `<div><strong style="color:var(--on-surface)">Ran</strong> <span style="font-family:var(--mono)">${escapeHtml(id)}</span></div>`;
+        }
+      }, 140);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      const el = document.activeElement;
+      if(el && el.classList?.contains('item')) el.click();
+    });
+  </script>
+</body>
+</html>

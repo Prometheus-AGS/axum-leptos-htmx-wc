@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>shadcn/ui Textarea — HTMX Variations (single file)</title>
+
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    :root{
+      --bg: #0b1220;
+      --panel: #0f172a;
+      --panel2: #0b1324;
+      --border: rgba(148,163,184,.18);
+      --text: #e5e7eb;
+      --muted: rgba(226,232,240,.72);
+      --accent: #60a5fa;
+      --accentSoft: rgba(96,165,250,.16);
+      --danger: #f87171;
+      --ok: #34d399;
+
+      --r: 14px;
+      --r2: 12px;
+      --shadow: 0 18px 45px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.38);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{ box-sizing:border-box }
+    body{
+      margin:0; font-family: var(--sans);
+      background: radial-gradient(circle at top left, #0b1220 0, #0b1220 40%, #000 100%);
+      color: var(--text);
+      padding: 22px;
+    }
+    .wrap{ max-width: 1100px; margin: 0 auto; }
+    .card{
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    h1{ font-size: 16px; margin:0 0 6px 0; }
+    .sub{ color: var(--muted); font-size: 13px; line-height: 1.4; margin-bottom: 14px; }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .panel{
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: rgba(15,23,42,.55);
+      padding: 12px;
+    }
+    .titleRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 10px; }
+    .title{ font-size: 13px; font-weight: 650; }
+    .pill{
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    label{ font-size: 12px; color: var(--muted); display:block; margin-bottom: 6px; }
+    textarea{
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      padding: 10px 12px;
+      border-radius: var(--r2);
+      border: 1px solid var(--border);
+      background: rgba(2,6,23,.55);
+      color: var(--text);
+      outline: none;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    textarea:focus{
+      border-color: rgba(96,165,250,.55);
+      box-shadow: 0 0 0 3px rgba(96,165,250,.18);
+    }
+    input[type="text"]{
+      width: 100%;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: var(--r2);
+      border: 1px solid var(--border);
+      background: rgba(2,6,23,.55);
+      color: var(--text);
+      outline:none;
+      font-size: 13px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(148,163,184,.08);
+      color: var(--text);
+      cursor:pointer;
+      font-size: 12px;
+      text-decoration:none;
+    }
+    .btn:hover{ background: rgba(148,163,184,.13); }
+    .btnPrimary{
+      border-color: rgba(96,165,250,.45);
+      background: rgba(96,165,250,.16);
+    }
+    .btnDanger{
+      border-color: rgba(248,113,113,.45);
+      background: rgba(248,113,113,.14);
+      color: var(--danger);
+    }
+    .out{
+      margin-top: 10px;
+      border: 1px dashed rgba(148,163,184,.25);
+      border-radius: var(--r);
+      padding: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 56px;
+    }
+    .mono{ font-family: var(--mono); font-size: 12px; }
+    .indicator{
+      display:none;
+      align-items:center;
+      gap:8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .htmx-request.indicator{ display:flex; }
+    .dot{
+      width:10px;height:10px;border-radius:999px;
+      background: rgba(96,165,250,.75);
+      box-shadow: 0 0 0 3px rgba(96,165,250,.18);
+    }
+    .ok{ color: var(--ok); }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Textarea (shadcn-style) — HTMX variations in one file</h1>
+      <div class="sub">
+        This is a single-file HTMX artifact (HTML + HTMX + vanilla JS) which fits the recommended environment choice for this artifact type. [1]
+        The “server” is simulated by intercepting <span class="mono">/fake/*</span> requests so the file can be dropped into an HTMX app without causing backend errors. [7]
+      </div>
+
+      <div class="grid">
+
+        <!-- 1) hx-get + hx-trigger + hx-target + hx-swap + hx-indicator -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">1) Live preview (hx-get)</div>
+            <span class="pill">hx-get + hx-trigger + hx-target + hx-swap + hx-indicator</span>
+          </div>
+
+          <label for="ta-preview">Type to preview (debounced)</label>
+          <textarea id="ta-preview" name="body"
+            placeholder="Write something..."
+            hx-get="/fake/textarea/preview"
+            hx-trigger="keyup changed delay:350ms"
+            hx-target="#preview-out"
+            hx-swap="innerHTML"
+            hx-indicator="#ind-preview"
+          ></textarea>
+
+          <div class="row">
+            <div id="ind-preview" class="indicator"><span class="dot"></span> Loading preview…</div>
+          </div>
+
+          <div id="preview-out" class="out">
+            Preview will appear here (server returns an HTML fragment). [27]
+          </div>
+        </div>
+
+        <!-- 2) hx-post form submit + hx-include + hx-vals -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">2) Save (hx-post form)</div>
+            <span class="pill">hx-post + hx-include + hx-vals + hx-target</span>
+          </div>
+
+          <form
+            hx-post="/fake/textarea/save"
+            hx-trigger="submit"
+            hx-target="#save-out"
+            hx-swap="innerHTML"
+            hx-indicator="#ind-save"
+          >
+            <label for="ta-save">Textarea value posted</label>
+            <textarea id="ta-save" name="body" placeholder="This will be posted via HTMX…"></textarea>
+
+            <label for="doc-id" style="margin-top:10px">Extra field included (hx-include)</label>
+            <input id="doc-id" name="docId" type="text" value="doc_123" />
+
+            <!-- hx-vals example: extra JSON-ish values attached to request -->
+            <button class="btn btnPrimary"
+              type="submit"
+              hx-vals='{"source":"textarea-demo","intent":"save"}'
+            >Save</button>
+
+            <div class="row">
+              <div id="ind-save" class="indicator"><span class="dot"></span> Saving…</div>
+            </div>
+          </form>
+
+          <div id="save-out" class="out">Submit to see a “saved” response.</div>
+        </div>
+
+        <!-- 3) hx-put update + hx-target + hx-swap -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">3) Update existing (hx-put)</div>
+            <span class="pill">hx-put + hx-target + hx-swap</span>
+          </div>
+
+          <label for="ta-put">Edit existing content</label>
+          <textarea id="ta-put" name="body">Existing content…</textarea>
+
+          <div class="row">
+            <button class="btn"
+              hx-put="/fake/textarea/update"
+              hx-include="#ta-put"
+              hx-target="#put-out"
+              hx-swap="innerHTML"
+              hx-indicator="#ind-put"
+            >Update</button>
+            <div id="ind-put" class="indicator"><span class="dot"></span> Updating…</div>
+          </div>
+
+          <div id="put-out" class="out">Update response here.</div>
+        </div>
+
+        <!-- 4) hx-delete delete + out-of-band (OOB) swap example -->
+        <div class="panel">
+          <div class="titleRow">
+            <div class="title">4) Delete (hx-delete) + OOB</div>
+            <span class="pill">hx-delete + hx-target + OOB swap</span>
+          </div>
+
+          <div class="sub" style="margin:0 0 10px 0">
+            The simulated server returns a normal fragment plus an <span class="mono">hx-swap-oob</span> toast/status update. (Out-of-band swaps are a named HTMX pattern in the materials.) [29]
+          </div>
+
+          <label for="ta-del">Item to delete</label>
+          <textarea id="ta-del" name="body">This item will be “deleted”.</textarea>
+
+          <div class="row">
+            <button class="btn btnDanger"
+              hx-delete="/fake/textarea/delete"
+              hx-include="#ta-del"
+              hx-target="#del-out"
+              hx-swap="innerHTML"
+              hx-indicator="#ind-del"
+            >Delete</button>
+            <div id="ind-del" class="indicator"><span class="dot"></span> Deleting…</div>
+          </div>
+
+          <div id="del-out" class="out">Delete response here.</div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:12px" class="out" id="global-status">
+        <div class="mono">Global status area (can be updated via OOB swaps).</div>
+      </div>
+
+      <div class="sub" style="margin-top:12px">
+        Pattern note: in your “real” app shell, these panels are typically swapped into regions (sidebar/main/etc.) as HTML fragments. [9]
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Standalone simulation: intercept /fake/* so the file runs without a backend. [7]
+    document.body.addEventListener("htmx:configRequest", (evt) => {
+      const path = evt.detail.path || evt.detail.requestConfig?.path;
+      if (!path || !path.startsWith("/fake/")) return;
+
+      evt.preventDefault();
+
+      const elt = evt.detail.elt;
+      const targetSel = elt?.getAttribute("hx-target");
+      const includeSel = elt?.getAttribute("hx-include");
+
+      const gather = () => {
+        const data = {};
+        if (includeSel) {
+          document.querySelectorAll(includeSel).forEach((node) => {
+            if (node.name) data[node.name] = node.value;
+            node.querySelectorAll?.("textarea,input,select").forEach((x) => {
+              if (x.name) data[x.name] = x.value;
+            });
+          });
+        }
+        // Also gather from closest form if any
+        const form = elt?.closest("form");
+        if (form) {
+          form.querySelectorAll("textarea,input,select").forEach((x) => {
+            if (x.name) data[x.name] = x.value;
+          });
+        }
+        return data;
+      };
+
+      const payload = gather();
+
+      const respond = (html) => {
+        // HTMX would normally do this; we do minimal update for the demo.
+        if (targetSel) {
+          const target = document.querySelector(targetSel);
+          if (target) target.innerHTML = html;
+        }
+        // Process any OOB swaps contained in the returned html
+        const tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        tmp.querySelectorAll("[hx-swap-oob]").forEach((oob) => {
+          const id = oob.getAttribute("id");
+          if (!id) return;
+          const dest = document.getElementById(id);
+          if (dest) dest.innerHTML = oob.innerHTML;
+        });
+      };
+
+      // Artificial latency for indicators
+      setTimeout(() => {
+        if (path === "/fake/textarea/preview") {
+          const body = payload.body ?? document.getElementById("ta-preview")?.value ?? "";
+          respond(`<div><div class="mono">Preview:</div><div style="margin-top:6px;color:var(--text)">${escapeHtml(body).replace(/\n/g,"<br/>")}</div></div>`);
+        } else if (path === "/fake/textarea/save") {
+          respond(`<div><div class="ok">Saved.</div><div class="mono" style="margin-top:6px">docId=${escapeHtml(payload.docId||"")}, source=intent via hx-vals (see request)</div></div>`);
+        } else if (path === "/fake/textarea/update") {
+          respond(`<div><div class="ok">Updated.</div><div class="mono" style="margin-top:6px">len=${(payload.body||"").length}</div></div>`);
+        } else if (path === "/fake/textarea/delete") {
+          respond(`
+            <div><span style="color:var(--danger)">Deleted.</span></div>
+            <div id="global-status" hx-swap-oob="true">
+              <div class="mono">Global status updated via OOB swap.</div>
+            </div>
+          `);
+        } else {
+          respond(`<div class="mono">Unhandled fake path: ${escapeHtml(path)}</div>`);
+        }
+      }, 250);
+
+      function escapeHtml(s){
+        return String(s)
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+    });
+  </script>
+</body>
+</html>
