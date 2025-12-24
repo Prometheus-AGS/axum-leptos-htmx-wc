@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Combobox (HTMX + Web Components-ready)</title>
+
+    <!-- HTMX included for declarative integration patterns. [6] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         Material 3 dynamic theming with CSS custom properties. [2]
+         Borderless surfaces (no borders). [2][11]
+         Focus-visible ring guidance. [9]
+      ============================================================ */
+      :root {
+        --primary-hue: 210;
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+        --surface-container-highest: hsl(var(--primary-hue) 16% 18%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+
+        --radius-md: 12px;
+        --radius-lg: 14px;
+        --radius-xl: 20px;
+
+        --space-xs: 8px;
+        --space-sm: 12px;
+        --space-md: 18px;
+        --space-lg: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(circle at top left, var(--surface-container-lowest) 0%, var(--surface-container) 60%, #000 140%);
+        padding: var(--space-lg);
+      }
+
+      .shell { max-width: 1120px; margin: 0 auto; display: grid; gap: var(--space-md); }
+
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-lg);
+        box-shadow: var(--shadow-2);
+      }
+
+      h1 { margin: 0; font-size: 1.1rem; font-weight: 950; letter-spacing: .2px; }
+      .sub { margin: 8px 0 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .card {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        padding: var(--space-md);
+        display: grid;
+        gap: var(--space-sm);
+      }
+
+      .row { display:flex; flex-wrap:wrap; gap: var(--space-sm); align-items:center; justify-content:space-between; }
+
+      .btn {
+        border: none; /* borderless [2][11] */
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 900;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-container);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* focus guidance [9] */
+
+      /* ============================================================
+         “Zone input” style pattern (borderless) inspired by form section. [11]
+      ============================================================ */
+      .zone-input { display: grid; gap: var(--space-xs); }
+      .zone-input__label { font-weight: 900; color: var(--on-surface); }
+      .zone-input__hint { color: var(--on-surface-variant); font-size: 0.92rem; }
+
+      /* Combobox surface */
+      .zone-combobox {
+        display: grid;
+        gap: var(--space-xs);
+        position: relative;
+        max-width: 520px;
+      }
+
+      .zone-combobox__control {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: var(--surface-container);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-1);
+      }
+
+      .zone-combobox__control:focus-within {
+        outline: 2px solid var(--primary); /* focus guidance [9] */
+        outline-offset: 2px;
+      }
+
+      .zone-combobox__input {
+        border: none;
+        outline: none;
+        width: 100%;
+        background: transparent;
+        color: var(--on-surface);
+        font-size: 0.98rem;
+      }
+
+      .zone-combobox__trigger {
+        border: none;
+        cursor: pointer;
+        background: color-mix(in oklab, var(--surface-container-high) 65%, transparent);
+        color: var(--on-surface);
+        border-radius: 12px;
+        padding: 8px 10px;
+        box-shadow: var(--shadow-1);
+        font-weight: 950;
+      }
+      .zone-combobox__trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* [9] */
+
+      .zone-combobox__popover {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        z-index: 20;
+        background: var(--surface-container-highest);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-2);
+        padding: 10px;
+        display: none;
+      }
+      .zone-combobox[data-open="true"] .zone-combobox__popover { display: block; }
+
+      .zone-combobox__list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-height: 260px;
+        overflow: auto;
+        display: grid;
+        gap: 6px;
+      }
+
+      .zone-combobox__option {
+        border: none;
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: var(--radius-lg);
+        background: color-mix(in oklab, var(--surface-container) 70%, transparent);
+        color: var(--on-surface);
+        cursor: pointer;
+        box-shadow: var(--shadow-1);
+        font-weight: 850;
+      }
+
+      .zone-combobox__option[aria-selected="true"] {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+
+      .zone-combobox__option[data-active="true"] {
+        outline: 2px solid var(--ring);
+        outline-offset: 1px;
+      }
+
+      .tags {
+        display:flex;
+        flex-wrap:wrap;
+        gap: 8px;
+      }
+      .tag {
+        display:inline-flex;
+        align-items:center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--surface-container-high) 70%, transparent);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface);
+        font-weight: 850;
+      }
+      .tag button {
+        border: none;
+        background: transparent;
+        color: var(--on-surface);
+        cursor: pointer;
+        font-weight: 950;
+      }
+
+      .result {
+        padding: 12px;
+        border-radius: var(--radius-lg);
+        background: color-mix(in oklab, var(--surface-container) 75%, transparent);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+      }
+
+      /* Mobile breakpoint guidance (<768px). [2] */
+      @media (max-width: 768px) {
+        .zone-combobox { max-width: 100%; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Combobox (HTMX + vanilla JS, Web Components boundaries)</h1>
+            <p class="sub">
+              Implements ARIA combobox pattern, search/filter, keyboard navigation, and an optional multi-select mode as expected for shadcn-like select/combobox systems. [26][29]
+            </p>
+          </div>
+          <button class="btn" type="button" id="themeToggle">Toggle Theme</button>
+        </div>
+
+        <div style="height: var(--space-md)"></div>
+
+        <!-- ============================================================
+             Variation 1 — Basic combobox (single select)
+             <wc-combobox> boundary (future Custom Element)
+             Suggested props:
+               - name (form field name)
+               - placeholder
+               - disabled
+               - value (single)
+               - items (data source)
+               - htmx: hx-get/hx-post wiring for server-side filtering (optional)
+             Requirements: combobox ARIA + keyboard nav + search. [26][29]
+        ============================================================ -->
+        <div class="card">
+          <div style="font-weight: 950;">Variation 1 — Single-select combobox (client-side filter)</div>
+
+          <div class="zone-input">
+            <div class="zone-input__label">Framework</div>
+            <div class="zone-input__hint">Type to filter; Enter selects; Esc closes.</div>
+          </div>
+
+          <div class="zone-combobox" id="cbSingle"
+               data-open="false"
+               data-mode="single"
+               data-name="framework">
+            <!-- <wc-combobox-control> boundary -->
+            <div class="zone-combobox__control">
+              <!-- <wc-combobox-input> boundary -->
+              <input class="zone-combobox__input"
+                     type="text"
+                     role="combobox"
+                     aria-autocomplete="list"
+                     aria-expanded="false"
+                     aria-controls="cbSingleList"
+                     aria-activedescendant=""
+                     placeholder="Select framework..." />
+              <!-- <wc-combobox-trigger> boundary -->
+              <button class="zone-combobox__trigger" type="button" aria-label="Toggle options">▾</button>
+            </div>
+
+            <!-- Hidden field for form submit -->
+            <input type="hidden" name="framework" value="" />
+
+            <!-- <wc-combobox-popover> boundary -->
+            <div class="zone-combobox__popover" role="presentation">
+              <!-- <wc-combobox-listbox> boundary -->
+              <ul class="zone-combobox__list" id="cbSingleList" role="listbox"></ul>
+            </div>
+          </div>
+
+          <div class="result" id="cbSingleResult">Selected: <strong>(none)</strong></div>
+        </div>
+
+        <!-- ============================================================
+             Variation 2 — Multi-select combobox (tags)
+             Expected pattern mentions multi-select + tags. [26][29]
+        ============================================================ -->
+        <div class="card">
+          <div style="font-weight: 950;">Variation 2 — Multi-select combobox (tags)</div>
+
+          <div class="zone-combobox" id="cbMulti"
+               data-open="false"
+               data-mode="multiple"
+               data-name="languages">
+            <div class="zone-combobox__control">
+              <input class="zone-combobox__input"
+                     type="text"
+                     role="combobox"
+                     aria-autocomplete="list"
+                     aria-expanded="false"
+                     aria-controls="cbMultiList"
+                     placeholder="Add languages..." />
+              <button class="zone-combobox__trigger" type="button" aria-label="Toggle options">▾</button>
+            </div>
+
+            <!-- Hidden field stores CSV for HTMX form posts (simple baseline) -->
+            <input type="hidden" name="languages" value="" />
+
+            <div class="zone-combobox__popover" role="presentation">
+              <ul class="zone-combobox__list" id="cbMultiList" role="listbox" aria-multiselectable="true"></ul>
+            </div>
+
+            <!-- <wc-combobox-tags> boundary -->
+            <div class="tags" id="cbMultiTags" aria-label="Selected tags"></div>
+          </div>
+
+          <div class="result" id="cbMultiResult">Selected: <strong>(none)</strong></div>
+        </div>
+
+        <!-- ============================================================
+             Variation 3 — HTMX-backed search (server filtering)
+             Lean artifact rule: fetch data, don’t embed huge datasets. [2]
+             HTMX attributes show how to query /api/combobox?q=... and swap list HTML. [6]
+             (This demo still renders client-side options, but wiring is ready.)
+        ============================================================ -->
+        <div class="card">
+          <div style="font-weight: 950;">Variation 3 — HTMX-backed search (wiring-ready)</div>
+
+          <div class="zone-input">
+            <div class="zone-input__label">User</div>
+            <div class="zone-input__hint">Example wiring: input can <code>hx-get</code> to server to fetch filtered options. [6]</div>
+          </div>
+
+          <div class="zone-combobox" id="cbHtmx"
+               data-open="false"
+               data-mode="single"
+               data-name="user_id">
+            <div class="zone-combobox__control">
+              <input class="zone-combobox__input"
+                     type="text"
+                     role="combobox"
+                     aria-autocomplete="list"
+                     aria-expanded="false"
+                     aria-controls="cbHtmxList"
+                     placeholder="Search users..."
+                     hx-get="/api/users/options"
+                     hx-trigger="keyup changed delay:250ms"
+                     hx-target="#cbHtmxList"
+                     hx-swap="innerHTML" />
+              <button class="zone-combobox__trigger" type="button" aria-label="Toggle options">▾</button>
+            </div>
+
+            <input type="hidden" name="user_id" value="" />
+
+            <div class="zone-combobox__popover" role="presentation">
+              <!-- Server should return <li><button ...> rows, or plain <li role="option"> -->
+              <ul class="zone-combobox__list" id="cbHtmxList" role="listbox"></ul>
+            </div>
+          </div>
+
+          <div class="result" id="cbHtmxResult">Selected: <strong>(none)</strong></div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      // Theme toggle (token-driven approach). [2]
+      document.getElementById("themeToggle").addEventListener("click", () => {
+        const root = document.documentElement;
+        const current = root.getAttribute("data-theme") || "dark";
+        root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+      });
+
+      // ============================================================
+      // Vanilla JS combobox engine
+      // - ARIA combobox patterns + keyboard navigation are expected. [26][29]
+      // - Multi-select with tags is expected. [26][29]
+      // ============================================================
+      function mountCombobox(root, items, resultEl) {
+        const mode = root.getAttribute("data-mode"); // "single" | "multiple"
+        const name = root.getAttribute("data-name");
+        const input = root.querySelector(".zone-combobox__input");
+        const trigger = root.querySelector(".zone-combobox__trigger");
+        const list = root.querySelector('[role="listbox"]');
+        const hidden = root.querySelector(`input[type="hidden"][name="${name}"]`);
+        const tagsEl = root.querySelector("#cbMultiTags");
+
+        let open = false;
+        let activeIndex = -1;
+        let filtered = items.slice();
+        const selected = new Set(); // for multiple
+        let selectedValue = "";     // for single
+
+        function setOpen(v) {
+          open = v;
+          root.setAttribute("data-open", open ? "true" : "false");
+          input.setAttribute("aria-expanded", open ? "true" : "false");
+          if (open) renderList();
+        }
+
+        function setActive(idx) {
+          activeIndex = idx;
+          const opts = Array.from(list.querySelectorAll('[role="option"]'));
+          opts.forEach((el, i) => {
+            el.setAttribute("data-active", i === activeIndex ? "true" : "false");
+            if (i === activeIndex) input.setAttribute("aria-activedescendant", el.id || "");
+          });
+        }
+
+        function updateResult() {
+          if (mode === "multiple") {
+            const vals = Array.from(selected.values());
+            hidden.value = vals.join(","); // simplest baseline for HTMX forms
+            resultEl.innerHTML = `Selected: <strong>${vals.length ? vals.join(", ") : "(none)"}</strong>`;
+          } else {
+            hidden.value = selectedValue;
+            resultEl.innerHTML = `Selected: <strong>${selectedValue || "(none)"}</strong>`;
+          }
+        }
+
+        function renderTags() {
+          if (!tagsEl) return;
+          tagsEl.innerHTML = "";
+          Array.from(selected.values()).forEach((val) => {
+            const t = document.createElement("span");
+            t.className = "tag";
+            t.innerHTML = `<span>${val}</span>`;
+            const x = document.createElement("button");
+            x.type = "button";
+            x.setAttribute("aria-label", `Remove ${val}`);
+            x.textContent = "×";
+            x.addEventListener("click", () => {
+              selected.delete(val);
+              renderTags();
+              renderList();
+              updateResult();
+            });
+            t.appendChild(x);
+            tagsEl.appendChild(t);
+          });
+        }
+
+        function renderList() {
+          list.innerHTML = "";
+          const q = (input.value || "").toLowerCase();
+
+          filtered = items.filter((it) => it.toLowerCase().includes(q));
+          if (filtered.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "result";
+            empty.textContent = "No results.";
+            list.appendChild(empty);
+            return;
+          }
+
+          filtered.forEach((it, i) => {
+            const li = document.createElement("li");
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "zone-combobox__option";
+            btn.id = `${root.id}-opt-${i}`;
+            btn.setAttribute("role", "option");
+
+            if (mode === "multiple") {
+              btn.setAttribute("aria-selected", selected.has(it) ? "true" : "false");
+            } else {
+              btn.setAttribute("aria-selected", it === selectedValue ? "true" : "false");
+            }
+
+            btn.textContent = it;
+            btn.addEventListener("click", () => {
+              if (mode === "multiple") {
+                if (selected.has(it)) selected.delete(it);
+                else selected.add(it);
+                renderTags();
+                renderList();
+              } else {
+                selectedValue = it;
+                input.value = it;
+                setOpen(false);
+              }
+              updateResult();
+            });
+
+            li.appendChild(btn);
+            list.appendChild(li);
+          });
+
+          setActive(Math.min(Math.max(activeIndex, 0), filtered.length - 1));
+        }
+
+        // Interactions
+        trigger.addEventListener("click", () => setOpen(!open));
+
+        input.addEventListener("focus", () => setOpen(true));
+        input.addEventListener("input", () => { setOpen(true); activeIndex = 0; renderList(); });
+
+        input.addEventListener("keydown", (e) => {
+          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) setOpen(true);
+
+          const max = filtered.length - 1;
+
+          if (e.key === "ArrowDown") { e.preventDefault(); setActive(Math.min(activeIndex + 1, max)); }
+          if (e.key === "ArrowUp") { e.preventDefault(); setActive(Math.max(activeIndex - 1, 0)); }
+
+          if (e.key === "Enter") {
+            const opts = Array.from(list.querySelectorAll('[role="option"]'));
+            const cur = opts[activeIndex];
+            if (cur) { e.preventDefault(); cur.click(); }
+          }
+
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setOpen(false);
+          }
+        });
+
+        // Click outside closes
+        document.addEventListener("click", (e) => {
+          if (!root.contains(e.target)) setOpen(false);
+        });
+
+        // Initial render
+        updateResult();
+        renderTags();
+        renderList();
+      }
+
+      // Demo datasets (small, but the system supports HTMX fetching for large lists). [2]
+      const frameworks = ["Next.js", "SvelteKit", "Nuxt", "Remix", "Astro", "Leptos", "HTMX"];
+      const langs = ["Rust", "TypeScript", "JavaScript", "Python", "Go", "Zig", "Elixir"];
+
+      mountCombobox(document.getElementById("cbSingle"), frameworks, document.getElementById("cbSingleResult"));
+      mountCombobox(document.getElementById("cbMulti"), langs, document.getElementById("cbMultiResult"));
+      mountCombobox(document.getElementById("cbHtmx"), ["(server will populate options)"], document.getElementById("cbHtmxResult"));
+    </script>
+  </body>
+</html>

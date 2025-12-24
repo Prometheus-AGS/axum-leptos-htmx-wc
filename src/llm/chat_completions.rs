@@ -58,10 +58,10 @@ impl LlmDriver for ChatCompletionsDriver {
     ) -> anyhow::Result<std::pin::Pin<Box<dyn Stream<Item = anyhow::Result<NormalizedEvent>> + Send>>>
     {
         // Build URL based on provider
-        let url = self.settings.provider.build_chat_url(
-            &self.settings.base_url,
-            &self.settings.model,
-        );
+        let url = self
+            .settings
+            .provider
+            .build_chat_url(&self.settings.base_url, &self.settings.model);
 
         tracing::info!(
             url = %url,
@@ -80,17 +80,17 @@ impl LlmDriver for ChatCompletionsDriver {
                 "include_usage": true
             },
             "messages": req.messages,
-            "tools": if req.tools.is_empty() { 
-                serde_json::Value::Null 
-            } else { 
-                serde_json::Value::Array(req.tools) 
+            "tools": if req.tools.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::Array(req.tools)
             }
         });
 
         // Add parallel_tool_calls if specified and supported
         // Note: GPT-5.x models don't support parallel_tool_calls parameter
         let is_gpt5_model = self.settings.model.starts_with("gpt-5");
-        
+
         if let Some(parallel) = self.settings.parallel_tool_calls {
             if is_gpt5_model {
                 tracing::debug!(
@@ -118,7 +118,7 @@ impl LlmDriver for ChatCompletionsDriver {
         );
 
         let mut rb = self.http.post(&url).json(&body);
-        
+
         // Add authentication header
         if let Some(k) = &self.settings.api_key {
             rb = rb.bearer_auth(k);
@@ -127,17 +127,20 @@ impl LlmDriver for ChatCompletionsDriver {
 
         tracing::debug!("Sending HTTP request to LLM API");
         let resp = rb.send().await?;
-        
+
         let status = resp.status();
         tracing::info!(
             status = %status,
             "Received response from LLM API"
         );
-        
+
         // Check for error status and parse error details if present
         if !status.is_success() {
-            let error_body = resp.text().await.unwrap_or_else(|_| String::from("Failed to read error body"));
-            
+            let error_body = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| String::from("Failed to read error body"));
+
             // Try to parse as JSON to extract detailed error information
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_body) {
                 let error_obj = &error_json["error"];
@@ -145,7 +148,7 @@ impl LlmDriver for ChatCompletionsDriver {
                 let error_type = error_obj["type"].as_str().unwrap_or("unknown");
                 let error_param = error_obj["param"].as_str();
                 let error_code = error_obj["code"].as_str();
-                
+
                 tracing::error!(
                     status = %status,
                     error_type = error_type,
@@ -155,7 +158,7 @@ impl LlmDriver for ChatCompletionsDriver {
                     full_error_body = %error_body,
                     "LLM API returned error with details"
                 );
-                
+
                 // Create a detailed error message
                 let mut detailed_error = format!("LLM API error ({status}): {error_message}");
                 if let Some(param) = error_param {
@@ -168,7 +171,7 @@ impl LlmDriver for ChatCompletionsDriver {
                     detailed_error.push_str(code);
                     detailed_error.push(']');
                 }
-                
+
                 return Err(anyhow::anyhow!(detailed_error));
             }
             // Not JSON, log raw body
@@ -179,7 +182,7 @@ impl LlmDriver for ChatCompletionsDriver {
             );
             return Err(anyhow::anyhow!("LLM API error ({status}): {error_body}"));
         }
-        
+
         let byte_stream = resp.bytes_stream();
 
         tracing::debug!("Starting to process response stream");
@@ -231,30 +234,36 @@ impl LlmDriver for ChatCompletionsDriver {
                         );
 
                         let v: serde_json::Value = serde_json::from_str(data)?;
-                        
+
                         // Check for usage information (sent in final chunk)
-                        if let Some(usage) = v.get("usage") {
-                            if let (Some(prompt), Some(completion), Some(total)) = (
-                                usage.get("prompt_tokens").and_then(|x| x.as_u64()),
-                                usage.get("completion_tokens").and_then(|x| x.as_u64()),
-                                usage.get("total_tokens").and_then(|x| x.as_u64()),
-                            ) {
-                                event_count += 1;
-                                tracing::info!(
-                                    prompt_tokens = prompt,
-                                    completion_tokens = completion,
-                                    total_tokens = total,
-                                    "Received usage information from API"
-                                );
-                                #[allow(clippy::cast_possible_truncation)]
-                                yield NormalizedEvent::Usage {
-                                    prompt_tokens: prompt as u32,
-                                    completion_tokens: completion as u32,
-                                    total_tokens: total as u32,
-                                };
-                            }
+                        if let Some(usage) = v.get("usage")
+                            && let (Some(prompt), Some(completion), Some(total)) = (
+                                usage
+                                    .get("prompt_tokens")
+                                    .and_then(serde_json::Value::as_u64),
+                                usage
+                                    .get("completion_tokens")
+                                    .and_then(serde_json::Value::as_u64),
+                                usage
+                                    .get("total_tokens")
+                                    .and_then(serde_json::Value::as_u64),
+                            )
+                        {
+                            event_count += 1;
+                            tracing::info!(
+                                prompt_tokens = prompt,
+                                completion_tokens = completion,
+                                total_tokens = total,
+                                "Received usage information from API"
+                            );
+                            #[allow(clippy::cast_possible_truncation)]
+                            yield NormalizedEvent::Usage {
+                                prompt_tokens: prompt as u32,
+                                completion_tokens: completion as u32,
+                                total_tokens: total as u32,
+                            };
                         }
-                        
+
                         let choice = &v["choices"][0];
                         let delta = &choice["delta"];
 

@@ -1,9 +1,10 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/`: Axum server and LLM orchestration. Entry point is `src/main.rs` with supporting modules in `src/llm/`, `src/mcp/`, and `src/normalized.rs`.
-- `web/`: Web Component client code in TypeScript (see `web/app.ts`).
-- `static/`: Static assets served at `/static` via Axum (bundle minified JS here; avoid CDN assets).
+- `src/`: Axum server + Leptos SSR + LLM orchestration. Entry point is `src/main.rs` with supporting modules in `src/llm/`, `src/mcp/`, `src/session/`, `src/ui/`, and `src/normalized.rs` (typed streaming event contract). Shared library code lives in `src/lib.rs`.
+- `web/`: Web Component client code in TypeScript. Bundler entry point is `web/main.ts` with supporting code in `web/components/`, `web/stores/`, and `web/utils/`.
+- `static/`: Static assets served at `/static` via Axum (bundle/minify JS and CSS here; avoid CDN assets). Outputs include `main.js`, `app.css`, `pglite.wasm`, `pglite.data`, fonts, and vendored JS.
+- `scripts/`: Developer utilities (e.g., `scripts/download-fonts.sh` to vendor fonts into `static/fonts`).
 - `docs/coding-standards/`: Rust coding standards reference (imported guidelines).
 - `mcp.json`: MCP server/tool configuration. `.env.example` documents required env vars.
 
@@ -12,9 +13,14 @@
 - `cargo build`: Compile the Rust application.
 - `cargo fmt`: Format Rust code with rustfmt defaults.
 - `cargo clippy --all-targets --all-features`: Lint Rust code for warnings and best practices.
-- `cargo test`: Run tests (none are currently defined, but use this for future suites).
+- `cargo test`: Run Rust unit tests and doctests.
 - `bun install`: Install web dependencies for TypeScript tooling.
-- `bun run build`: Build the TypeScript bundle into `static/` (keep outputs local to avoid CDN use).
+- `bun run build`: Build the client bundle into `static/` (builds TS to `static/main.js`, builds Tailwind to `static/app.css`, and copies PGlite assets).
+- `bun run dev`: Watch/rebuild the client bundle while developing.
+- `bun run check`: Typecheck (`tsc --noEmit`).
+- `bun run lint`: Lint TypeScript (`eslint web/`).
+- `bun run format`: Format TypeScript (`prettier --write web/`).
+- `bash scripts/download-fonts.sh`: (Re)download and vendor font files into `static/fonts`.
 
 ## Clean Build Policy
 - **CRITICAL**: The codebase must ALWAYS compile with ZERO errors and ZERO warnings.
@@ -28,21 +34,23 @@
 
 ## Coding Style & Naming Conventions
 - Rust: follow rustfmt defaults (4-space indentation). Use `snake_case` for modules/functions, `CamelCase` for types/traits, and `SCREAMING_SNAKE_CASE` for constants.
-- TypeScript: keep formatting consistent with `web/app.ts` (2-space indentation, semicolons) and target TypeScript 5.9.3.
+- TypeScript: keep formatting consistent with `web/main.ts` (2-space indentation, semicolons) and target TypeScript 5.9.3. Prefer `bun run format` for consistent formatting.
 - API and architecture guidance: reference `docs/coding-standards/README.md` for Rust-specific conventions and documentation expectations.
 
 ## Testing Guidelines
-- No test framework is configured yet. When adding tests, prefer module tests with `#[cfg(test)]` or integration tests in `tests/`.
+- This repo already includes module unit tests and doctests; keep `cargo test` green.
+- When adding tests, prefer module tests with `#[cfg(test)]` or integration tests in `tests/`.
 - Use descriptive test names that mirror behavior (e.g., `streams_tool_results`).
 - Always run `cargo test` before opening a PR.
 
 ## Commit & Pull Request Guidelines
-- There is no existing commit history in this repo, so no enforced convention. Use short, imperative subjects (e.g., "Add SSE tool events") and include scope when helpful.
-- PRs should include: a brief summary, how to run/verify changes, and any config updates (env vars or `mcp.json`). Include UI screenshots/GIFs when `web/` or `static/` output changes.
+- Use short, imperative subjects (e.g., "Add SSE tool events") and include scope when helpful.
+- PRs should include: a brief summary, how to run/verify changes, and any config updates (env vars or `mcp.json`). Include UI screenshots/GIFs when `web/` changes (and ensure corresponding `static/` outputs are updated if they are checked in).
 
 ## Configuration & Secrets
 - Copy `.env.example` to `.env` and set `LLM_BASE_URL`, `LLM_MODEL`, `LLM_PROTOCOL`, and `LLM_API_KEY` as needed.
 - MCP tools are discovered from `mcp.json` and may require `TAVILY_API_KEY` (do not commit secrets).
+- Logging is controlled via `RUST_LOG` (e.g., `RUST_LOG=info`), using `tracing_subscriber`'s env filter.
 
 ## UI Component Reference Library
 - **Location**: `docs/htmx/` directory contains HTMX sample code for shadcn-ui-like components and UI constructs.

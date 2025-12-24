@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>shadcn-like Alert Dialog (HTMX + Web Components-ready)</title>
+
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* Borderless Material Zones styling (no borders). [7] */
+      :root {
+        --primary-hue: 210;
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+        --danger: hsl(4 80% 60%);
+
+        --surface-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-low: hsl(var(--primary-hue) 11% 10%);
+        --surface: hsl(var(--primary-hue) 12% 12%);
+        --surface-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+
+        --r-xl: 20px;
+        --r-lg: 14px;
+
+        --sp-3: 14px;
+        --sp-4: 18px;
+        --sp-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(circle at top left, var(--surface-lowest) 0%, var(--surface) 55%, #000 140%);
+        padding: var(--sp-5);
+      }
+
+      .shell { max-width: 860px; margin: 0 auto; display: grid; gap: var(--sp-4); }
+      .zone { background: var(--surface-low); border-radius: var(--r-xl); padding: var(--sp-5); box-shadow: var(--shadow-2); }
+
+      .row { display:flex; flex-wrap:wrap; gap: var(--sp-3); align-items:center; justify-content:space-between; }
+      h1 { margin:0; font-size: 1.1rem; font-weight: 950; }
+      .sub { margin: 8px 0 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 900;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .ad-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        z-index: 50;
+      }
+      .ad-overlay[data-open="true"] { display:flex; }
+
+      .ad-content {
+        width: min(92vw, 520px);
+        background: var(--surface-low);
+        border-radius: var(--r-xl);
+        box-shadow: var(--shadow-2);
+        padding: var(--sp-4);
+        animation: pop 140ms ease-out;
+      }
+
+      .ad-header { display:grid; gap: 8px; }
+      .ad-title { margin:0; font-size: 1.05rem; font-weight: 950; }
+      .ad-desc { margin:0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .ad-footer {
+        margin-top: var(--sp-4);
+        display:flex;
+        flex-wrap:wrap;
+        gap: 10px;
+        justify-content:flex-end;
+      }
+
+      @keyframes pop {
+        from { transform: translateY(6px) scale(0.98); opacity: 0; }
+        to { transform: translateY(0) scale(1); opacity: 1; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Alert Dialog (shadcn-like)</h1>
+            <p class="sub">
+              Alert Dialog interrupts with important content and expects a response. [1]
+            </p>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             <wc-alert-dialog-trigger> boundary
+             In shadcn example: Trigger asChild wraps a Button “Show Dialog”. [1]
+        ============================================================ -->
+        <button class="btn" type="button" data-ad-open="ad1">Show Dialog</button>
+      </section>
+
+      <!-- ============================================================
+           <wc-alert-dialog-root id="ad1"> boundary
+           Compound structure with Trigger/Content/Header/Footer/Cancel/Action. [1]
+      ============================================================ -->
+      <div class="ad-overlay" id="ad1" role="presentation" aria-hidden="true">
+        <!-- <wc-alert-dialog-content> boundary -->
+        <div class="ad-content" role="alertdialog" aria-modal="true"
+             aria-labelledby="ad1-title" aria-describedby="ad1-desc" tabindex="-1">
+          <!-- <wc-alert-dialog-header> boundary -->
+          <div class="ad-header">
+            <h2 class="ad-title" id="ad1-title">Are you absolutely sure?</h2>
+            <p class="ad-desc" id="ad1-desc">
+              This action cannot be undone. This will permanently delete your account and remove your data from our servers. [1]
+            </p>
+          </div>
+
+          <!-- <wc-alert-dialog-footer> boundary -->
+          <div class="ad-footer">
+            <!-- <wc-alert-dialog-cancel> boundary -->
+            <button class="btn" type="button" data-ad-cancel>Cancel</button>
+            <!-- <wc-alert-dialog-action> boundary -->
+            <button class="btn btn-primary" type="button" data-ad-action>Continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        let activeId = null;
+        let lastFocused = null;
+
+        function getFocusable(container) {
+          return Array.from(
+            container.querySelectorAll(
+              'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+            )
+          );
+        }
+
+        function openAlert(id) {
+          const overlay = document.getElementById(id);
+          if (!overlay) return;
+
+          lastFocused = document.activeElement;
+          activeId = id;
+          overlay.setAttribute("data-open", "true");
+          overlay.setAttribute("aria-hidden", "false");
+
+          const dlg = overlay.querySelector('[role="alertdialog"]');
+          const f = getFocusable(dlg);
+          (f[0] || dlg).focus();
+        }
+
+        function closeAlert() {
+          if (!activeId) return;
+          const overlay = document.getElementById(activeId);
+          overlay?.removeAttribute("data-open");
+          overlay?.setAttribute("aria-hidden", "true");
+          activeId = null;
+          if (lastFocused?.focus) lastFocused.focus();
+        }
+
+        document.addEventListener("click", (e) => {
+          const openBtn = e.target.closest("[data-ad-open]");
+          if (openBtn) return openAlert(openBtn.getAttribute("data-ad-open"));
+
+          if (e.target.closest("[data-ad-cancel]")) return closeAlert();
+
+          if (e.target.closest("[data-ad-action]")) {
+            // perform action then close
+            closeAlert();
+            return;
+          }
+
+          // backdrop click closes
+          if (e.target.classList?.contains("ad-overlay")) closeAlert();
+        });
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") closeAlert();
+
+          // Focus trap
+          if (e.key === "Tab" && activeId) {
+            const overlay = document.getElementById(activeId);
+            const dlg = overlay.querySelector('[role="alertdialog"]');
+            const items = getFocusable(dlg);
+            if (items.length === 0) return;
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

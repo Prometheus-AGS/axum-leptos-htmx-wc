@@ -66,12 +66,9 @@ export function renderMarkdown(markdown: string): string {
     initializeMarkdown();
   }
 
-  // Parse markdown
+  // Parse markdown, then sanitize to prevent XSS while preserving our custom elements.
   const raw = marked.parse(markdown) as string;
-  
-  // Note: We don't use global sanitizeHtml here because it might strip our custom web components
-  // Instead, we rely on marked's default sanitization + specific component safety
-  return raw; 
+  return sanitizeHtml(raw);
 }
 
 /**

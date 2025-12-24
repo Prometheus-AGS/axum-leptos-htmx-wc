@@ -30,6 +30,12 @@ export class ChatStream extends HTMLElement {
   // Logic & View
   private view: TranscriptView | null = null;
   private controller: StreamController | null = null;
+  
+  // Bound Event Handlers for proper cleanup
+  private _handleConversationChanged: EventListener | null = null;
+  private _handleStreamCompleted: EventListener | null = null;
+    
+  private debugMode = false;
   // private sseContainer: HTMLElement | null = null;
 
   // View state is now in TranscriptView
@@ -74,8 +80,14 @@ export class ChatStream extends HTMLElement {
     // but we don't attach listeners.
     
     // 4. Other Listeners
-    window.addEventListener('conversation-changed', this.handleConversationChanged.bind(this) as unknown as EventListener);
-    window.addEventListener('stream-completed', this.handleStreamCompleted.bind(this) as unknown as EventListener);
+    this._handleConversationChanged = this.handleConversationChanged.bind(this) as unknown as EventListener;
+    this._handleStreamCompleted = this.handleStreamCompleted.bind(this) as unknown as EventListener;
+    
+    window.addEventListener('conversation-changed', this._handleConversationChanged);
+    window.addEventListener('stream-completed', this._handleStreamCompleted);
+    
+    // Check for debug mode active
+    this.debugMode = new URLSearchParams(window.location.search).has('debug') || localStorage.getItem('debug') === 'true';
   }
 
   disconnectedCallback(): void {
@@ -86,8 +98,16 @@ export class ChatStream extends HTMLElement {
     // Clean up EventSource
     this.closeStream();
 
-    window.removeEventListener('conversation-changed', this.handleConversationChanged.bind(this) as unknown as EventListener);
-    window.removeEventListener('stream-completed', this.handleStreamCompleted.bind(this) as unknown as EventListener);
+    this.closeStream();
+
+    if (this._handleConversationChanged) {
+        window.removeEventListener('conversation-changed', this._handleConversationChanged);
+        this._handleConversationChanged = null;
+    }
+    if (this._handleStreamCompleted) {
+        window.removeEventListener('stream-completed', this._handleStreamCompleted);
+        this._handleStreamCompleted = null;
+    }
   }
 
   attributeChangedCallback(
@@ -253,7 +273,9 @@ export class ChatStream extends HTMLElement {
    * Handle incoming SSE Message.
    */
   private handleSseMessage(type: string, rawData: string): void {
-    console.log("[chat-stream] Received SSE:", type, rawData);
+    if (this.debugMode && type !== "agui.message.delta") {
+       console.log("[chat-stream] Received SSE:", type, rawData);
+    }
 
     // Manual parsing
     let agUiEvent: AgUiEvent | null = null;

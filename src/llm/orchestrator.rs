@@ -483,7 +483,7 @@ impl Orchestrator {
     }
 
     /// Non-streaming chat for simple requests (e.g., title generation).
-    /// 
+    ///
     /// This collects all message deltas into a single string response.
     pub async fn chat_non_streaming(&self, messages: Vec<Message>) -> anyhow::Result<String> {
         let request_id = Uuid::new_v4().to_string();

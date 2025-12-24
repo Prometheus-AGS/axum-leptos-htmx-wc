@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Progress Variations (HTMX + Web Component ready)</title>
+
+    <!-- HTMX for integration patterns (polling, swaps, etc.). [26] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* Minimal “zone” styling to support borderless, tokenized surfaces.
+         (References emphasize artifact hosting + iframe/shadow-dom use.) [9] */
+      :root{
+        --primary: hsl(210 70% 55%);
+        --on-primary: white;
+
+        --surface: hsl(210 12% 12%);
+        --surface-2: hsl(210 14% 16%);
+        --on-surface: hsl(210 20% 92%);
+        --on-surface-variant: hsl(210 10% 72%);
+
+        --radius-lg: 14px;
+        --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+        --shadow-2: 0 18px 44px rgba(0,0,0,.58);
+      }
+
+      body{
+        margin:0;
+        padding:24px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: radial-gradient(circle at top left, #111 0%, #070707 55%, #000 140%);
+        color: var(--on-surface);
+      }
+
+      .zone{
+        max-width: 980px;
+        margin: 0 auto;
+        background: color-mix(in oklab, var(--surface) 90%, black);
+        border-radius: 20px;
+        box-shadow: var(--shadow-2);
+        padding: 22px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .card{
+        background: var(--surface-2);
+        border-radius: 20px;
+        box-shadow: var(--shadow-1);
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .row{ display:flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+      .muted{ color: var(--on-surface-variant); font-size: .95rem; line-height: 1.35; }
+
+      /* ---------- Base Progress (determinate) ---------- */
+      .progress{
+        --h: 10px;
+        --value: 0;     /* 0..100 */
+        --track: color-mix(in oklab, var(--surface) 75%, transparent);
+        --fill: var(--primary);
+
+        width: 100%;
+        height: var(--h);
+        border-radius: 999px;
+        background: var(--track);
+        overflow: hidden;
+        box-shadow: var(--shadow-1);
+        position: relative;
+      }
+
+      .progress__bar{
+        height: 100%;
+        width: calc(var(--value) * 1%);
+        background: var(--fill);
+        border-radius: 999px;
+        transition: width 180ms ease;
+      }
+
+      /* ---------- Indeterminate Progress ---------- */
+      .progress--indeterminate .progress__bar{
+        width: 30%;
+        position: absolute;
+        left: -30%;
+        animation: indeterminate 1.05s infinite ease-in-out;
+      }
+
+      @keyframes indeterminate{
+        0%   { left: -30%; }
+        50%  { left: 35%;  }
+        100% { left: 110%; }
+      }
+
+      /* ---------- Sizes ---------- */
+      .progress--sm{ --h: 6px; }
+      .progress--md{ --h: 10px; }
+      .progress--lg{ --h: 14px; }
+
+      /* ---------- Label row ---------- */
+      .progress-meta{
+        display:flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .progress-meta__label{ font-weight: 900; }
+      .progress-meta__value{ color: var(--on-surface-variant); font-weight: 850; }
+
+      /* ---------- “Steps / segmented” style ---------- */
+      .steps{
+        display:flex;
+        gap: 8px;
+      }
+      .step{
+        flex: 1;
+        height: 10px;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--surface) 75%, transparent);
+        box-shadow: var(--shadow-1);
+        overflow: hidden;
+      }
+      .step[data-state="done"]{
+        background: var(--primary);
+      }
+
+      /* Controls */
+      .btn{
+        border: none;
+        border-radius: 999px;
+        padding: 10px 14px;
+        background: color-mix(in oklab, var(--surface) 75%, transparent);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        cursor: pointer;
+        font-weight: 900;
+      }
+      .btn-primary{ background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible{ outline: 2px solid var(--primary); outline-offset: 2px; }
+    </style>
+  </head>
+
+  <body>
+    <main class="zone">
+      <div>
+        <div style="font-weight: 950; font-size: 1.1rem;">Progress — variations (web component boundaries)</div>
+        <div class="muted">
+          This file gives determinate + indeterminate + labeled + sizes + step/segmented patterns, and includes HTMX wiring ideas for polling/updates. [26][8]
+        </div>
+      </div>
+
+      <!-- =========================================================
+           Variation 1: Basic determinate progress
+           <wc-progress value="35" max="100">
+      ========================================================= -->
+      <section class="card" id="v1">
+        <div class="row">
+          <div>
+            <div style="font-weight: 950;">Variation 1 — Determinate</div>
+            <div class="muted">Set <code>--value</code> (0..100) or drive it from JS/HTMX swaps.</div>
+          </div>
+          <div class="muted" id="v1Text">35%</div>
+        </div>
+
+        <div class="progress progress--md" id="v1Progress" style="--value: 35"
+             role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35"
+             aria-label="Progress (determinate)">
+          <div class="progress__bar"></div>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="button" onclick="setProgress('v1Progress','v1Text', 0)">0%</button>
+          <button class="btn" type="button" onclick="setProgress('v1Progress','v1Text', 35)">35%</button>
+          <button class="btn btn-primary" type="button" onclick="setProgress('v1Progress','v1Text', 72)">72%</button>
+          <button class="btn" type="button" onclick="setProgress('v1Progress','v1Text', 100)">100%</button>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Variation 2: Indeterminate (loading)
+           Aligns with “loading chunk” having a progress bar/spinner concept. [8]
+      ========================================================= -->
+      <section class="card" id="v2">
+        <div>
+          <div style="font-weight: 950;">Variation 2 — Indeterminate</div>
+          <div class="muted">Use when you don’t have a meaningful percentage yet. [8]</div>
+        </div>
+
+        <div class="progress progress--md progress--indeterminate"
+             role="progressbar" aria-valuemin="0" aria-valuemax="100"
+             aria-label="Progress (indeterminate)">
+          <div class="progress__bar"></div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Variation 3: Labeled determinate (label + value)
+      ========================================================= -->
+      <section class="card" id="v3">
+        <div class="progress-meta">
+          <div class="progress-meta__label">Uploading</div>
+          <div class="progress-meta__value" id="v3Text">18%</div>
+        </div>
+
+        <div class="progress progress--lg" id="v3Progress" style="--value: 18"
+             role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="18"
+             aria-label="Uploading progress">
+          <div class="progress__bar"></div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Variation 4: Sizes (sm/md/lg)
+      ========================================================= -->
+      <section class="card" id="v4">
+        <div style="font-weight: 950;">Variation 4 — Sizes</div>
+
+        <div class="muted">Small</div>
+        <div class="progress progress--sm" style="--value: 40" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40">
+          <div class="progress__bar"></div>
+        </div>
+
+        <div class="muted">Medium</div>
+        <div class="progress progress--md" style="--value: 60" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60">
+          <div class="progress__bar"></div>
+        </div>
+
+        <div class="muted">Large</div>
+        <div class="progress progress--lg" style="--value: 80" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80">
+          <div class="progress__bar"></div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Variation 5: Step/segmented progress (wizard-like)
+           References mention multi-step forms with progress tracking. [26]
+      ========================================================= -->
+      <section class="card" id="v5">
+        <div class="row">
+          <div>
+            <div style="font-weight: 950;">Variation 5 — Steps / segmented</div>
+            <div class="muted">Useful for multi-step flows (“wizard”) progress tracking. [26]</div>
+          </div>
+          <div class="muted" id="v5Text">Step 2 of 5</div>
+        </div>
+
+        <div class="steps" id="v5Steps" aria-label="Step progress">
+          <div class="step" data-state="done"></div>
+          <div class="step" data-state="done"></div>
+          <div class="step" data-state="todo"></div>
+          <div class="step" data-state="todo"></div>
+          <div class="step" data-state="todo"></div>
+        </div>
+
+        <div class="row">
+          <button class="btn" type="button" onclick="setSteps(1)">1</button>
+          <button class="btn" type="button" onclick="setSteps(2)">2</button>
+          <button class="btn btn-primary" type="button" onclick="setSteps(3)">3</button>
+          <button class="btn" type="button" onclick="setSteps(4)">4</button>
+          <button class="btn" type="button" onclick="setSteps(5)">5</button>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Variation 6: HTMX polling / server-driven progress (pattern)
+           References include polling pattern expectations. [26]
+           This is wiring-ready: you’d return a swapped fragment with new aria/value.
+      ========================================================= -->
+      <section class="card" id="v6">
+        <div style="font-weight: 950;">Variation 6 — HTMX server-driven progress (wiring)</div>
+        <div class="muted">
+          Example: poll an endpoint and swap the progress fragment; stop when server says complete. [26]
+        </div>
+
+        <!-- In your app, /api/job/123/progress would return the inner HTML of this div. -->
+        <div id="job-progress"
+             hx-get="/api/job/123/progress"
+             hx-trigger="every 2s"
+             hx-swap="outerHTML">
+          <div class="progress-meta">
+            <div class="progress-meta__label">Job #123</div>
+            <div class="progress-meta__value">Server says: 0%</div>
+          </div>
+          <div class="progress progress--md" style="--value: 0"
+               role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+               aria-label="Job progress">
+            <div class="progress__bar"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <script>
+      function setProgress(progressId, textId, value){
+        const p = document.getElementById(progressId);
+        const t = document.getElementById(textId);
+        p.style.setProperty("--value", value);
+        p.setAttribute("aria-valuenow", String(value));
+        if (t) t.textContent = value + "%";
+      }
+
+      function setSteps(step){
+        const steps = document.getElementById("v5Steps");
+        const text = document.getElementById("v5Text");
+        const children = Array.from(steps.children);
+        children.forEach((el, idx) => {
+          el.dataset.state = (idx < step) ? "done" : "todo";
+        });
+        text.textContent = `Step ${step} of ${children.length}`;
+      }
+    </script>
+  </body>
+</html>

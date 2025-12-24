@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>shadcn-like Dialog (HTMX + Web Components-ready)</title>
+
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         Material Zones + borderless philosophy (no borders). [7]
+      ============================================================ */
+      :root {
+        --primary-hue: 210;
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-low: hsl(var(--primary-hue) 11% 10%);
+        --surface: hsl(var(--primary-hue) 12% 12%);
+        --surface-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+
+        --r-xl: 20px;
+        --r-lg: 14px;
+        --r-md: 12px;
+
+        --sp-2: 10px;
+        --sp-3: 14px;
+        --sp-4: 18px;
+        --sp-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(circle at top left, var(--surface-lowest) 0%, var(--surface) 55%, #000 140%);
+        padding: var(--sp-5);
+      }
+
+      .shell { max-width: 1100px; margin: 0 auto; display: grid; gap: var(--sp-4); }
+      .zone {
+        background: var(--surface-low);
+        border-radius: var(--r-xl);
+        padding: var(--sp-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .row { display:flex; flex-wrap:wrap; gap: var(--sp-3); align-items:center; justify-content:space-between; }
+      h1 { margin: 0; font-size: 1.1rem; font-weight: 950; letter-spacing: .2px; }
+      .sub { margin: 8px 0 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 900;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .card {
+        background: var(--surface-high);
+        border-radius: var(--r-xl);
+        box-shadow: var(--shadow-1);
+        padding: var(--sp-4);
+      }
+
+      /* ============================================================
+         Dialog primitives (Web Component boundaries) [25]
+         - Trigger
+         - Overlay
+         - Content
+         - Header, Title, Description
+         - Footer
+         - Close
+      ============================================================ */
+
+      .dlg-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        z-index: 50;
+      }
+
+      .dlg-overlay[data-open="true"] { display: flex; }
+
+      .dlg-content {
+        width: min(92vw, 520px);
+        background: var(--surface-low);
+        border-radius: var(--r-xl);
+        box-shadow: var(--shadow-2);
+        padding: var(--sp-4);
+        position: relative;
+      }
+
+      .dlg-content[data-size="sm"] { width: min(92vw, 420px); }
+      .dlg-content[data-size="md"] { width: min(92vw, 520px); }
+      .dlg-content[data-size="lg"] { width: min(92vw, 680px); }
+
+      .dlg-close-x {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        border: 0;
+        background: color-mix(in oklab, var(--surface-high) 75%, transparent);
+        color: var(--on-surface);
+        cursor: pointer;
+        font-weight: 950;
+        box-shadow: var(--shadow-1);
+      }
+      .dlg-close-x:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .dlg-header { display: grid; gap: 8px; padding-right: 48px; }
+      .dlg-title { margin: 0; font-size: 1.05rem; font-weight: 950; }
+      .dlg-desc { margin: 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .dlg-body { margin-top: var(--sp-3); display: grid; gap: 12px; }
+
+      .grid { display:grid; gap: 12px; }
+      .field { display:grid; gap: 8px; }
+      label { font-weight: 850; color: var(--on-surface); }
+      input {
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 12px;
+        background: var(--surface-high);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        outline: none;
+      }
+      input:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .dlg-footer {
+        margin-top: var(--sp-4);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      /* Demo “Context Menu / Dropdown Menu” card */
+      .menuRow { display:flex; flex-wrap:wrap; gap: 10px; align-items:center; }
+      .menuItem {
+        border: 0;
+        border-radius: 14px;
+        padding: 10px 12px;
+        background: var(--surface);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        cursor: pointer;
+        font-weight: 850;
+      }
+      .menuItem:hover { background: color-mix(in oklab, var(--surface) 80%, transparent); }
+      .menuItem:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      /* Simple transition (enter) */
+      @keyframes pop {
+        from { transform: translateY(6px) scale(0.98); opacity: 0; }
+        to { transform: translateY(0) scale(1); opacity: 1; }
+      }
+      .dlg-content { animation: pop 140ms ease-out; }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Dialog (shadcn-like, HTMX + Web Components-ready)</h1>
+            <p class="sub">
+              Dialog is an overlay window rendering the underlying content inert. [4]
+            </p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" id="themeToggle" type="button">Toggle Theme</button>
+          </div>
+        </div>
+
+        <div style="height: var(--sp-4)"></div>
+
+        <div class="card" style="display:grid; gap: var(--sp-4);">
+          <div class="row" style="justify-content:flex-start;">
+            <!-- ============================================================
+                 <wc-dialog-trigger> boundary (Open Dialog example) [4]
+                 (In shadcn: DialogTrigger asChild wraps a Button.) [4]
+            ============================================================ -->
+            <button class="btn" type="button"
+                    data-dlg-open="dlg-profile">
+              Open Dialog
+            </button>
+
+            <!-- ============================================================
+                 <wc-dialog-trigger> boundary (Custom close button example) [4]
+                 (In shadcn example, trigger label is “Share”.) [4]
+            ============================================================ -->
+            <button class="btn" type="button"
+                    data-dlg-open="dlg-share">
+              Share
+            </button>
+          </div>
+
+          <!-- ============================================================
+               Notes demo: “Dialog inside Context Menu / Dropdown Menu”
+               The shadcn page note says: to use Dialog from within a Context Menu
+               or Dropdown Menu, encase the menu component in the Dialog. [4]
+          ============================================================ -->
+          <div style="display:grid; gap: 10px;">
+            <div style="font-weight:950;">Notes demo (Context Menu / Dropdown Menu)</div>
+            <div class="sub" style="margin:0;">
+              To use Dialog from within a Context Menu or Dropdown Menu, encase the menu component in the Dialog. [4]
+            </div>
+            <div class="menuRow" aria-label="Context menu demo">
+              <button class="menuItem" type="button">Open</button>
+              <button class="menuItem" type="button">Download</button>
+
+              <!-- In shadcn note, DialogTrigger wraps a menu item “Delete”. [4] -->
+              <button class="menuItem" type="button" data-dlg-open="dlg-delete">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           <wc-dialog-root id="dlg-profile"> boundary
+           Implements compound component API expected for Dialog systems. [25]
+      ============================================================ -->
+      <div class="dlg-overlay" id="dlg-profile" role="presentation" aria-hidden="true">
+        <!-- <wc-dialog-overlay> boundary -->
+        <div class="dlg-content" role="dialog" aria-modal="true"
+             aria-labelledby="dlg-profile-title" aria-describedby="dlg-profile-desc"
+             data-size="sm" tabindex="-1">
+          <!-- <wc-dialog-close> boundary (X close) -->
+          <button class="dlg-close-x" type="button" data-dlg-close aria-label="Close">×</button>
+
+          <!-- <wc-dialog-header> boundary -->
+          <div class="dlg-header">
+            <h2 class="dlg-title" id="dlg-profile-title">Edit profile</h2>
+            <p class="dlg-desc" id="dlg-profile-desc">
+              Make changes to your profile here. Click save when you're done. [4]
+            </p>
+          </div>
+
+          <!-- <wc-dialog-body> boundary -->
+          <form class="dlg-body" id="profileForm">
+            <div class="grid">
+              <div class="field">
+                <label for="name-1">Name</label>
+                <input id="name-1" name="name" value="Pedro Duarte" />
+              </div>
+              <div class="field">
+                <label for="username-1">Username</label>
+                <input id="username-1" name="username" value="@peduarte" />
+              </div>
+            </div>
+
+            <!-- <wc-dialog-footer> boundary -->
+            <div class="dlg-footer">
+              <!-- In shadcn demo, Cancel is DialogClose asChild wrapping outline button. [4] -->
+              <button class="btn" type="button" data-dlg-close>Cancel</button>
+              <button class="btn btn-primary" type="submit">Save changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           <wc-dialog-root id="dlg-share"> boundary
+           “Custom close button” example from shadcn page. [4]
+      ============================================================ -->
+      <div class="dlg-overlay" id="dlg-share" role="presentation" aria-hidden="true">
+        <div class="dlg-content" role="dialog" aria-modal="true"
+             aria-labelledby="dlg-share-title" aria-describedby="dlg-share-desc"
+             data-size="sm" tabindex="-1">
+          <button class="dlg-close-x" type="button" data-dlg-close aria-label="Close">×</button>
+
+          <div class="dlg-header">
+            <h2 class="dlg-title" id="dlg-share-title">Share link</h2>
+            <p class="dlg-desc" id="dlg-share-desc">
+              Anyone who has this link will be able to view this. [4]
+            </p>
+          </div>
+
+          <div class="dlg-body">
+            <div class="field">
+              <label for="link" style="position:absolute; left:-9999px;">Link</label>
+              <input id="link" value="https://ui.shadcn.com/docs/installation" readonly />
+            </div>
+
+            <div class="dlg-footer" style="justify-content:flex-start;">
+              <!-- In shadcn example, footer has a custom close button (secondary). [4] -->
+              <button class="btn" type="button" data-dlg-close>Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           <wc-dialog-root id="dlg-delete"> boundary
+           Mirrors the “Dialog inside ContextMenu” note example (Confirm). [4]
+      ============================================================ -->
+      <div class="dlg-overlay" id="dlg-delete" role="presentation" aria-hidden="true">
+        <div class="dlg-content" role="dialog" aria-modal="true"
+             aria-labelledby="dlg-delete-title" aria-describedby="dlg-delete-desc"
+             data-size="sm" tabindex="-1">
+          <button class="dlg-close-x" type="button" data-dlg-close aria-label="Close">×</button>
+
+          <div class="dlg-header">
+            <h2 class="dlg-title" id="dlg-delete-title">Are you absolutely sure?</h2>
+            <p class="dlg-desc" id="dlg-delete-desc">
+              This action cannot be undone. Are you sure you want to permanently delete this file from our servers? [4]
+            </p>
+          </div>
+
+          <div class="dlg-footer">
+            <button class="btn" type="button" data-dlg-close>Cancel</button>
+            <button class="btn btn-primary" type="button" data-dlg-close>Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Theme toggle (token-driven)
+      document.getElementById("themeToggle").addEventListener("click", () => {
+        const root = document.documentElement;
+        const current = root.getAttribute("data-theme") || "dark";
+        root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+      });
+
+      // ============================================================
+      // Dialog runtime (vanilla JS)
+      // Implements expected dialog behaviors (Escape, backdrop click,
+      // focus management / basic focus trap) [25]
+      // ============================================================
+      (function () {
+        let activeId = null;
+        let lastFocused = null;
+
+        function getFocusable(container) {
+          return Array.from(
+            container.querySelectorAll(
+              'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+            )
+          );
+        }
+
+        function openDialog(id) {
+          const overlay = document.getElementById(id);
+          if (!overlay) return;
+
+          lastFocused = document.activeElement;
+          activeId = id;
+
+          overlay.setAttribute("data-open", "true");
+          overlay.setAttribute("aria-hidden", "false");
+
+          const content = overlay.querySelector('[role="dialog"]');
+          // focus first focusable or dialog itself
+          const f = getFocusable(content);
+          (f[0] || content).focus();
+        }
+
+        function closeDialog() {
+          if (!activeId) return;
+          const overlay = document.getElementById(activeId);
+          overlay?.removeAttribute("data-open");
+          overlay?.setAttribute("aria-hidden", "true");
+
+          activeId = null;
+          if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+        }
+
+        // Open triggers
+        document.addEventListener("click", (e) => {
+          const openBtn = e.target.closest("[data-dlg-open]");
+          if (openBtn) {
+            openDialog(openBtn.getAttribute("data-dlg-open"));
+            return;
+          }
+
+          const closeBtn = e.target.closest("[data-dlg-close]");
+          if (closeBtn) {
+            closeDialog();
+            return;
+          }
+
+          // Backdrop click: click on overlay (not content) closes [25]
+          const overlay = e.target.classList?.contains("dlg-overlay") ? e.target : null;
+          if (overlay && overlay.getAttribute("data-open") === "true") {
+            closeDialog();
+          }
+        });
+
+        // Escape closes [25]
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") closeDialog();
+
+          // Focus trap (Tab) [25]
+          if (e.key === "Tab" && activeId) {
+            const overlay = document.getElementById(activeId);
+            const content = overlay.querySelector('[role="dialog"]');
+            const items = getFocusable(content);
+            if (items.length === 0) return;
+
+            const first = items[0];
+            const last = items[items.length - 1];
+
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        });
+
+        // Demo submit behavior (no backend); close on submit
+        document.getElementById("profileForm")?.addEventListener("submit", (e) => {
+          e.preventDefault();
+          closeDialog();
+        });
+      })();
+    </script>
+  </body>
+</html>

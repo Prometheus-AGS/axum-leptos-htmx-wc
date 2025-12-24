@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "mcp__tavily-mcp__tavily-search"
+    ]
+  }
+}

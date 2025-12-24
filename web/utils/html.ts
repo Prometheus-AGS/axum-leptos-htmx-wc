@@ -50,8 +50,34 @@ export function sanitizeHtml(html: string): string {
       "tr",
       "th",
       "td",
+
+      // Media
+      "img",
+      "video",
+      "source",
+
+      // Custom elements emitted by our markdown renderer
+      "chat-code-block",
+      "chat-mermaid",
     ],
-    ALLOWED_ATTR: ["href", "class", "id", "target", "rel"],
+    ALLOWED_ATTR: [
+      "href",
+      "class",
+      "id",
+      "target",
+      "rel",
+
+      // Media
+      "src",
+      "alt",
+      "title",
+      "controls",
+      "type",
+
+      // Custom elements
+      "code",
+      "language",
+    ],
     ALLOW_DATA_ATTR: false,
   });
 }

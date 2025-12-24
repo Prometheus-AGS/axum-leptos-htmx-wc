@@ -117,25 +117,25 @@ impl McpRegistry {
         })
     }
 
-    /// Sanitize tool names for OpenAI API compatibility.
+    /// Sanitize tool names for `OpenAI` API compatibility.
     ///
-    /// OpenAI requires tool names to match: `^[a-zA-Z0-9_-]+$`
+    /// `OpenAI` requires tool names to match: `^[a-zA-Z0-9_-]+$`
     /// This means:
     /// - Only alphanumeric characters (a-z, A-Z, 0-9)
     /// - Underscores (_)
     /// - Hyphens (-)
     ///
-    /// MCP allows dots (.) but OpenAI doesn't, so we replace them with underscores.
+    /// MCP allows dots (.) but `OpenAI` doesn't, so we replace them with underscores.
     /// We also replace any other invalid characters with underscores.
     ///
     /// # Provider Compatibility
     ///
-    /// - **OpenAI** (gpt-4, gpt-5, o1, o3, o4 series): Requires `^[a-zA-Z0-9_-]+$`
-    /// - **Azure OpenAI**: Same as OpenAI
-    /// - **OpenRouter**: Follows OpenAI spec
-    /// - **Together.ai**: Follows OpenAI spec
-    /// - **Groq**: Follows OpenAI spec
-    /// - **Ollama**: More permissive, but works with OpenAI format
+    /// - **`OpenAI`** (gpt-4, gpt-5, o1, o3, o4 series): Requires `^[a-zA-Z0-9_-]+$`
+    /// - **Azure `OpenAI`**: Same as `OpenAI`
+    /// - **`OpenRouter`**: Follows `OpenAI` spec
+    /// - **Together.ai**: Follows `OpenAI` spec
+    /// - **Groq**: Follows `OpenAI` spec
+    /// - **Ollama**: More permissive, but works with `OpenAI` format
     fn sanitize_tool_name(name: &str) -> String {
         name.chars()
             .map(|c| {
@@ -179,7 +179,7 @@ impl McpRegistry {
 
     /// Execute a namespaced tool, e.g. "`time__now`" or "`tavily__search`".
     ///
-    /// Tool names are sanitized to match OpenAI's requirements (`^[a-zA-Z0-9_-]+$`).
+    /// Tool names are sanitized to match `OpenAI`'s requirements (`^[a-zA-Z0-9_-]+$`).
     /// The original MCP server name and tool name are stored in the tool index.
     ///
     /// `arguments` must be a JSON object for MCP tools/call.

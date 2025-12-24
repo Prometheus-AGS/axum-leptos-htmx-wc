@@ -24,14 +24,33 @@
     "mermaid": "^11.12.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/typography": "^0.5.19",
     "@types/dompurify": "^3.2.0",
     "@typescript-eslint/eslint-plugin": "^8.50.1",
     "@typescript-eslint/parser": "^8.50.1",
     "eslint": "^9.39.2",
+    "playwright": "^1.57.0",
     "prettier": "^3.7.4",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3"
-  }
+  },
+  "description": "This repository is a reference implementation and living architecture example for building agentic AI applications that: *   support tool-first LLM interaction *   stream rich, typed model output *   remain HTML-first and inspectable *   avoid heavyweight SPA frameworks *   run identically as:     *   a web app     *   a desktop app (via Tauri)     *   a mobile app (via Tauri)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Prometheus-AGS/axum-leptos-htmx-wc.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Prometheus-AGS/axum-leptos-htmx-wc/issues"
+  },
+  "homepage": "https://github.com/Prometheus-AGS/axum-leptos-htmx-wc#readme"
 }

@@ -22,7 +22,6 @@ mod llm;
 mod mcp;
 mod normalized;
 mod session;
-mod ui;
 
 use std::sync::Arc;
 
@@ -273,7 +272,7 @@ fn chat_content() -> &'static str {
                 hx-trigger="submit"
                 hx-swap="none"
                 hx-ext="json-enc"
-                hx-on--before-request="
+                hx-on::before-request="
                     const msg = this.querySelector('[name=message]').value;
                     const chatStream = document.querySelector('chat-stream');
                     
@@ -295,7 +294,7 @@ fn chat_content() -> &'static str {
                         }
                     }
                 "
-                hx-on--after-request="
+                hx-on::after-request="
                     const response = JSON.parse(event.detail.xhr.response);
                     const chatStream = document.querySelector('chat-stream');
                     
@@ -462,13 +461,13 @@ async fn api_chat(
 
     let session = if let Some(id) = &req.session_id {
         // Only use existing session if ID is not empty
-        if !id.is_empty() {
-            tracing::debug!(session_id = %id, "Using existing session");
-            state.sessions.get_or_create(id)
-        } else {
+        if id.is_empty() {
             let session = state.sessions.create();
             tracing::debug!(session_id = %session.id(), "Created new session (empty ID provided)");
             session
+        } else {
+            tracing::debug!(session_id = %id, "Using existing session");
+            state.sessions.get_or_create(id)
         }
     } else {
         let session = state.sessions.create();

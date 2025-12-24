@@ -119,8 +119,8 @@ export class TranscriptView {
     if (resultContainer) {
         resultContainer.classList.remove("hidden");
         resultContainer.innerHTML = `
-            <div class="font-medium mb-1 ${isError ? 'text-red-600' : 'text-green-600'}">${isError ? 'Error' : 'Result'}</div>
-            <pre class="overflow-x-auto whitespace-pre-wrap font-mono text-gray-600 dark:text-gray-400">${escapeHtml(result)}</pre>
+            <div class="font-medium mb-1 ${isError ? 'text-red-500' : 'text-green-500'}">${isError ? 'Error' : 'Result'}</div>
+            <pre class="overflow-x-auto whitespace-pre-wrap font-mono text-textMuted">${escapeHtml(result)}</pre>
         `;
     }
 
@@ -129,11 +129,12 @@ export class TranscriptView {
         statusIndicator.className = `status-indicator w-1.5 h-1.5 rounded-full ${isError ? 'bg-red-500' : 'bg-green-500'}`;
     }
 
-    // Update border color
+    // Update border color - simplified to just use panelBorder for consistency, or error color if critical
+    // Keeping it simple for S-Tier clean look:
     if (containerBorder) {
         if (isError) {
-             containerBorder.classList.remove('border-gray-200', 'dark:border-gray-700');
-             containerBorder.classList.add('border-red-200', 'dark:border-red-800');
+             containerBorder.classList.remove('border-panelBorder');
+             containerBorder.classList.add('border-red-500/50');
         }
     }
     
@@ -158,7 +159,7 @@ export class TranscriptView {
         if (item.role === "user") {
           el.classList.add("user-message", "flex", "justify-end", "group");
           el.innerHTML = `
-            <div class="relative max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+            <div class="relative max-w-[80%] bg-primary text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
                 <div class="prose prose-invert max-w-none text-sm break-words" id="${uniqueId}">${item.html || ""}</div>
                 <div class="absolute -left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <copy-button target="${uniqueId}" text=""></copy-button>
@@ -168,11 +169,11 @@ export class TranscriptView {
         } else {
           el.classList.add("assistant-message", "flex", "gap-3", "group");
           el.innerHTML = `
-            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-sm self-end mb-2">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-surfaceContainer flex items-center justify-center text-primary shadow-sm self-end mb-2 border border-panelBorder">
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
-            <div class="relative max-w-[85%] bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-               <div class="prose max-w-none text-sm text-gray-800 dark:text-gray-200 leading-relaxed break-words" id="${uniqueId}">${item.html || ""}</div>
+            <div class="relative max-w-[85%] bg-surfaceContainer rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+               <div class="prose max-w-none text-sm text-textPrimary leading-relaxed break-words" id="${uniqueId}">${item.html || ""}</div>
                <div class="absolute -right-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <copy-button target="${uniqueId}" text=""></copy-button>
                </div>
@@ -189,23 +190,23 @@ export class TranscriptView {
         const isError = item.isError;
         
         el.innerHTML = `
-           <div class="bg-white dark:bg-gray-900 border ${isError ? 'border-red-200 dark:border-red-800' : 'border-gray-200 dark:border-gray-700'} rounded-lg shadow-sm overflow-hidden transition-all duration-200">
+           <div class="bg-surface border ${isError ? 'border-red-500/50' : 'border-panelBorder'} rounded-lg shadow-sm overflow-hidden transition-all duration-200">
              <!-- Header -->
-             <div class="bg-gray-50 dark:bg-gray-800/50 px-3 py-2 border-b ${isError ? 'border-red-100 dark:border-red-900/50' : 'border-gray-100 dark:border-gray-700'} flex items-center justify-between">
+             <div class="bg-surfaceVariant px-3 py-2 border-b ${isError ? 'border-red-500/30' : 'border-panelBorder'} flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <div class="status-indicator w-1.5 h-1.5 rounded-full ${isComplete ? (isError ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}"></div>
-                    <code class="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono">${escapeHtml(item.toolName || item.name || "unknown_tool")}</code>
+                    <code class="text-xs font-semibold text-textPrimary font-mono">${escapeHtml(item.toolName || item.name || "unknown_tool")}</code>
                 </div>
-                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Tool Call</div>
+                <div class="text-[10px] text-textMuted uppercase tracking-wider font-medium">Tool Call</div>
              </div>
              
              <!-- Body (Arguments) -->
-             <div class="p-3 bg-gray-50/30 dark:bg-black/20">
-                <pre class="tool-args text-xs text-gray-600 dark:text-gray-400 font-mono whitespace-pre-wrap overflow-x-auto break-all">${escapeHtml(item.args || "")}</pre>
+             <div class="p-3 bg-background/50">
+                <pre class="tool-args text-xs text-textSecondary font-mono whitespace-pre-wrap overflow-x-auto break-all">${escapeHtml(item.args || "")}</pre>
              </div>
 
              <!-- Result Footer (Added dynamically via upsert/update) -->
-             <div class="tool-result-container hidden border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/20 p-2 text-xs">
+             <div class="tool-result-container hidden border-t border-panelBorder bg-surfaceVariant/50 p-2 text-xs">
                 <!-- Result content goes here -->
              </div>
            </div>
@@ -241,17 +242,17 @@ export class TranscriptView {
     if (this.pendingScroll) return;
     this.pendingScroll = true;
     requestAnimationFrame(() => {
-      this.scrollToBottom();
+      this.scrollToBottom('instant'); // Always instant when auto-scrolling during stream
       this.pendingScroll = false;
     });
   }
 
-  private scrollToBottom() {
+  private scrollToBottom(behavior: ScrollBehavior = 'instant') {
     if (this.isUserScrolling) return;
     
     this.container.scrollTo({
       top: this.container.scrollHeight,
-      behavior: 'smooth'
+      behavior
     });
   }
 

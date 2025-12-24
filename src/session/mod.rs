@@ -24,4 +24,6 @@
 
 mod thread;
 
+#[allow(unused_imports)]
+pub use thread::Session;
 pub use thread::SessionStore;

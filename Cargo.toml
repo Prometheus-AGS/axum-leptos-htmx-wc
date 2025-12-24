@@ -15,12 +15,7 @@ path = "src/main.rs"
 axum = "0.8"
 tower-http = { version = "0.6.8", features = ["fs", "cors"] }
 
-# Leptos SSR
-leptos = { version = "0.8.14", features = ["csr", "ssr"] }
-leptos_dom = "0.8.7"
-leptos_macro = "0.8.14"
-leptos_router = { version = "0.8.11", features = ["ssr"] }
-leptos_axum = "0.8.7"
+
 
 # Async runtime
 tokio = { version = "1", features = ["full", "process"] }
@@ -83,8 +78,11 @@ empty_drop = "warn"
 if_then_some_else_none = "warn"
 map_err_ignore = "warn"
 redundant_type_annotations = "warn"
-string_to_string = "warn"
 undocumented_unsafe_blocks = "warn"
+
+# Cargo lints (useful in crates.io-bound projects) are noisy for a reference repo.
+cargo_common_metadata = "allow"
+multiple_crate_versions = "allow"
 
 # Allow some pedantic lints that are too noisy
 missing_errors_doc = "allow"

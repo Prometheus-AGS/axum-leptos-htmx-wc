@@ -7,6 +7,9 @@
 
 import { pgliteStore } from '../../stores/pglite-store';
 import type { ConversationSearchResult } from '../../types/database';
+import type { ShadcnAlertDialog } from '../ui/shadcn-alert-dialog';
+import '../ui/shadcn-alert-dialog';
+
 
 type DateGroup = 'Today' | 'Yesterday' | 'Previous 7 Days' | 'Previous 30 Days' | 'Older';
 
@@ -16,6 +19,7 @@ export class ConversationSidebar extends HTMLElement {
   private conversations: ConversationSearchResult[] = [];
   private activeConversationId: string | null = null;
   private editingId: string | null = null; // ID of conversation being renamed
+  private deleteTargetId: string | null = null; // ID of conversation pending deletion
 
   async connectedCallback(): Promise<void> {
     this.render();
@@ -89,7 +93,6 @@ export class ConversationSidebar extends HTMLElement {
           ${this.isCollapsed ? this.renderCollapsedList() : this.renderGroupedList()}
         </div>
         
-        <!-- User / Settings (Bottom) -->
         <div class="mt-auto p-3 border-t border-gray-200 dark:border-gray-800">
              <token-counter 
                 input-tokens="0" 
@@ -100,6 +103,30 @@ export class ConversationSidebar extends HTMLElement {
             ></token-counter>
         </div>
       </aside>
+
+      <!-- Delete Confirmation Alert -->
+      <shadcn-alert-dialog id="delete-alert">
+        <shadcn-alert-dialog-content>
+            <shadcn-alert-dialog-header>
+                <shadcn-alert-dialog-title>Delete Conversation?</shadcn-alert-dialog-title>
+                <shadcn-alert-dialog-description>
+                    This action cannot be undone. This conversation will be permanently deleted from your local database.
+                </shadcn-alert-dialog-description>
+            </shadcn-alert-dialog-header>
+            <shadcn-alert-dialog-footer>
+                <shadcn-alert-dialog-cancel>
+                    <button class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md text-sm font-medium transition-colors">
+                        Cancel
+                    </button>
+                </shadcn-alert-dialog-cancel>
+                <shadcn-alert-dialog-action>
+                    <button class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors">
+                        Delete
+                    </button>
+                </shadcn-alert-dialog-action>
+            </shadcn-alert-dialog-footer>
+        </shadcn-alert-dialog-content>
+      </shadcn-alert-dialog>
     `;
   }
 
@@ -334,10 +361,29 @@ export class ConversationSidebar extends HTMLElement {
                 this.render();
                 this.attachEventListeners();
             } else if (action === 'delete') {
-                await this.handleDelete(conversationId);
+                this.deleteTargetId = conversationId;
+                const alert = this.querySelector('#delete-alert') as ShadcnAlertDialog;
+                if (alert) alert.open();
             }
         });
     });
+
+    // Alert Dialog Actions
+    const alert = this.querySelector('#delete-alert') as ShadcnAlertDialog;
+    if (alert) {
+        alert.addEventListener('shadcn-alert-action-click', async () => {
+            if (this.deleteTargetId) {
+                await this.handleDelete(this.deleteTargetId);
+                this.deleteTargetId = null;
+                alert.close();
+            }
+        });
+
+        alert.addEventListener('shadcn-alert-close-click', () => {
+             this.deleteTargetId = null;
+             alert.close();
+        });
+    }
   }
 
   private async loadConversations(): Promise<void> {
@@ -368,9 +414,7 @@ export class ConversationSidebar extends HTMLElement {
     const conv = this.conversations.find(c => c.id === conversationId);
     if (!conv) return;
 
-    if (!confirm(`Delete "${conv.title}"?`)) {
-      return;
-    }
+    // Confirmed via Alert Dialog
 
     try {
       await pgliteStore.deleteConversation(conversationId);

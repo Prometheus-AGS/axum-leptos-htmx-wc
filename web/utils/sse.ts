@@ -2,15 +2,15 @@
  * SSE (Server-Sent Events) connection management.
  */
 
-import type { NormalizedEvent } from "../types/events";
-import { parseNormalizedEvent } from "../types/events";
+import type { AgUiEvent, NormalizedEvent } from "../types/events";
+import { parseAgUiEvent, parseNormalizedEvent } from "../types/events";
 
 /**
  * Event handler types for SSE connection.
  */
 export interface SSEEventHandlers {
   onNormalizedEvent?: (event: NormalizedEvent) => void;
-  onAguiEvent?: (event: AguiEvent) => void;
+  onAguiEvent?: (event: AgUiEvent) => void;
   onOpen?: () => void;
   onError?: (error: Event) => void;
   onClose?: () => void;
@@ -145,7 +145,7 @@ export class SSEConnection {
     for (const eventType of aguiEventTypes) {
       this.eventSource.addEventListener(eventType, (ev) => {
         const messageEvent = ev as MessageEvent<string>;
-        const parsed = parseAguiEvent(messageEvent.data);
+        const parsed = parseAgUiEvent(messageEvent.data);
         if (parsed && this.handlers.onAguiEvent) {
           this.handlers.onAguiEvent(parsed);
         }

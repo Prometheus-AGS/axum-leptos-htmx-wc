@@ -66,17 +66,20 @@ impl LlmDriver for ResponsesDriver {
 
         tracing::debug!("Sending HTTP request to Responses API");
         let resp = rb.send().await?;
-        
+
         let status = resp.status();
         tracing::info!(
             status = %status,
             "Received response from Responses API"
         );
-        
+
         // Check for error status and parse error details if present
         if !status.is_success() {
-            let error_body = resp.text().await.unwrap_or_else(|_| String::from("Failed to read error body"));
-            
+            let error_body = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| String::from("Failed to read error body"));
+
             // Try to parse as JSON to extract detailed error information
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_body) {
                 let error_obj = &error_json["error"];
@@ -84,7 +87,7 @@ impl LlmDriver for ResponsesDriver {
                 let error_type = error_obj["type"].as_str().unwrap_or("unknown");
                 let error_param = error_obj["param"].as_str();
                 let error_code = error_obj["code"].as_str();
-                
+
                 tracing::error!(
                     status = %status,
                     error_type = error_type,
@@ -94,7 +97,7 @@ impl LlmDriver for ResponsesDriver {
                     full_error_body = %error_body,
                     "Responses API returned error with details"
                 );
-                
+
                 // Create a detailed error message
                 let mut detailed_error = format!("Responses API error ({status}): {error_message}");
                 if let Some(param) = error_param {
@@ -107,7 +110,7 @@ impl LlmDriver for ResponsesDriver {
                     detailed_error.push_str(code);
                     detailed_error.push(']');
                 }
-                
+
                 return Err(anyhow::anyhow!(detailed_error));
             }
             // Not JSON, log raw body
@@ -116,9 +119,11 @@ impl LlmDriver for ResponsesDriver {
                 error_body = %error_body,
                 "Responses API returned non-JSON error"
             );
-            return Err(anyhow::anyhow!("Responses API error ({status}): {error_body}"));
+            return Err(anyhow::anyhow!(
+                "Responses API error ({status}): {error_body}"
+            ));
         }
-        
+
         let byte_stream = resp.bytes_stream();
 
         let out = async_stream::try_stream! {

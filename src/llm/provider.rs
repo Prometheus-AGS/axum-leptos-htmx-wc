@@ -37,7 +37,7 @@ impl Provider {
     #[must_use]
     pub fn detect_from_url(base_url: &str) -> Self {
         let lower = base_url.to_lowercase();
-        
+
         if lower.contains("azure.com") || lower.contains("openai.azure.com") {
             Self::AzureOpenAI {
                 deployment_name: String::new(),
@@ -74,9 +74,12 @@ impl Provider {
     #[must_use]
     pub fn build_chat_url(&self, base_url: &str, _model: &str) -> String {
         let base = base_url.trim_end_matches('/');
-        
+
         match self {
-            Self::AzureOpenAI { deployment_name, api_version } => {
+            Self::AzureOpenAI {
+                deployment_name,
+                api_version,
+            } => {
                 format!(
                     "{base}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
                 )
