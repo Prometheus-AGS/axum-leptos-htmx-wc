@@ -412,6 +412,9 @@ export class ChatStream extends HTMLElement {
         if (lastItem?.kind === "message" && lastItem.role === "assistant") {
           lastItem.content = this.state.streamingText;
           lastItem.html = html;
+          
+          // Update DOM directly without full re-render (much smoother!)
+          this.updateStreamingMessageDOM(html);
         } else {
           this.state.items.push({
             kind: "message",
@@ -419,11 +422,33 @@ export class ChatStream extends HTMLElement {
             content: this.state.streamingText,
             html: html,
           });
+          
+          // First message - do full render
+          this.renderTranscript();
         }
-        
-        this.renderTranscript();
       }
     );
+  }
+  
+  /**
+   * Update only the streaming message DOM (avoids full re-render flicker).
+   */
+  private updateStreamingMessageDOM(html: string): void {
+    if (!this.transcriptEl) return;
+    
+    // Find the last assistant message bubble
+    const messageBubbles = this.transcriptEl.querySelectorAll('.chat-message.assistant');
+    const lastBubble = messageBubbles[messageBubbles.length - 1];
+    
+    if (lastBubble) {
+      const proseDiv = lastBubble.querySelector('.prose');
+      if (proseDiv) {
+        proseDiv.innerHTML = html;
+        
+        // Smooth scroll to bottom
+        this.scrollToBottom();
+      }
+    }
   }
 
   /**
@@ -443,6 +468,8 @@ export class ChatStream extends HTMLElement {
           (item) => item.kind === "thinking" && !item.isComplete
         );
         
+        const isNewItem = !thinkingItem;
+        
         if (!thinkingItem) {
           thinkingItem = {
             kind: "thinking",
@@ -454,9 +481,34 @@ export class ChatStream extends HTMLElement {
           thinkingItem.content = this.state.streamingThinking;
         }
         
-        this.renderTranscript();
+        if (isNewItem) {
+          // First chunk - do full render
+          this.renderTranscript();
+        } else {
+          // Update DOM directly
+          this.updateStreamingThinkingDOM(this.state.streamingThinking);
+        }
       }
     );
+  }
+  
+  /**
+   * Update only the streaming thinking block DOM.
+   */
+  private updateStreamingThinkingDOM(content: string): void {
+    if (!this.transcriptEl) return;
+    
+    const thinkingBlocks = this.transcriptEl.querySelectorAll('.chat-thinking .thinking-block');
+    const lastBlock = thinkingBlocks[thinkingBlocks.length - 1];
+    
+    if (lastBlock) {
+      const contentDiv = lastBlock.querySelector('[data-raw-content]');
+      if (contentDiv) {
+        contentDiv.textContent = content;
+        contentDiv.setAttribute('data-raw-content', content);
+        this.scrollToBottom();
+      }
+    }
   }
 
   /**
@@ -476,6 +528,8 @@ export class ChatStream extends HTMLElement {
           (item) => item.kind === "reasoning" && !item.isComplete
         );
         
+        const isNewItem = !reasoningItem;
+        
         if (!reasoningItem) {
           reasoningItem = {
             kind: "reasoning",
@@ -487,9 +541,34 @@ export class ChatStream extends HTMLElement {
           reasoningItem.content = this.state.streamingReasoning;
         }
         
-        this.renderTranscript();
+        if (isNewItem) {
+          // First chunk - do full render
+          this.renderTranscript();
+        } else {
+          // Update DOM directly
+          this.updateStreamingReasoningDOM(this.state.streamingReasoning);
+        }
       }
     );
+  }
+  
+  /**
+   * Update only the streaming reasoning block DOM.
+   */
+  private updateStreamingReasoningDOM(content: string): void {
+    if (!this.transcriptEl) return;
+    
+    const reasoningBlocks = this.transcriptEl.querySelectorAll('.chat-reasoning .reasoning-block');
+    const lastBlock = reasoningBlocks[reasoningBlocks.length - 1];
+    
+    if (lastBlock) {
+      const contentDiv = lastBlock.querySelector('[data-raw-content]');
+      if (contentDiv) {
+        contentDiv.textContent = content;
+        contentDiv.setAttribute('data-raw-content', content);
+        this.scrollToBottom();
+      }
+    }
   }
 
   /**
@@ -767,7 +846,14 @@ export class ChatStream extends HTMLElement {
     }
 
     // Don't show "Done" - token counter will show the info
-    this.disconnect();
+    // Don't disconnect immediately - let usage event come through first
+    // The connection will auto-close after all events are received
+    setTimeout(() => {
+      if (this.state.status === "done") {
+        this.disconnect();
+      }
+    }, 100); // Small delay to allow usage event to arrive
+    
     this.renderTranscript();
   }
 
@@ -847,7 +933,13 @@ export class ChatStream extends HTMLElement {
     if (!this.transcriptEl) return;
 
     const html = this.state.items.map((item) => this.renderItem(item)).join("");
-    this.transcriptEl.innerHTML = html;
+    
+    // Add thinking badge if streaming
+    const thinkingBadge = (this.state.status === "connecting" || this.state.status === "streaming") 
+      ? this.renderThinkingBadge() 
+      : "";
+    
+    this.transcriptEl.innerHTML = html + thinkingBadge;
 
     // Smooth scroll to bottom
     this.smoothScrollToBottom();
@@ -1033,6 +1125,22 @@ export class ChatStream extends HTMLElement {
             <span class="text-sm font-medium text-danger">Error</span>
           </div>
           <p class="text-sm text-danger">${escapeHtml(item.message)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render the thinking badge (shown while streaming).
+   */
+  private renderThinkingBadge(): string {
+    return `
+      <div class="chat-item thinking-badge-container flex justify-start">
+        <div class="thinking-badge inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 animate-pulse">
+          <svg class="w-4 h-4 text-primary animate-spin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+          <span class="text-sm font-medium text-primary">Thinking...</span>
         </div>
       </div>
     `;

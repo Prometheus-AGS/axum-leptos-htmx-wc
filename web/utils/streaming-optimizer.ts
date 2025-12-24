@@ -35,15 +35,15 @@ export class StreamingOptimizer {
   
   constructor(config: Partial<StreamingConfig> = {}) {
     this.config = {
-      textBatchSize: 20,
-      textBatchDelay: 16,
-      markdownBatchSize: 40,
-      markdownBatchDelay: 16,
+      textBatchSize: 50,        // Increased from 20
+      textBatchDelay: 32,       // Increased from 16 (30fps instead of 60fps)
+      markdownBatchSize: 80,    // Increased from 40
+      markdownBatchDelay: 32,   // Increased from 16
       structuredDelay: 50,
-      thinkingBatchSize: 60,
-      thinkingBatchDelay: 20,
+      thinkingBatchSize: 100,   // Increased from 60
+      thinkingBatchDelay: 32,   // Increased from 20
       maxFrameBudgetMs: 12,
-      minFrameDelay: 16,
+      minFrameDelay: 32,        // Increased from 16 (30fps)
       ...config
     };
   }
