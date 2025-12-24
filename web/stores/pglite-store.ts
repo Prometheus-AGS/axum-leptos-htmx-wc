@@ -146,6 +146,7 @@ export class PGliteConversationStore {
         // Insert messages
         for (let i = 0; i < conv.messages.length; i++) {
           const msg = conv.messages[i];
+          if (!msg) continue;
           await this.db!.query(`
             INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0), $6)
@@ -198,6 +199,47 @@ export class PGliteConversationStore {
   }
 
   /**
+   * Add a single message to the conversation
+   */
+  async addMessage(message: Message): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    if (message.sequence_order === undefined) {
+        // Fallback if no sequence order provided (expensive but safe)
+        const result = await this.db.query(`
+            SELECT COALESCE(MAX(sequence_order), 0) as max_seq 
+            FROM messages WHERE conversation_id = $1
+        `, [message.conversation_id]);
+        message.sequence_order = (result.rows[0] as any).max_seq + 1;
+    }
+
+    await this.db.query(`
+      INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (id) DO UPDATE SET
+        content = EXCLUDED.content,
+        metadata = EXCLUDED.metadata,
+        sequence_order = EXCLUDED.sequence_order,
+        created_at = EXCLUDED.created_at
+    `, [
+      message.id,
+      message.conversation_id,
+      message.role,
+      message.content,
+      message.created_at,
+      message.sequence_order,
+      JSON.stringify(message.metadata)
+    ]);
+
+    await this.db.query(`
+      UPDATE conversations 
+      SET updated_at = NOW(), 
+          message_count = (SELECT COUNT(*) FROM messages WHERE conversation_id = $1)
+      WHERE id = $1
+    `, [message.conversation_id]);
+  }
+
+  /**
    * Save a complete conversation turn with all chunks
    */
   async saveConversationTurn(conversationId: string, turn: ConversationTurn): Promise<void> {
@@ -212,13 +254,16 @@ export class PGliteConversationStore {
         await this.db.query(`
           INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order, metadata)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT (id) DO UPDATE SET
+            content = EXCLUDED.content,
+            metadata = EXCLUDED.metadata
         `, [
           turn.userMessage.id,
           conversationId,
           turn.userMessage.role,
           turn.userMessage.content,
           turn.userMessage.created_at,
-          this.sequenceCounter++,
+          turn.userMessage.sequence_order ?? this.sequenceCounter++,
           JSON.stringify(turn.userMessage.metadata)
         ]);
       }
@@ -229,13 +274,16 @@ export class PGliteConversationStore {
         await this.db.query(`
           INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order, metadata)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT (id) DO UPDATE SET
+            content = EXCLUDED.content,
+            metadata = EXCLUDED.metadata
         `, [
           msgId,
           conversationId,
           turn.assistantMessage.role,
           turn.assistantMessage.content,
           turn.assistantMessage.created_at,
-          this.sequenceCounter++,
+          turn.assistantMessage.sequence_order ?? this.sequenceCounter++,
           JSON.stringify(turn.assistantMessage.metadata)
         ]);
 
@@ -244,6 +292,9 @@ export class PGliteConversationStore {
           await this.db.query(`
             INSERT INTO thinking_blocks (id, conversation_id, message_id, content, is_complete, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO UPDATE SET
+                content = EXCLUDED.content,
+                is_complete = EXCLUDED.is_complete
           `, [
             thinking.id,
             conversationId,
@@ -251,7 +302,7 @@ export class PGliteConversationStore {
             thinking.content,
             thinking.is_complete,
             thinking.created_at,
-            this.sequenceCounter++
+            (thinking as any).sequence_order ?? this.sequenceCounter++
           ]);
         }
 
@@ -260,6 +311,9 @@ export class PGliteConversationStore {
           await this.db.query(`
             INSERT INTO reasoning_blocks (id, conversation_id, message_id, content, is_complete, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO UPDATE SET
+                content = EXCLUDED.content,
+                is_complete = EXCLUDED.is_complete
           `, [
             reasoning.id,
             conversationId,
@@ -267,7 +321,7 @@ export class PGliteConversationStore {
             reasoning.content,
             reasoning.is_complete,
             reasoning.created_at,
-            this.sequenceCounter++
+            (reasoning as any).sequence_order ?? this.sequenceCounter++
           ]);
         }
 
@@ -276,6 +330,9 @@ export class PGliteConversationStore {
           await this.db.query(`
             INSERT INTO tool_calls (id, conversation_id, message_id, call_index, tool_name, arguments, status, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (id) DO UPDATE SET
+                arguments = EXCLUDED.arguments,
+                status = EXCLUDED.status
           `, [
             toolCall.id,
             conversationId,
@@ -285,7 +342,7 @@ export class PGliteConversationStore {
             JSON.stringify(toolCall.arguments),
             toolCall.status,
             toolCall.created_at,
-            this.sequenceCounter++
+            (toolCall as any).sequence_order ?? this.sequenceCounter++
           ]);
         }
 
@@ -294,6 +351,7 @@ export class PGliteConversationStore {
           await this.db.query(`
             INSERT INTO tool_results (id, conversation_id, tool_call_id, tool_name, content, success, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO NOTHING
           `, [
             result.id,
             conversationId,
@@ -302,7 +360,7 @@ export class PGliteConversationStore {
             result.content,
             result.success,
             result.created_at,
-            this.sequenceCounter++
+            (result as any).sequence_order ?? this.sequenceCounter++
           ]);
         }
 
@@ -311,6 +369,7 @@ export class PGliteConversationStore {
           await this.db.query(`
             INSERT INTO citations (id, conversation_id, message_id, url, title, citation_index, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO NOTHING
           `, [
             citation.id,
             conversationId,
@@ -319,7 +378,7 @@ export class PGliteConversationStore {
             citation.title,
             citation.citation_index,
             citation.created_at,
-            this.sequenceCounter++
+            (citation as any).sequence_order ?? this.sequenceCounter++
           ]);
         }
       }
@@ -329,7 +388,7 @@ export class PGliteConversationStore {
         UPDATE conversations 
         SET updated_at = NOW(), 
             message_count = (SELECT COUNT(*) FROM messages WHERE conversation_id = $1)
-        WHERE id = $1
+      WHERE id = $1
       `, [conversationId]);
 
       // Commit transaction
@@ -368,12 +427,12 @@ export class PGliteConversationStore {
 
     // Combine all events and sort by sequence_order
     const allEvents: ConversationHistoryItem[] = [
-      ...messages.rows.map((m: Message) => ({ type: 'message' as const, data: m })),
-      ...thinking.rows.map((t: ThinkingBlock) => ({ type: 'thinking' as const, data: t })),
-      ...reasoning.rows.map((r: ReasoningBlock) => ({ type: 'reasoning' as const, data: r })),
-      ...toolCalls.rows.map((tc: ToolCall) => ({ type: 'tool_call' as const, data: tc })),
-      ...toolResults.rows.map((tr: ToolResult) => ({ type: 'tool_result' as const, data: tr })),
-      ...citations.rows.map((c: Citation) => ({ type: 'citation' as const, data: c }))
+      ...(messages.rows as any[]).map((m: Message) => ({ type: 'message' as const, data: m })),
+      ...(thinking.rows as any[]).map((t: ThinkingBlock) => ({ type: 'thinking' as const, data: t })),
+      ...(reasoning.rows as any[]).map((r: ReasoningBlock) => ({ type: 'reasoning' as const, data: r })),
+      ...(toolCalls.rows as any[]).map((tc: ToolCall) => ({ type: 'tool_call' as const, data: tc })),
+      ...(toolResults.rows as any[]).map((tr: ToolResult) => ({ type: 'tool_result' as const, data: tr })),
+      ...(citations.rows as any[]).map((c: Citation) => ({ type: 'citation' as const, data: c }))
     ].sort((a, b) => {
       const aOrder = 'sequence_order' in a.data ? a.data.sequence_order : 0;
       const bOrder = 'sequence_order' in b.data ? b.data.sequence_order : 0;
@@ -453,7 +512,7 @@ export class PGliteConversationStore {
       RETURNING is_pinned
     `, [conversationId]);
 
-    return result.rows[0]?.is_pinned ?? false;
+    return (result.rows[0] as any)?.is_pinned ?? false;
   }
 
   /**

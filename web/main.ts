@@ -38,10 +38,7 @@ mermaid.initialize({
 declare global {
   interface Window {
     mermaid: typeof mermaid;
-    Alpine: {
-      store(name: string, data?: unknown): unknown;
-      start(): void;
-    };
+    Alpine: any;
   }
 }
 window.mermaid = mermaid;

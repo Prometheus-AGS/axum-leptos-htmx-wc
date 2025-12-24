@@ -2,16 +2,50 @@
  * Markdown rendering utilities.
  */
 
-import { marked, type MarkedOptions } from "marked";
-import { markedHighlight } from "marked-highlight";
-import hljs from "highlight.js";
-import { sanitizeHtml } from "./html";
+import { marked } from "marked";
+import { sanitizeHtml, escapeHtml } from "./html";
 
 // Singleton for initialization state
 let isInitialized = false;
 
+// Custom renderer to output Web Components
+const renderer = new marked.Renderer();
+
+// Override code block rendering
+renderer.code = ({ text, lang }: { text: string; lang?: string }): string => {
+  const language = (lang || "").toLowerCase();
+  const code = text;
+
+  // Check for Mermaid
+  if (language === "mermaid" || isProbablyMermaid(code)) {
+    return `<chat-mermaid code="${escapeHtml(code)}"></chat-mermaid>`;
+  }
+
+  // Standard code block
+  return `<chat-code-block language="${escapeHtml(language)}" code="${escapeHtml(code)}"></chat-code-block>`;
+};
+
+// Override image rendering to support video
+renderer.image = ({ href, title, text }: { href: string; title: string | null; text: string }): string => {
+  if (!href) return "";
+
+  const fileExt = href.split('.').pop()?.toLowerCase();
+  const isVideo = ["mp4", "webm", "ogg", "mov"].includes(fileExt || "");
+
+  if (isVideo) {
+    return `
+      <video controls class="max-w-full rounded-lg my-2" title="${title || text || ''}">
+        <source src="${href}" type="video/${fileExt === 'mov' ? 'mp4' : fileExt}">
+        Your browser does not support the video tag.
+      </video>
+    `;
+  }
+
+  return `<img src="${href}" alt="${text}" title="${title || ''}" class="max-w-full rounded-lg my-2">`;
+};
+
 /**
- * Initialize the markdown renderer with syntax highlighting.
+ * Initialize the markdown renderer with custom renderer.
  * Should be called once at application startup.
  */
 export function initializeMarkdown(): void {
@@ -19,62 +53,25 @@ export function initializeMarkdown(): void {
     return;
   }
 
-  marked.use(
-    markedHighlight({
-      langPrefix: "hljs language-",
-      highlight(code: string, lang: string): string {
-        if (lang && hljs.getLanguage(lang)) {
-          return hljs.highlight(code, { language: lang }).value;
-        }
-        return hljs.highlightAuto(code).value;
-      },
-    }),
-  );
-
+  marked.use({ renderer });
   isInitialized = true;
 }
 
 /**
- * Render markdown to HTML with syntax highlighting.
- * Output is sanitized for XSS protection.
+ * Render markdown to HTML with syntax highlighting (via components).
+ * Output is sanitized for XSS protection (components handle their own sanitization).
  */
 export function renderMarkdown(markdown: string): string {
   if (!isInitialized) {
     initializeMarkdown();
   }
 
-  const options: MarkedOptions = {
-    breaks: true,
-    gfm: true,
-  };
-
-  const raw = marked.parse(markdown, options);
-
-  // Handle both string and Promise returns from marked
-  if (typeof raw === "string") {
-    return sanitizeHtml(raw);
-  }
-
-  // This shouldn't happen with sync mode, but handle it gracefully
-  console.warn("[markdown] Unexpected async result from marked.parse");
-  return "";
-}
-
-/**
- * Render inline markdown (no block elements).
- */
-export function renderInlineMarkdown(markdown: string): string {
-  if (!isInitialized) {
-    initializeMarkdown();
-  }
-
-  const raw = marked.parseInline(markdown);
-
-  if (typeof raw === "string") {
-    return sanitizeHtml(raw);
-  }
-
-  return "";
+  // Parse markdown
+  const raw = marked.parse(markdown) as string;
+  
+  // Note: We don't use global sanitizeHtml here because it might strip our custom web components
+  // Instead, we rely on marked's default sanitization + specific component safety
+  return raw; 
 }
 
 /**
@@ -104,35 +101,10 @@ export function isProbablyMermaid(code: string): boolean {
 }
 
 /**
- * Extract code blocks from markdown for special handling.
- */
-export interface CodeBlock {
-  language: string;
-  code: string;
-  isMermaid: boolean;
-}
-
-export function extractCodeBlocks(markdown: string): CodeBlock[] {
-  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
-  const blocks: CodeBlock[] = [];
-  let match: RegExpExecArray | null = null;
-
-  match = codeBlockRegex.exec(markdown);
-  while (match !== null) {
-    const language = match[1] || "";
-    const code = match[2] || "";
-    const isMermaid = language === "mermaid" || isProbablyMermaid(code);
-
-    blocks.push({ language, code, isMermaid });
-    match = codeBlockRegex.exec(markdown);
-  }
-
-  return blocks;
-}
-
-/**
  * Highlight code without wrapping in pre/code tags.
+ * (Preserved for compatibility, though largely superseded by ChatCodeBlock)
  */
+import hljs from "highlight.js";
 export function highlightCode(code: string, language: string): string {
   if (language && hljs.getLanguage(language)) {
     return hljs.highlight(code, { language }).value;

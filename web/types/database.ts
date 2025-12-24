@@ -72,6 +72,7 @@ export interface Citation {
   message_id: string | null;
   url: string;
   title: string | null;
+  snippet: string | null;
   citation_index: number;
   created_at: string;
   sequence_order: number;

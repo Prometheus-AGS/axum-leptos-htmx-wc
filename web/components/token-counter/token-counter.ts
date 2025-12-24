@@ -126,6 +126,19 @@ export class TokenCounter extends HTMLElement {
         tooltip.classList.add("hidden");
       });
     }
+
+    // Listen for global usage updates
+    window.addEventListener('token-usage-update', (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (detail) {
+            this.updateTokens(detail.input, detail.output);
+            if (detail.cost) this.updateCost(detail.cost);
+            if (detail.model) {
+                this._modelId = detail.model;
+                this.render();
+            }
+        }
+    });
   }
 
   /**
