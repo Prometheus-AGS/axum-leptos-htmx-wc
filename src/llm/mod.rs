@@ -1,7 +1,7 @@
 //! LLM driver traits and implementations.
 //!
 //! This module provides protocol-agnostic abstractions for interacting with
-//! Large Language Models, supporting both OpenAI Chat Completions and
+//! Large Language Models, supporting both `OpenAI` Chat Completions and
 //! Responses APIs.
 //!
 //! # Overview
@@ -12,8 +12,8 @@
 //!
 //! # Drivers
 //!
-//! - [`ChatCompletionsDriver`]: OpenAI Chat Completions API (`/v1/chat/completions`)
-//! - [`ResponsesDriver`]: OpenAI Responses API (`/v1/responses`)
+//! - [`ChatCompletionsDriver`]: `OpenAI` Chat Completions API (`/v1/chat/completions`)
+//! - [`ResponsesDriver`]: `OpenAI` Responses API (`/v1/responses`)
 //!
 //! # Example
 //!
@@ -30,10 +30,12 @@
 
 pub mod chat_completions;
 pub mod orchestrator;
+pub mod provider;
 pub mod responses;
 
 pub use chat_completions::ChatCompletionsDriver;
 pub use orchestrator::Orchestrator;
+pub use provider::Provider;
 pub use responses::ResponsesDriver;
 
 use crate::normalized::NormalizedEvent;
@@ -50,6 +52,16 @@ pub struct LlmSettings {
     pub model: String,
     /// Protocol to use for communication.
     pub protocol: LlmProtocol,
+    /// Provider type (auto-detected from `base_url` if not specified).
+    pub provider: Provider,
+    /// Whether to enable parallel tool calls (provider-dependent).
+    pub parallel_tool_calls: Option<bool>,
+    /// Azure deployment name (required for Azure `OpenAI`).
+    #[allow(dead_code)]
+    pub deployment_name: Option<String>,
+    /// Azure API version (required for Azure `OpenAI`).
+    #[allow(dead_code)]
+    pub api_version: Option<String>,
 }
 
 /// LLM protocol variants.
@@ -58,9 +70,9 @@ pub enum LlmProtocol {
     /// Automatically detect protocol based on the provider.
     #[default]
     Auto,
-    /// OpenAI Responses API (`/v1/responses`).
+    /// `OpenAI` Responses API (`/v1/responses`).
     Responses,
-    /// OpenAI Chat Completions API (`/v1/chat/completions`).
+    /// `OpenAI` Chat Completions API (`/v1/chat/completions`).
     Chat,
 }
 
@@ -119,7 +131,7 @@ pub struct ToolCallFunction {
 pub struct LlmRequest {
     /// Conversation messages.
     pub messages: Vec<serde_json::Value>,
-    /// Available tools in OpenAI function schema format.
+    /// Available tools in `OpenAI` function schema format.
     pub tools: Vec<serde_json::Value>,
 }
 

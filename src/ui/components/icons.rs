@@ -15,7 +15,7 @@ pub fn SendIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -41,7 +41,7 @@ pub fn LoaderIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {} animate-spin", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class} animate-spin");
 
     view! {
         <svg
@@ -66,7 +66,7 @@ pub fn CopyIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -92,7 +92,7 @@ pub fn CheckIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -117,7 +117,7 @@ pub fn XIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -143,7 +143,7 @@ pub fn MenuIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -170,7 +170,7 @@ pub fn ToolIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -195,7 +195,7 @@ pub fn UserIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -221,7 +221,7 @@ pub fn BotIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg
@@ -250,7 +250,7 @@ pub fn SparklesIcon(
     #[prop(default = "")]
     class: &'static str,
 ) -> impl IntoView {
-    let classes = format!("{} {}", ICON_SIZE, class);
+    let classes = format!("{ICON_SIZE} {class}");
 
     view! {
         <svg

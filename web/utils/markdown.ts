@@ -115,14 +115,16 @@ export interface CodeBlock {
 export function extractCodeBlocks(markdown: string): CodeBlock[] {
   const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
   const blocks: CodeBlock[] = [];
-  let match: RegExpExecArray | null;
+  let match: RegExpExecArray | null = null;
 
-  while ((match = codeBlockRegex.exec(markdown)) !== null) {
+  match = codeBlockRegex.exec(markdown);
+  while (match !== null) {
     const language = match[1] || "";
     const code = match[2] || "";
     const isMermaid = language === "mermaid" || isProbablyMermaid(code);
 
     blocks.push({ language, code, isMermaid });
+    match = codeBlockRegex.exec(markdown);
   }
 
   return blocks;

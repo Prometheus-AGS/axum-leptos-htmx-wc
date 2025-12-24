@@ -160,6 +160,17 @@ pub enum NormalizedEvent {
         code: Option<String>,
     },
 
+    /// Token usage information from the API.
+    #[serde(rename = "usage")]
+    Usage {
+        /// Number of tokens in the prompt/input.
+        prompt_tokens: u32,
+        /// Number of tokens in the completion/output.
+        completion_tokens: u32,
+        /// Total tokens used (prompt + completion).
+        total_tokens: u32,
+    },
+
     /// Stream has completed successfully.
     #[serde(rename = "done")]
     Done,
@@ -176,7 +187,7 @@ fn default_true() -> bool {
 /// Convert a [`NormalizedEvent`] to an SSE-formatted string.
 ///
 /// The output follows the Server-Sent Events specification with both
-/// an `event:` line (for EventSource listeners) and a `data:` line
+/// an `event:` line (for `EventSource` listeners) and a `data:` line
 /// containing the JSON payload.
 ///
 /// # Example
@@ -210,6 +221,7 @@ pub fn event_name(evt: &NormalizedEvent) -> &'static str {
         NormalizedEvent::ToolCallDelta { .. } => "tool_call.delta",
         NormalizedEvent::ToolCallComplete { .. } => "tool_call.complete",
         NormalizedEvent::ToolResult { .. } => "tool_result",
+        NormalizedEvent::Usage { .. } => "usage",
         NormalizedEvent::Error { .. } => "error",
         NormalizedEvent::Done => "done",
     }
@@ -328,6 +340,20 @@ pub fn agui_sse_event(evt: &NormalizedEvent, request_id: &str) -> String {
                 "name": name,
                 "content": content,
                 "success": success
+            }),
+        ),
+        NormalizedEvent::Usage {
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        } => (
+            "agui.usage",
+            serde_json::json!({
+                "kind": "usage",
+                "request_id": request_id,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens
             }),
         ),
         NormalizedEvent::Error { message, code } => (

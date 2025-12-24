@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::llm::{Message, MessageRole, ToolCall};
 
 /// Default session timeout (30 minutes).
+#[allow(dead_code)]
 const DEFAULT_SESSION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 /// A single conversation session.
@@ -27,6 +28,7 @@ struct SessionInner {
     /// Conversation messages.
     messages: RwLock<Vec<Message>>,
     /// Session creation time.
+    #[allow(dead_code)]
     created_at: Instant,
     /// Last activity time.
     last_activity: RwLock<Instant>,
@@ -64,6 +66,7 @@ impl Session {
     }
 
     /// Set the system prompt for this session.
+    #[allow(dead_code)]
     pub fn set_system_prompt(&self, prompt: impl Into<String>) {
         let mut guard = self.inner.system_prompt.write().unwrap();
         *guard = Some(prompt.into());
@@ -88,6 +91,7 @@ impl Session {
     }
 
     /// Add an assistant message to the conversation.
+    #[allow(dead_code)]
     pub fn add_assistant_message(&self, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::Assistant,
@@ -99,6 +103,7 @@ impl Session {
     }
 
     /// Add an assistant message with tool calls.
+    #[allow(dead_code)]
     pub fn add_assistant_with_tool_calls(
         &self,
         content: Option<String>,
@@ -114,6 +119,7 @@ impl Session {
     }
 
     /// Add a tool result message.
+    #[allow(dead_code)]
     pub fn add_tool_result(&self, tool_call_id: impl Into<String>, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::Tool,
@@ -163,6 +169,7 @@ impl Session {
     }
 
     /// Clear all messages from the session.
+    #[allow(dead_code)]
     pub fn clear(&self) {
         let mut guard = self.inner.messages.write().unwrap();
         guard.clear();
@@ -177,12 +184,14 @@ impl Session {
 
     /// Check if the session has expired.
     #[must_use]
+    #[allow(dead_code)]
     pub fn is_expired(&self) -> bool {
         self.is_expired_with_timeout(DEFAULT_SESSION_TIMEOUT)
     }
 
     /// Check if the session has expired with a custom timeout.
     #[must_use]
+    #[allow(dead_code)]
     pub fn is_expired_with_timeout(&self, timeout: Duration) -> bool {
         let last = *self.inner.last_activity.read().unwrap();
         last.elapsed() > timeout
@@ -190,6 +199,7 @@ impl Session {
 
     /// Get the session age.
     #[must_use]
+    #[allow(dead_code)]
     pub fn age(&self) -> Duration {
         self.inner.created_at.elapsed()
     }
@@ -272,12 +282,14 @@ impl SessionStore {
 
     /// Get the number of active sessions.
     #[must_use]
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.inner.sessions.read().unwrap().len()
     }
 
     /// Check if there are no sessions.
     #[must_use]
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -285,11 +297,13 @@ impl SessionStore {
     /// Remove all expired sessions.
     ///
     /// Returns the number of sessions removed.
+    #[allow(dead_code)]
     pub fn cleanup_expired(&self) -> usize {
         self.cleanup_expired_with_timeout(DEFAULT_SESSION_TIMEOUT)
     }
 
     /// Remove sessions that have been inactive longer than the timeout.
+    #[allow(dead_code)]
     pub fn cleanup_expired_with_timeout(&self, timeout: Duration) -> usize {
         let mut guard = self.inner.sessions.write().unwrap();
         let before = guard.len();

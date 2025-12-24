@@ -50,7 +50,7 @@ pub fn Input(
                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary \
                         focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
-    let classes = format!("{} {}", base_classes, class);
+    let classes = format!("{base_classes} {class}");
 
     view! {
         <input
@@ -98,7 +98,7 @@ pub fn Textarea(
                         focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 \
                         resize-none";
 
-    let classes = format!("{} {}", base_classes, class);
+    let classes = format!("{base_classes} {class}");
 
     view! {
         <textarea

@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calendar (2-month layout improved) - HTMX single file</title>
+
+    <!-- HTMX (drop-in ready) [9] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         MATERIAL ZONES TOKENS (borderless, Material 3-ish)
+         - Use CSS custom properties generated from a primary hue. [1][12]
+         - NO borders: use surface container zones for separation. [1][6][8][12]
+      ============================================================ */
+
+      :root {
+        --primary-hue: 210; /* configurable personalization knob [1][12] */
+
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.14);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+        /* Calendar sizing */
+        --cell-size: 2.75rem;
+      }
+
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 60%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+        padding: var(--space-5);
+      }
+
+      .shell {
+        width: 100%;
+        max-width: 1140px;
+        margin: 0 auto;
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 900;
+        letter-spacing: 0.2px;
+      }
+
+      .subtitle {
+        margin: 8px 0 0 0;
+        color: var(--on-surface-variant);
+        line-height: 1.35;
+      }
+
+      .btn {
+        border: 0; /* no borders [6][8][12] */
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* focus guidance [7] */
+
+      .select {
+        border: 0; /* no borders [6][8][12] */
+        border-radius: 999px;
+        padding: 10px 12px;
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        outline: none;
+        font-weight: 750;
+      }
+      .select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* focus guidance [7] */
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: var(--surface-container-high);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+        font-weight: 750;
+        font-size: 0.92rem;
+      }
+
+      /* ============================================================
+         2-month layout improvements (UX + layout)
+         - Single shared header for the range calendar (less repetition).
+         - Sticky DOW row inside each month pane (easier scanning).
+         - Clear separation via zones (no borders). [1][6][8][12]
+         - Responsive collapse <768px: stack months vertically. [1][12]
+      ============================================================ */
+
+      .calendar-range {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        padding: var(--space-4);
+      }
+
+      .range-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+      }
+
+      .range-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 900;
+        letter-spacing: 0.2px;
+      }
+
+      .range-sub {
+        margin: 6px 0 0 0;
+        color: var(--on-surface-variant);
+        font-size: 0.92rem;
+      }
+
+      .nav-btn {
+        width: calc(var(--cell-size));
+        height: calc(var(--cell-size));
+        border-radius: 12px;
+        border: 0; /* no borders [6][8][12] */
+        cursor: pointer;
+        background: var(--surface-container-low);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        font-weight: 900;
+      }
+      .nav-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* focus guidance [7] */
+
+      .months {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-3);
+        align-items: start;
+      }
+
+      /* Responsive breakpoint at 768px as required. [1][12] */
+      @media (max-width: 768px) {
+        .months { grid-template-columns: 1fr; }
+      }
+
+      .month {
+        background: color-mix(in oklab, var(--surface-container-low) 75%, transparent);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        padding: var(--space-3);
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .month-caption {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: 0 var(--space-1);
+      }
+
+      .month-name {
+        font-weight: 900;
+        letter-spacing: 0.2px;
+      }
+
+      .month-meta {
+        color: var(--on-surface-variant);
+        font-weight: 750;
+        font-size: 0.9rem;
+      }
+
+      .dow {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        padding: 0 var(--space-1);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: color-mix(in oklab, var(--surface-container-high) 80%, transparent);
+        border-radius: var(--radius-lg);
+      }
+
+      .dow div {
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 800;
+        color: var(--on-surface-variant);
+        padding: 8px 0;
+        user-select: none;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        padding: 0 var(--space-1) var(--space-1) var(--space-1);
+      }
+
+      .day {
+        height: var(--cell-size);
+        border-radius: 12px;
+        border: 0;
+        cursor: pointer;
+        background: transparent;
+        color: var(--on-surface);
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+      }
+
+      .day:hover {
+        background: color-mix(in oklab, var(--surface-container-low) 80%, transparent);
+      }
+
+      .day:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      } /* focus guidance [7] */
+
+      .day[data-outside="true"] {
+        color: color-mix(in oklab, var(--on-surface-variant) 70%, transparent);
+      }
+
+      .day[data-range="middle"] {
+        background: color-mix(in oklab, var(--primary) 18%, var(--surface-container-low));
+        color: var(--on-surface);
+        border-radius: 0;
+      }
+      .day[data-range="start"], .day[data-range="end"] {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+      .day[data-range="start"] { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+      .day[data-range="end"] { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+      .day[data-today="true"] {
+        box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 55%, transparent);
+      }
+
+      .footer {
+        margin-top: var(--space-3);
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .hint {
+        margin: 0;
+        color: var(--on-surface-variant);
+        font-size: 0.92rem;
+        line-height: 1.35;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Calendar (2-month range) — improved layout + UX</h1>
+            <p class="subtitle">
+              Uses borderless zone separation (no borders) and Material 3 token-based theming via CSS custom properties. [1][6][8][12]
+            </p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" type="button" id="themeToggle" aria-label="Toggle theme">Toggle Theme</button>
+            <button class="btn btn-primary" type="button" id="todayBtn" aria-label="Jump to today">Today</button>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <!-- ============================================================
+             <CalendarRangeRoot> (Leptos boundary)
+             Props you’d likely lift into Leptos:
+             - viewYear, viewMonth, from, to, showOutsideDays, cellSize
+        ============================================================ -->
+        <div class="calendar-range" id="calendarRange">
+          <!-- ============================================================
+               <CalendarRangeHeader> (Leptos boundary)
+               UX improvement: one shared header for both months.
+          ============================================================ -->
+          <div class="range-header">
+            <div>
+              <p class="range-title">Mode: range (2 months)</p>
+              <p class="range-sub">
+                Cleaner header, better month scanning, and responsive stacking at 768px. [1][12]
+              </p>
+            </div>
+
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+              <label class="pill" style="gap:10px;">
+                Cell size
+                <select class="select" id="cellSizeSelect" aria-label="Cell size">
+                  <option value="2.25rem">Compact</option>
+                  <option value="2.75rem" selected>Default</option>
+                  <option value="3rem">Large</option>
+                </select>
+              </label>
+
+              <button class="btn" type="button" id="clearRange" aria-label="Clear selected range">Clear range</button>
+
+              <!-- Shared nav controls -->
+              <button class="nav-btn" type="button" data-nav="prev" aria-label="Previous month">‹</button>
+              <button class="nav-btn" type="button" data-nav="next" aria-label="Next month">›</button>
+            </div>
+          </div>
+
+          <!-- ============================================================
+               <CalendarMonths> (Leptos boundary)
+               Responsive: 2 columns desktop, 1 column <768px. [1][12]
+          ============================================================ -->
+          <div class="months" id="months">
+            <!-- Month A -->
+            <!-- ============================================================
+                 <CalendarMonth> (Leptos boundary)
+            ============================================================ -->
+            <div class="month">
+              <div class="month-caption">
+                <div class="month-name" id="capA">—</div>
+                <div class="month-meta">Month 1</div>
+              </div>
+              <div class="dow" aria-hidden="true">
+                <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+              </div>
+              <div class="grid" id="gridA" role="grid" aria-label="Calendar days (range month 1)"></div>
+            </div>
+
+            <!-- Month B -->
+            <div class="month">
+              <div class="month-caption">
+                <div class="month-name" id="capB">—</div>
+                <div class="month-meta">Month 2</div>
+              </div>
+              <div class="dow" aria-hidden="true">
+                <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+              </div>
+              <div class="grid" id="gridB" role="grid" aria-label="Calendar days (range month 2)"></div>
+            </div>
+          </div>
+
+          <!-- ============================================================
+               <CalendarFooter> (Leptos boundary)
+          ============================================================ -->
+          <div class="footer">
+            <p class="hint">Range: <strong id="rangeLabel">None</strong></p>
+            <span class="pill">TZ: <span id="tzLabel">detecting…</span></span>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <p class="hint">
+          Accessibility: buttons include ARIA labels where needed, and focus-visible outlines are provided for keyboard navigation. [7]
+        </p>
+      </section>
+    </div>
+
+    <script>
+      // ============================================================
+      // Theme toggle (token-driven)
+      // Uses CSS variables; do not hardcode colors. [7][12]
+      // ============================================================
+      (function () {
+        const root = document.documentElement;
+        document.getElementById("themeToggle").addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      // Timezone label (client-side)
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      document.getElementById("tzLabel").textContent = tz || "unknown";
+
+      // ============================================================
+      // Calendar logic (kept self-contained)
+      // JS is self-contained to avoid global collisions. [9]
+      // ============================================================
+      (function initCalendarRange() {
+        const MONTHS = Array.from({ length: 12 }, (_, i) =>
+          new Date(2000, i, 1).toLocaleString("default", { month: "long" })
+        );
+
+        function ymd(d) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return `${y}-${m}-${day}`;
+        }
+
+        function formatHuman(d) {
+          return d.toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" });
+        }
+
+        function sameDay(a, b) {
+          return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+        }
+
+        function addMonths(year, month, delta) {
+          const d = new Date(year, month + delta, 1);
+          return { y: d.getFullYear(), m: d.getMonth() };
+        }
+
+        function getMonthMatrix(year, month, showOutsideDays = true) {
+          const first = new Date(year, month, 1);
+          const startDow = first.getDay(); // 0=Su
+          const start = new Date(year, month, 1 - startDow);
+
+          const cells = [];
+          for (let i = 0; i < 42; i++) {
+            const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+            const outside = d.getMonth() !== month;
+            cells.push({
+              date: d,
+              outside,
+              hidden: outside && !showOutsideDays,
+            });
+          }
+          return cells;
+        }
+
+        function inRange(d, from, to) {
+          if (!from || !to) return false;
+          const t = d.getTime();
+          return t > from.getTime() && t < to.getTime();
+        }
+
+        // State
+        const now = new Date();
+        const state = {
+          viewY: now.getFullYear(),
+          viewM: now.getMonth(),
+          from: new Date(2025, 5, 12),
+          to: new Date(2025, 6, 15),
+          showOutsideDays: true
+        };
+
+        const capA = document.getElementById("capA");
+        const capB = document.getElementById("capB");
+        const gridA = document.getElementById("gridA");
+        const gridB = document.getElementById("gridB");
+        const rangeLabel = document.getElementById("rangeLabel");
+
+        function renderMonth(gridEl, y, m) {
+          const today = new Date();
+          const cells = getMonthMatrix(y, m, state.showOutsideDays);
+
+          gridEl.innerHTML = cells.map((c) => {
+            if (c.hidden) return `<div></div>`;
+
+            const isStart = state.from && sameDay(c.date, state.from);
+            const isEnd = state.to && sameDay(c.date, state.to);
+            const isMid = inRange(c.date, state.from, state.to);
+            const isToday = sameDay(c.date, today);
+
+            let rangeAttr = "";
+            if (isStart) rangeAttr = "start";
+            else if (isEnd) rangeAttr = "end";
+            else if (isMid) rangeAttr = "middle";
+
+            return `
+              <button
+                type="button"
+                class="day"
+                data-date="${ymd(c.date)}"
+                data-outside="${c.outside ? "true" : "false"}"
+                data-range="${rangeAttr}"
+                data-today="${isToday ? "true" : "false"}"
+                aria-label="${formatHuman(c.date)}"
+              >
+                ${c.date.getDate()}
+              </button>
+            `;
+          }).join("");
+        }
+
+        function render() {
+          const a = { y: state.viewY, m: state.viewM };
+          const b = addMonths(a.y, a.m, 1);
+
+          capA.textContent = `${MONTHS[a.m]} ${a.y}`;
+          capB.textContent = `${MONTHS[b.m]} ${b.y}`;
+
+          renderMonth(gridA, a.y, a.m);
+          renderMonth(gridB, b.y, b.m);
+
+          const label =
+            state.from && state.to
+              ? `${formatHuman(state.from)} → ${formatHuman(state.to)}`
+              : state.from
+                ? `${formatHuman(state.from)} → …`
+                : "None";
+          rangeLabel.textContent = label;
+        }
+
+        // Navigation
+        document.addEventListener("click", (evt) => {
+          const nav = evt.target.closest("[data-nav]");
+          if (nav) {
+            const dir = nav.getAttribute("data-nav");
+            const next = addMonths(state.viewY, state.viewM, dir === "next" ? 1 : -1);
+            state.viewY = next.y; state.viewM = next.m;
+            render();
+            return;
+          }
+
+          const day = evt.target.closest(".day");
+          if (!day) return;
+
+          const d = new Date(day.getAttribute("data-date") + "T12:00:00"); // DST-safe-ish
+
+          if (!state.from || (state.from && state.to)) {
+            state.from = d;
+            state.to = null;
+          } else {
+            if (d.getTime() < state.from.getTime()) {
+              state.to = state.from;
+              state.from = d;
+            } else {
+              state.to = d;
+            }
+          }
+          render();
+
+          // Optional event dispatch pattern (interaction hook). [4]
+          document.dispatchEvent(new CustomEvent("calendar:select", {
+            detail: { mode: "range", from: state.from ? ymd(state.from) : null, to: state.to ? ymd(state.to) : null }
+          }));
+        });
+
+        // Controls
+        document.getElementById("todayBtn").addEventListener("click", () => {
+          const n = new Date();
+          state.viewY = n.getFullYear();
+          state.viewM = n.getMonth();
+          state.from = n;
+          state.to = null;
+          render();
+        });
+
+        document.getElementById("clearRange").addEventListener("click", () => {
+          state.from = null;
+          state.to = null;
+          render();
+        });
+
+        // cell-size control
+        document.getElementById("cellSizeSelect").addEventListener("change", (e) => {
+          document.documentElement.style.setProperty("--cell-size", e.target.value);
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

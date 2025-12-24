@@ -41,7 +41,7 @@ pub fn Separator(
         SeparatorOrientation::Vertical => "h-full w-[1px]",
     };
 
-    let classes = format!("{} {} {}", base_classes, orientation_classes, class);
+    let classes = format!("{base_classes} {orientation_classes} {class}");
 
     view! {
         <div role="separator" class=classes />

@@ -41,6 +41,11 @@ export interface ToolCallItem {
   name: string;
   argumentsRaw: string;
   status: "streaming" | "complete";
+  // Result is added when available
+  result?: {
+    content: string;
+    success: boolean;
+  };
 }
 
 export interface ToolResultItem {
@@ -127,4 +132,37 @@ export function resetChatState(state: ChatState): void {
   state.streamingReasoning = "";
   state.toolCalls.clear();
   state.citations = [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conversation Store Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ConversationMessage {
+  id: string;
+  role: "user" | "assistant" | "tool" | "error";
+  content: string;
+  timestamp: number;
+  // For assistant messages with tool calls
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    arguments: string;
+  }>;
+  // For tool results
+  toolResult?: {
+    id: string;
+    name: string;
+    content: string;
+    success: boolean;
+  };
+}
+
+export interface Conversation {
+  id: string;
+  sessionId: string; // Server session ID
+  title: string;
+  messages: ConversationMessage[];
+  createdAt: number;
+  updatedAt: number;
 }

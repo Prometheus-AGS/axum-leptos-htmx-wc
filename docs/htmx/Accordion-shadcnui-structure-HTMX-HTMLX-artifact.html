@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Accordion (shadcn/ui structure) - HTMX HTMLX artifact</title>
+
+    <!-- HTMX included so this can be dropped into an HTMX app. [1] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         TOKENS (Material-ish + Borderless Zones)
+         - Use design tokens (CSS custom properties) for theming. [4]
+         - Avoid borders; use surface containers instead. [4]
+      ============================================================ */
+
+      :root {
+        --primary-hue: 210;
+
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --outline-variant: hsl(var(--primary-hue) 10% 80%);
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.14);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+        --outline-variant: hsl(var(--primary-hue) 10% 28%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 14px 36px rgba(0, 0, 0, 0.58);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 60%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+        padding: var(--space-5);
+      }
+
+      .shell {
+        width: 100%;
+        max-width: 720px;
+        margin: 0 auto;
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      /* Borderless "zone" container (no borders). [4] */
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+      }
+
+      .subtitle {
+        margin: 8px 0 0 0;
+        color: var(--on-surface-variant);
+        line-height: 1.35;
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 750;
+        box-shadow: var(--shadow-1);
+      }
+
+      .btn-surface {
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+
+      .btn:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      /* ============================================================
+         ACCORDION STYLES (shadcn-like structure)
+         - We'll implement "single + collapsible" behavior similar to docs. [1]
+         - Use ARIA roles and relationships; shadcn notes WAI-ARIA pattern. [1]
+      ============================================================ */
+
+      .accordion {
+        display: grid;
+        gap: 10px;
+        width: 100%;
+      }
+
+      /* <AccordionItem> */
+      .accordion-item {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-1);
+        overflow: clip;
+      }
+
+      /* <AccordionTrigger> */
+      .accordion-trigger {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+
+        padding: 14px 14px;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+
+        color: var(--on-surface);
+        font: inherit;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        text-align: left;
+      }
+
+      .accordion-trigger:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .accordion-chevron {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        border-radius: 6px;
+        background: color-mix(in oklab, var(--primary) 22%, transparent);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transform: rotate(0deg);
+        transition: transform 150ms ease;
+      }
+
+      .accordion-item[data-state="open"] .accordion-chevron {
+        transform: rotate(180deg);
+      }
+
+      /* <AccordionContent> */
+      .accordion-content {
+        padding: 0 14px 14px 14px;
+        color: var(--on-surface-variant);
+        line-height: 1.45;
+      }
+
+      /* "flex flex-col gap-4 text-balance" vibe from docs demo content. [1] */
+      .accordion-content-inner {
+        display: grid;
+        gap: 14px;
+        text-wrap: balance;
+        padding-top: 6px;
+      }
+
+      /* Collapsing animation via max-height.
+         (Leptos port can do height measurement for smoother animation.) */
+      .accordion-panel {
+        max-height: 0px;
+        overflow: hidden;
+        transition: max-height 300ms ease;
+      }
+
+      .accordion-item[data-state="open"] .accordion-panel {
+        max-height: 480px; /* enough for demo; in Leptos use measured height */
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .accordion-panel {
+          transition: none;
+        }
+        .accordion-chevron {
+          transition: none;
+        }
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 0.92rem;
+        color: var(--on-surface-variant);
+      }
+
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+          "Courier New", monospace;
+        font-size: 0.92em;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="title-row">
+          <div>
+            <h1>Accordion (shadcn/ui structure)</h1>
+            <p class="subtitle">
+              A vertically stacked set of interactive headings that each reveal a section of content. [1]
+            </p>
+          </div>
+
+          <div style="display:flex; gap: 10px; align-items:center;">
+            <button class="btn btn-surface" type="button" id="toggleThemeBtn">
+              Toggle Theme
+            </button>
+            <button class="btn btn-primary" type="button" id="expandAllBtn">
+              Expand all (demo)
+            </button>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <!-- ============================================================
+             <Accordion> boundary (Leptos component)
+             - shadcn demo uses: type="single" collapsible defaultValue="item-1". [1]
+             - In Leptos, this could be <Accordion type=Single collapsible=true default_value="item-1">...</Accordion>
+        ============================================================ -->
+        <div
+          class="accordion"
+          id="accordion"
+          data-accordion-type="single"
+          data-accordion-collapsible="true"
+          data-accordion-default="item-1"
+        >
+          <!-- ============================================================
+               <AccordionItem value="item-1"> boundary (Leptos component)
+          ============================================================ -->
+          <div class="accordion-item" data-item="item-1" data-state="open">
+            <!-- ============================================================
+                 <AccordionTrigger> boundary (Leptos component)
+                 - The trigger label matches the docs demo item. [1]
+            ============================================================ -->
+            <button
+              class="accordion-trigger"
+              type="button"
+              id="acc-trigger-item-1"
+              aria-controls="acc-content-item-1"
+              aria-expanded="true"
+            >
+              <span>Product Information</span>
+              <span class="accordion-chevron" aria-hidden="true">⌄</span>
+            </button>
+
+            <!-- ============================================================
+                 <AccordionContent> boundary (Leptos component)
+                 - The docs demo uses: className="flex flex-col gap-4 text-balance". [1]
+            ============================================================ -->
+            <div
+              class="accordion-panel"
+              id="acc-content-item-1"
+              role="region"
+              aria-labelledby="acc-trigger-item-1"
+            >
+              <div class="accordion-content">
+                <div class="accordion-content-inner">
+                  <p>
+                    Our flagship product combines cutting-edge technology with sleek
+                    design. Built with premium materials, it offers unparalleled
+                    performance and reliability. [1]
+                  </p>
+                  <p>
+                    Key features include advanced processing capabilities, and an
+                    intuitive user interface designed for both beginners and experts. [1]
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================================
+               <AccordionItem value="item-2"> boundary
+          ============================================================ -->
+          <div class="accordion-item" data-item="item-2" data-state="closed">
+            <button
+              class="accordion-trigger"
+              type="button"
+              id="acc-trigger-item-2"
+              aria-controls="acc-content-item-2"
+              aria-expanded="false"
+            >
+              <span>Shipping Details</span>
+              <span class="accordion-chevron" aria-hidden="true">⌄</span>
+            </button>
+
+            <div
+              class="accordion-panel"
+              id="acc-content-item-2"
+              role="region"
+              aria-labelledby="acc-trigger-item-2"
+            >
+              <div class="accordion-content">
+                <div class="accordion-content-inner">
+                  <!-- The docs demo includes shipping paragraphs in the code sample. [1] -->
+                  <p>
+                    We offer worldwide shipping through trusted courier partners.
+                    Standard delivery takes 3-5 business days, while express shipping
+                    ensures delivery within 1-2 business days. [1]
+                  </p>
+                  <p>
+                    All orders are carefully packaged and fully insured. Track your
+                    shipment in real-time through our dedicated tracking portal. [1]
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================================
+               <AccordionItem value="item-3"> boundary
+          ============================================================ -->
+          <div class="accordion-item" data-item="item-3" data-state="closed">
+            <button
+              class="accordion-trigger"
+              type="button"
+              id="acc-trigger-item-3"
+              aria-controls="acc-content-item-3"
+              aria-expanded="false"
+            >
+              <span>Return Policy</span>
+              <span class="accordion-chevron" aria-hidden="true">⌄</span>
+            </button>
+
+            <div
+              class="accordion-panel"
+              id="acc-content-item-3"
+              role="region"
+              aria-labelledby="acc-trigger-item-3"
+            >
+              <div class="accordion-content">
+                <div class="accordion-content-inner">
+                  <!-- The docs demo includes return-policy paragraphs in the code sample. [1] -->
+                  <p>
+                    We stand behind our products with a comprehensive 30-day return
+                    policy. If you're not completely satisfied, simply return the
+                    item in its original condition. [1]
+                  </p>
+                  <p>
+                    Our hassle-free return process includes free return shipping and
+                    full refunds processed within 48 hours of receiving the returned
+                    item. [1]
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <p class="hint">
+          This demo follows the shadcn structure (<span class="code">Accordion</span>,
+          <span class="code">AccordionItem</span>, <span class="code">AccordionTrigger</span>,
+          <span class="code">AccordionContent</span>). [1]
+        </p>
+        <p class="hint">
+          The component is described as adhering to the WAI-ARIA accordion design pattern. [1]
+        </p>
+
+        <!-- ============================================================
+             Optional HTMX hook example (kept inert by default)
+             - For "lean artifacts", don't embed data; fetch if needed. [4]
+             - Replace /accordion-fragment with a real endpoint if desired.
+        ============================================================ -->
+        <!--
+        <button
+          class="btn btn-surface"
+          type="button"
+          hx-get="/accordion-fragment"
+          hx-target="#accordion"
+          hx-swap="outerHTML"
+        >
+          Load accordion from server (HTMX)
+        </button>
+        -->
+      </section>
+    </div>
+
+    <script>
+      // Theme toggle via data-theme (dark/light) using CSS token sets.
+      (function () {
+        const root = document.documentElement;
+        const btn = document.getElementById("toggleThemeBtn");
+        btn.addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      // Accordion logic:
+      // - models shadcn demo props: type="single" and collapsible. [1]
+      (function () {
+        const accordion = document.getElementById("accordion");
+        const type = accordion.getAttribute("data-accordion-type") || "single";
+        const collapsible = accordion.getAttribute("data-accordion-collapsible") === "true";
+        const defaultItem = accordion.getAttribute("data-accordion-default");
+
+        function setItemState(itemEl, open) {
+          itemEl.setAttribute("data-state", open ? "open" : "closed");
+          const trigger = itemEl.querySelector(".accordion-trigger");
+          const panelId = trigger.getAttribute("aria-controls");
+          trigger.setAttribute("aria-expanded", open ? "true" : "false");
+          const panel = document.getElementById(panelId);
+          // max-height transition is controlled by data-state CSS
+          // (We keep the panel in the DOM for accessibility.)
+        }
+
+        function closeAllExcept(exceptValue) {
+          accordion.querySelectorAll(".accordion-item").forEach((item) => {
+            const val = item.getAttribute("data-item");
+            if (val !== exceptValue) setItemState(item, false);
+          });
+        }
+
+        // Initialize (respect defaultValue="item-1" from docs demo). [1]
+        accordion.querySelectorAll(".accordion-item").forEach((item) => {
+          const val = item.getAttribute("data-item");
+          setItemState(item, val === defaultItem);
+        });
+
+        accordion.addEventListener("click", (evt) => {
+          const btn = evt.target.closest(".accordion-trigger");
+          if (!btn) return;
+
+          const item = btn.closest(".accordion-item");
+          const val = item.getAttribute("data-item");
+          const isOpen = item.getAttribute("data-state") === "open";
+
+          if (type === "single") {
+            if (isOpen) {
+              if (collapsible) setItemState(item, false);
+            } else {
+              closeAllExcept(val);
+              setItemState(item, true);
+            }
+          } else {
+            // "multiple" mode (not shown in shadcn snippet, but easy to support)
+            setItemState(item, !isOpen);
+          }
+        });
+
+        // Demo utility button (not part of shadcn API): expand/collapse all
+        const expandAllBtn = document.getElementById("expandAllBtn");
+        let expanded = false;
+        expandAllBtn.addEventListener("click", () => {
+          expanded = !expanded;
+          if (type === "single") {
+            // In single mode, "expand all" is just open first item.
+            const first = accordion.querySelector(".accordion-item");
+            closeAllExcept(first.getAttribute("data-item"));
+            setItemState(first, expanded);
+          } else {
+            accordion.querySelectorAll(".accordion-item").forEach((item) => setItemState(item, expanded));
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -22,6 +22,15 @@ pub struct McpRegistry {
     tools: Arc<Vec<(String, Tool)>>, // (namespaced_name, Tool)
 }
 
+impl std::fmt::Debug for McpRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpRegistry")
+            .field("tool_count", &self.tools.len())
+            .field("service_count", &self.services.len())
+            .finish()
+    }
+}
+
 impl McpRegistry {
     pub async fn load_from_file(path: &str) -> anyhow::Result<Self> {
         let cfg = load_mcp_config(path)?;
@@ -83,7 +92,7 @@ impl McpRegistry {
         let mut all_tools: Vec<(String, Tool)> = Vec::new();
         let mut tool_index: HashMap<String, (String, String)> = HashMap::new();
 
-        for (server_name, svc) in services.iter() {
+        for (server_name, svc) in &services {
             // list_tools exists on the rmcp running service in examples
             let result = svc
                 .list_tools(Default::default())
@@ -92,7 +101,10 @@ impl McpRegistry {
 
             for t in result.tools {
                 let tool_name = t.name.to_string();
-                let ns_name = format!("{server_name}::{tool_name}");
+                // Sanitize tool name for OpenAI compatibility
+                // OpenAI requires: ^[a-zA-Z0-9_-]+$ (no colons, dots, or special chars)
+                // Replace :: with __ for namespacing, and sanitize any other invalid chars
+                let ns_name = Self::sanitize_tool_name(&format!("{server_name}__{tool_name}"));
                 tool_index.insert(ns_name.clone(), (server_name.clone(), tool_name));
                 all_tools.push((ns_name, t));
             }
@@ -105,12 +117,44 @@ impl McpRegistry {
         })
     }
 
+    /// Sanitize tool names for OpenAI API compatibility.
+    ///
+    /// OpenAI requires tool names to match: `^[a-zA-Z0-9_-]+$`
+    /// This means:
+    /// - Only alphanumeric characters (a-z, A-Z, 0-9)
+    /// - Underscores (_)
+    /// - Hyphens (-)
+    ///
+    /// MCP allows dots (.) but OpenAI doesn't, so we replace them with underscores.
+    /// We also replace any other invalid characters with underscores.
+    ///
+    /// # Provider Compatibility
+    ///
+    /// - **OpenAI** (gpt-4, gpt-5, o1, o3, o4 series): Requires `^[a-zA-Z0-9_-]+$`
+    /// - **Azure OpenAI**: Same as OpenAI
+    /// - **OpenRouter**: Follows OpenAI spec
+    /// - **Together.ai**: Follows OpenAI spec
+    /// - **Groq**: Follows OpenAI spec
+    /// - **Ollama**: More permissive, but works with OpenAI format
+    fn sanitize_tool_name(name: &str) -> String {
+        name.chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    // Replace dots, colons, and any other invalid chars with underscore
+                    '_'
+                }
+            })
+            .collect()
+    }
+
     /// Return namespaced tools as `(namespaced_name, Tool)`
     pub fn tools(&self) -> &[(String, Tool)] {
         &self.tools
     }
 
-    /// Convert MCP tools to OpenAI "tools" schema (function tools).
+    /// Convert MCP tools to `OpenAI` "tools" schema (function tools).
     /// Works for both /v1/chat/completions and /v1/responses tool definitions.
     pub fn openai_tools_json(&self) -> Vec<serde_json::Value> {
         self.tools
@@ -133,7 +177,11 @@ impl McpRegistry {
             .collect()
     }
 
-    /// Execute a namespaced tool, e.g. "time::now" or "tavily::search".
+    /// Execute a namespaced tool, e.g. "`time__now`" or "`tavily__search`".
+    ///
+    /// Tool names are sanitized to match OpenAI's requirements (`^[a-zA-Z0-9_-]+$`).
+    /// The original MCP server name and tool name are stored in the tool index.
+    ///
     /// `arguments` must be a JSON object for MCP tools/call.
     pub async fn call_namespaced_tool(
         &self,

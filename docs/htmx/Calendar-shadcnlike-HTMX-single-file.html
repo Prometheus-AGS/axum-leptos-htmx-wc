@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calendar (shadcn-like) - HTMX single file</title>
+
+    <!-- HTMX (drop-in ready) [3] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         TOKENS (Material-ish + Borderless Zones)
+         - Dynamic theming via CSS custom properties [4]
+         - Borderless philosophy: avoid borders [4]
+      ============================================================ */
+
+      :root {
+        --primary-hue: 210;
+
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --accent: color-mix(in oklab, var(--primary) 22%, transparent);
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.14);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+        /* Calendar sizing: shadcn mentions --cell-size customization. [1] */
+        --cell-size: 2.75rem;
+      }
+
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 60%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+        padding: var(--space-5);
+      }
+
+      .shell { max-width: 1100px; margin: 0 auto; display: grid; gap: var(--space-4); }
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; }
+      h1 { margin: 0; font-size: 1.15rem; font-weight: 900; letter-spacing: .2px; }
+      .subtitle { margin: 8px 0 0 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .input, .select {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 12px;
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        outline: none;
+      }
+      .input:focus-visible, .select:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+      @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+      /* ============================================================
+         CALENDAR UI (shadcn-like)
+         We implement:
+         - captionLayout="dropdown" (month/year dropdowns) [1]
+         - modes: "single" and "range" [1]
+         - cell-size via --cell-size [1]
+      ============================================================ */
+
+      .calendar-card {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        padding: var(--space-4);
+      }
+
+      .cal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+      }
+
+      .nav-btn {
+        width: calc(var(--cell-size));
+        height: calc(var(--cell-size));
+        border-radius: 12px;
+        border: 0;
+        cursor: pointer;
+        background: var(--surface-container-low);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        font-weight: 900;
+      }
+      .nav-btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .caption {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        flex: 1;
+        min-width: 220px;
+      }
+
+      .caption-label {
+        font-weight: 900;
+        letter-spacing: .2px;
+        text-align: center;
+      }
+
+      .caption-dropdowns {
+        display: inline-flex;
+        gap: var(--space-2);
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+      }
+
+      .cal-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+      .cal-dow th {
+        font-size: 0.8rem;
+        font-weight: 750;
+        color: var(--on-surface-variant);
+        padding: 8px 0;
+        text-align: center;
+        user-select: none;
+      }
+
+      .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+      }
+
+      .day {
+        width: 100%;
+        height: var(--cell-size);
+        border-radius: 12px;
+        border: 0;
+        cursor: pointer;
+        background: transparent;
+        color: var(--on-surface);
+        box-shadow: none;
+        font-weight: 750;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+      }
+
+      .day:hover { background: color-mix(in oklab, var(--surface-container-low) 80%, transparent); }
+      .day:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .day[data-outside="true"] { color: color-mix(in oklab, var(--on-surface-variant) 70%, transparent); }
+      .day[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+
+      /* Single selected */
+      .day[data-selected="true"] {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+
+      /* Range styling */
+      .day[data-range="middle"] {
+        background: color-mix(in oklab, var(--primary) 18%, var(--surface-container-low));
+        color: var(--on-surface);
+        border-radius: 0;
+      }
+      .day[data-range="start"], .day[data-range="end"] {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+      .day[data-range="start"] { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+      .day[data-range="end"] { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+      /* Today */
+      .day[data-today="true"] {
+        box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 55%, transparent);
+      }
+
+      .hint {
+        margin: 0;
+        color: var(--on-surface-variant);
+        font-size: 0.92rem;
+        line-height: 1.35;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: var(--surface-container-high);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+        font-weight: 750;
+        font-size: 0.92rem;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { scroll-behavior: auto !important; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Calendar (shadcn-like, pure HTMX + vanilla JS)</h1>
+            <p class="subtitle">
+              shadcn Calendar is built on top of React DayPicker, but this is a frameworkless port. [1]
+            </p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" type="button" id="themeToggle">Toggle Theme</button>
+            <button class="btn btn-primary" type="button" id="todayBtn">Today</button>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <!-- ============================================================
+             Calendar Playground (Leptos boundary)
+             - In Leptos you’d likely expose props:
+               mode, selected, on_select, number_of_months, caption_layout, time_zone, cell_size
+             - This file demonstrates:
+               * mode="single" [1]
+               * mode="range" [1]
+               * captionLayout="dropdown" [1]
+               * cell size via --cell-size [1]
+               * timezone-safe display pattern [1]
+        ============================================================ -->
+        <div class="grid2">
+          <!-- ==========================
+               SINGLE selection calendar
+               (shadcn demo: mode="single", captionLayout="dropdown") [1]
+          =========================== -->
+          <div class="calendar-card" id="calSingleCard">
+            <!-- === Toolbar (Leptos boundary: CalendarControls) === -->
+            <div class="row" style="justify-content:flex-start; gap: var(--space-2); margin-bottom: var(--space-3);">
+              <span class="pill">Mode: <strong>single</strong></span>
+              <label class="pill" style="gap:10px;">
+                Cell size
+                <select class="select" id="cellSizeSingle">
+                  <option value="2.25rem">Compact</option>
+                  <option value="2.75rem" selected>Default</option>
+                  <option value="3rem">Large</option>
+                </select>
+              </label>
+            </div>
+
+            <!-- === Calendar root (Leptos boundary: CalendarRoot) === -->
+            <div class="cal-head">
+              <button class="nav-btn" type="button" data-cal="single" data-nav="prev" aria-label="Previous month">‹</button>
+
+              <!-- captionLayout="dropdown" [1] -->
+              <div class="caption" aria-label="Month and year">
+                <div class="caption-dropdowns">
+                  <select class="select" data-cal="single" data-caption="month" aria-label="Month"></select>
+                  <select class="select" data-cal="single" data-caption="year" aria-label="Year"></select>
+                </div>
+              </div>
+
+              <button class="nav-btn" type="button" data-cal="single" data-nav="next" aria-label="Next month">›</button>
+            </div>
+
+            <div class="cal-dow">
+              <table class="cal-table" aria-hidden="true">
+                <thead>
+                  <tr>
+                    <th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+
+            <div class="cal-grid" id="calSingleGrid" role="grid" aria-label="Calendar days (single)"></div>
+
+            <div style="height: var(--space-3)"></div>
+
+            <!-- Selected date with timezone pattern (shadcn mentions timeZone prop & client-side detection) [1] -->
+            <p class="hint">
+              Selected: <strong id="singleSelectedLabel">None</strong>
+              <span class="pill" style="margin-left:10px;">TZ: <span id="tzLabel">detecting…</span></span>
+            </p>
+          </div>
+
+          <!-- ==========================
+               RANGE selection calendar
+               (shadcn example: mode="range", numberOfMonths=2) [1]
+               We'll render 2 months side-by-side.
+          =========================== -->
+          <div class="calendar-card" id="calRangeCard">
+            <div class="row" style="justify-content:flex-start; gap: var(--space-2); margin-bottom: var(--space-3);">
+              <span class="pill">Mode: <strong>range</strong> (2 months)</span>
+              <button class="btn" type="button" id="clearRange">Clear range</button>
+            </div>
+
+            <div class="grid2" style="gap: var(--space-3);">
+              <!-- Month A -->
+              <div>
+                <div class="cal-head">
+                  <button class="nav-btn" type="button" data-cal="range" data-nav="prev" aria-label="Previous month">‹</button>
+                  <div class="caption">
+                    <!-- captionLayout label (simple) -->
+                    <div class="caption-label" id="rangeCaptionA"></div>
+                  </div>
+                  <button class="nav-btn" type="button" data-cal="range" data-nav="next" aria-label="Next month">›</button>
+                </div>
+                <div class="cal-dow">
+                  <table class="cal-table" aria-hidden="true">
+                    <thead><tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr></thead>
+                  </table>
+                </div>
+                <div class="cal-grid" id="calRangeGridA" role="grid" aria-label="Calendar days (range month 1)"></div>
+              </div>
+
+              <!-- Month B -->
+              <div>
+                <div class="cal-head">
+                  <div></div>
+                  <div class="caption">
+                    <div class="caption-label" id="rangeCaptionB"></div>
+                  </div>
+                  <div></div>
+                </div>
+                <div class="cal-dow">
+                  <table class="cal-table" aria-hidden="true">
+                    <thead><tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr></thead>
+                  </table>
+                </div>
+                <div class="cal-grid" id="calRangeGridB" role="grid" aria-label="Calendar days (range month 2)"></div>
+              </div>
+            </div>
+
+            <div style="height: var(--space-3)"></div>
+            <p class="hint">
+              Range: <strong id="rangeSelectedLabel">None</strong>
+            </p>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <p class="hint">
+          shadcn’s Calendar page includes examples like range calendars, month/year selector (captionLayout dropdown), and timezone-safe selection. [1]
+        </p>
+
+        <!-- Optional: show "lightweight library" suggestion for a date input popover.
+             Pikaday is described as lightweight and no dependencies. [2] -->
+        <p class="hint">
+          Optional lightweight library idea: use Pikaday for “input-triggered datepicker” overlays (lightweight, no dependencies). [2]
+        </p>
+
+        <!-- HTMX hook placeholder (server-driven month render):
+             In a real app, you could hx-get a month fragment and swap the grid. [3] -->
+        <!--
+        <button class="btn" hx-get="/calendar/month?y=2025&m=12" hx-target="#calSingleGrid" hx-swap="outerHTML">
+          Load month from server (HTMX)
+        </button>
+        -->
+      </section>
+    </div>
+
+    <script>
+      // ============================================================
+      // Theme toggle
+      // ============================================================
+      (function () {
+        const root = document.documentElement;
+        document.getElementById("themeToggle").addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      // ============================================================
+      // Timezone detection (client-side pattern like shadcn recommends) [1]
+      // ============================================================
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      document.getElementById("tzLabel").textContent = tz || "unknown";
+
+      // ============================================================
+      // Utilities
+      // ============================================================
+      const MONTHS = Array.from({ length: 12 }, (_, i) =>
+        new Date(2000, i, 1).toLocaleString("default", { month: "long" })
+      );
+
+      function ymd(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      }
+
+      function formatHuman(d) {
+        return d.toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" });
+      }
+
+      function sameDay(a, b) {
+        return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      }
+
+      function clampMonth(year, month) {
+        const d = new Date(year, month, 1);
+        return { y: d.getFullYear(), m: d.getMonth() };
+      }
+
+      function addMonths(year, month, delta) {
+        const d = new Date(year, month + delta, 1);
+        return { y: d.getFullYear(), m: d.getMonth() };
+      }
+
+      function getMonthMatrix(year, month, showOutsideDays = true) {
+        const first = new Date(year, month, 1);
+        const startDow = first.getDay(); // 0=Su
+        const start = new Date(year, month, 1 - startDow);
+
+        const cells = [];
+        for (let i = 0; i < 42; i++) {
+          const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+          const outside = d.getMonth() !== month;
+          cells.push({
+            date: d,
+            outside,
+            hidden: outside && !showOutsideDays,
+          });
+        }
+        return cells;
+      }
+
+      // ============================================================
+      // SINGLE calendar state (mode="single") [1]
+      // ============================================================
+      const single = {
+        viewY: new Date().getFullYear(),
+        viewM: new Date().getMonth(),
+        selected: new Date(),
+        showOutsideDays: true,
+      };
+
+      // ============================================================
+      // RANGE calendar state (mode="range", numberOfMonths=2) [1]
+      // ============================================================
+      const range = {
+        viewY: new Date().getFullYear(),
+        viewM: new Date().getMonth(),
+        from: new Date(2025, 5, 12),
+        to: new Date(2025, 6, 15),
+        showOutsideDays: true,
+      };
+
+      // ============================================================
+      // Caption dropdown population for single (captionLayout="dropdown") [1]
+      // ============================================================
+      function initSingleDropdowns() {
+        const monthSel = document.querySelector('[data-cal="single"][data-caption="month"]');
+        const yearSel = document.querySelector('[data-cal="single"][data-caption="year"]');
+
+        monthSel.innerHTML = MONTHS.map((name, i) => `<option value="${i}">${name}</option>`).join("");
+
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        for (let y = currentYear - 80; y <= currentYear + 20; y++) years.push(y);
+        yearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+
+        monthSel.value = String(single.viewM);
+        yearSel.value = String(single.viewY);
+
+        monthSel.addEventListener("change", () => {
+          single.viewM = parseInt(monthSel.value, 10);
+          renderSingle();
+        });
+
+        yearSel.addEventListener("change", () => {
+          single.viewY = parseInt(yearSel.value, 10);
+          renderSingle();
+        });
+      }
+
+      function setSingleDropdowns() {
+        document.querySelector('[data-cal="single"][data-caption="month"]').value = String(single.viewM);
+        document.querySelector('[data-cal="single"][data-caption="year"]').value = String(single.viewY);
+      }
+
+      function renderSingle() {
+        setSingleDropdowns();
+
+        const grid = document.getElementById("calSingleGrid");
+        const cells = getMonthMatrix(single.viewY, single.viewM, single.showOutsideDays);
+        const today = new Date();
+
+        grid.innerHTML = cells
+          .map((c) => {
+            if (c.hidden) {
+              return `<div></div>`;
+            }
+
+            const selected = sameDay(c.date, single.selected);
+            const isToday = sameDay(c.date, today);
+
+            return `
+              <button
+                type="button"
+                class="day"
+                data-cal="single"
+                data-date="${ymd(c.date)}"
+                data-outside="${c.outside ? "true" : "false"}"
+                data-selected="${selected ? "true" : "false"}"
+                data-today="${isToday ? "true" : "false"}"
+                aria-pressed="${selected ? "true" : "false"}"
+              >
+                ${c.date.getDate()}
+              </button>
+            `;
+          })
+          .join("");
+
+        document.getElementById("singleSelectedLabel").textContent = single.selected ? formatHuman(single.selected) : "None";
+      }
+
+      // ============================================================
+      // Render range: 2 months side-by-side [1]
+      // ============================================================
+      function inRange(d, from, to) {
+        if (!from || !to) return false;
+        const t = d.getTime();
+        return t > from.getTime() && t < to.getTime();
+      }
+
+      function renderRange() {
+        const a = { y: range.viewY, m: range.viewM };
+        const b = addMonths(a.y, a.m, 1);
+
+        document.getElementById("rangeCaptionA").textContent = `${MONTHS[a.m]} ${a.y}`;
+        document.getElementById("rangeCaptionB").textContent = `${MONTHS[b.m]} ${b.y}`;
+
+        const today = new Date();
+
+        function renderGrid(gridId, y, m) {
+          const grid = document.getElementById(gridId);
+          const cells = getMonthMatrix(y, m, range.showOutsideDays);
+          grid.innerHTML = cells.map((c) => {
+            if (c.hidden) return `<div></div>`;
+
+            const isStart = range.from && sameDay(c.date, range.from);
+            const isEnd = range.to && sameDay(c.date, range.to);
+            const isMid = inRange(c.date, range.from, range.to);
+            const isToday = sameDay(c.date, today);
+
+            let rangeAttr = "";
+            if (isStart) rangeAttr = "start";
+            else if (isEnd) rangeAttr = "end";
+            else if (isMid) rangeAttr = "middle";
+
+            return `
+              <button
+                type="button"
+                class="day"
+                data-cal="range"
+                data-date="${ymd(c.date)}"
+                data-outside="${c.outside ? "true" : "false"}"
+                data-range="${rangeAttr}"
+                data-selected="${(isStart || isEnd) ? "true" : "false"}"
+                data-today="${isToday ? "true" : "false"}"
+                aria-pressed="${(isStart || isEnd) ? "true" : "false"}"
+              >
+                ${c.date.getDate()}
+              </button>
+            `;
+          }).join("");
+        }
+
+        renderGrid("calRangeGridA", a.y, a.m);
+        renderGrid("calRangeGridB", b.y, b.m);
+
+        const label =
+          range.from && range.to
+            ? `${formatHuman(range.from)} → ${formatHuman(range.to)}`
+            : range.from
+              ? `${formatHuman(range.from)} → …`
+              : "None";
+        document.getElementById("rangeSelectedLabel").textContent = label;
+      }
+
+      // ============================================================
+      // Events
+      // ============================================================
+      document.addEventListener("click", (evt) => {
+        const nav = evt.target.closest("[data-nav]");
+        if (nav) {
+          const cal = nav.getAttribute("data-cal");
+          const dir = nav.getAttribute("data-nav");
+
+          if (cal === "single") {
+            const next = addMonths(single.viewY, single.viewM, dir === "next" ? 1 : -1);
+            single.viewY = next.y; single.viewM = next.m;
+            renderSingle();
+          } else if (cal === "range") {
+            const next = addMonths(range.viewY, range.viewM, dir === "next" ? 1 : -1);
+            range.viewY = next.y; range.viewM = next.m;
+            renderRange();
+          }
+          return;
+        }
+
+        const dayBtn = evt.target.closest(".day");
+        if (!dayBtn) return;
+
+        const cal = dayBtn.getAttribute("data-cal");
+        const d = new Date(dayBtn.getAttribute("data-date") + "T12:00:00"); // noon to avoid DST edge weirdness
+
+        if (cal === "single") {
+          single.selected = d;
+          renderSingle();
+          // Optional standardized event hook (artifact runtime can listen) [3]
+          document.dispatchEvent(new CustomEvent("calendar:select", { detail: { mode: "single", date: ymd(d) } }));
+        }
+
+        if (cal === "range") {
+          if (!range.from || (range.from && range.to)) {
+            range.from = d;
+            range.to = null;
+          } else {
+            // second click sets end; swap if needed
+            if (d.getTime() < range.from.getTime()) {
+              range.to = range.from;
+              range.from = d;
+            } else {
+              range.to = d;
+            }
+          }
+          renderRange();
+          document.dispatchEvent(new CustomEvent("calendar:select", { detail: { mode: "range", from: range.from ? ymd(range.from) : null, to: range.to ? ymd(range.to) : null } }));
+        }
+      });
+
+      document.getElementById("todayBtn").addEventListener("click", () => {
+        const now = new Date();
+        single.viewY = now.getFullYear();
+        single.viewM = now.getMonth();
+        single.selected = now;
+        range.viewY = now.getFullYear();
+        range.viewM = now.getMonth();
+        renderSingle();
+        renderRange();
+      });
+
+      document.getElementById("clearRange").addEventListener("click", () => {
+        range.from = null;
+        range.to = null;
+        renderRange();
+      });
+
+      // cell-size control (shadcn mentions using --cell-size) [1]
+      document.getElementById("cellSizeSingle").addEventListener("change", (e) => {
+        document.documentElement.style.setProperty("--cell-size", e.target.value);
+      });
+
+      // init
+      initSingleDropdowns();
+      renderSingle();
+      renderRange();
+    </script>
+  </body>
+</html>

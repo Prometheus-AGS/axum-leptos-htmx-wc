@@ -105,6 +105,7 @@ export class SSEConnection {
       "tool_call.delta",
       "tool_call.complete",
       "tool_result",
+      "usage",
       "error",
       "done",
     ];

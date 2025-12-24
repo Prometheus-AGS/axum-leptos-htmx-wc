@@ -38,7 +38,7 @@ pub fn expand_env_placeholders(input: &str) -> String {
     let mut out = input.to_string();
     // naive scan; good enough for config values
     for (k, v) in std::env::vars() {
-        let needle = format!("${{{}}}", k);
+        let needle = format!("${{{k}}}");
         if out.contains(&needle) {
             out = out.replace(&needle, &v);
         }

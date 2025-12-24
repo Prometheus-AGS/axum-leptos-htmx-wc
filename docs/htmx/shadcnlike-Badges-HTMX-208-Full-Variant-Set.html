@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>shadcn-like Badges • HTMX 2.0.8 • Full Variant Set</title>
+
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* Tokens-first: define colors as tokens, then consume them in components. [2] */
+      :root {
+        --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+        --background: 0 0% 100%;
+        --foreground: 222 47% 11%;
+
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+
+        --muted: 210 40% 96%;
+        --muted-foreground: 215 16% 47%;
+
+        --primary: 222 47% 11%;
+        --primary-foreground: 210 40% 98%;
+
+        --secondary: 210 40% 96%;
+        --secondary-foreground: 222 47% 11%;
+
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 210 40% 98%;
+
+        --border: 214 32% 91%;
+        --ring: 221 83% 53%;
+
+        --radius: 14px;
+        --radius-pill: 999px;
+      }
+
+      .dark {
+        --background: 222 47% 11%;
+        --foreground: 210 40% 98%;
+
+        --card: 222 47% 13%;
+        --card-foreground: 210 40% 98%;
+
+        --muted: 217 33% 17%;
+        --muted-foreground: 215 20% 65%;
+
+        --primary: 210 40% 98%;
+        --primary-foreground: 222 47% 11%;
+
+        --secondary: 217 33% 17%;
+        --secondary-foreground: 210 40% 98%;
+
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 210 40% 98%;
+
+        --border: 217 33% 17%;
+        --ring: 217 91% 60%;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+      }
+
+      .shell {
+        min-height: 100%;
+        padding: 18px;
+        display: grid;
+        place-items: start center;
+      }
+
+      .frame {
+        width: min(980px, 100%);
+        background: hsl(var(--muted));
+        border-radius: calc(var(--radius) + 6px);
+        padding: 16px;
+      }
+
+      .card {
+        background: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+
+      .subtitle {
+        margin: 6px 0 0 0;
+        font-size: 13px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+      }
+
+      .seg {
+        display: inline-flex;
+        padding: 4px;
+        border-radius: 999px;
+        background: hsl(var(--muted));
+        gap: 4px;
+        align-items: center;
+      }
+
+      .seg button {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: hsl(var(--muted-foreground));
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .seg button[aria-selected="true"] {
+        background: hsl(var(--card));
+        color: hsl(var(--foreground));
+      }
+
+      /* Badge base */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 24px;
+        padding: 0 10px;
+        border-radius: var(--radius-pill);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        white-space: nowrap;
+        user-select: none;
+      }
+
+      /* Variants: default / secondary / destructive / outline. [25] */
+      .badge--default {
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+      }
+
+      .badge--secondary {
+        background: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground));
+      }
+
+      .badge--destructive {
+        background: hsl(var(--destructive));
+        color: hsl(var(--destructive-foreground));
+      }
+
+      .badge--outline {
+        background: transparent;
+        color: hsl(var(--foreground));
+        border: 1px solid hsl(var(--border));
+      }
+
+      /* Common “badge component” patterns shown in the reference example (icon+label, counts). [image] */
+      .badge--verified {
+        background: hsl(221 83% 53%);
+        color: hsl(210 40% 98%);
+      }
+
+      .badge--count {
+        height: 22px;
+        padding: 0 8px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .badge--count-muted {
+        background: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground));
+      }
+
+      .badge--count-strong {
+        background: hsl(var(--destructive));
+        color: hsl(var(--destructive-foreground));
+      }
+
+      .icon {
+        width: 14px;
+        height: 14px;
+        display: inline-block;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .panel {
+        grid-column: span 12;
+        background: hsl(var(--muted));
+        border-radius: var(--radius);
+        padding: 14px;
+      }
+
+      @media (min-width: 900px) {
+        .panel { grid-column: span 6; }
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      .panel p {
+        margin: 6px 0 12px 0;
+        font-size: 13px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+    </style>
+
+    <script>
+      function setTheme(mode) {
+        var root = document.documentElement;
+        if (mode === "dark") root.classList.add("dark");
+        else root.classList.remove("dark");
+        localStorage.setItem("theme", mode);
+        syncThemeToggle();
+      }
+
+      function bootTheme() {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark" || saved === "light") setTheme(saved);
+        else setTheme("light");
+      }
+
+      function syncThemeToggle() {
+        var isDark = document.documentElement.classList.contains("dark");
+        var lightBtn = document.getElementById("theme-light");
+        var darkBtn = document.getElementById("theme-dark");
+        if (lightBtn && darkBtn) {
+          lightBtn.setAttribute("aria-selected", isDark ? "false" : "true");
+          darkBtn.setAttribute("aria-selected", isDark ? "true" : "false");
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", bootTheme);
+    </script>
+  </head>
+
+  <body>
+    <div class="shell">
+      <div class="frame">
+        <div class="card">
+          <div class="header">
+            <div>
+              <h1 class="title">Badge variants (shadcn-like)</h1>
+              <p class="subtitle">
+                Shows default / secondary / destructive / outline plus common usage patterns (icon+label, counts). [25][image]
+              </p>
+            </div>
+
+            <div class="seg" role="tablist" aria-label="Theme">
+              <button id="theme-light" type="button" aria-selected="true" onclick="setTheme('light')">Light</button>
+              <button id="theme-dark" type="button" aria-selected="false" onclick="setTheme('dark')">Dark</button>
+            </div>
+          </div>
+
+          <div class="grid">
+            <section class="panel" aria-label="Core badge variants">
+              <h3>Core variants</h3>
+              <p>These match the standard Badge variant set: default, secondary, destructive, outline. [25]</p>
+              <div class="row">
+                <span class="badge badge--default">Badge</span>
+                <span class="badge badge--secondary">Secondary</span>
+                <span class="badge badge--destructive">Destructive</span>
+                <span class="badge badge--outline">Outline</span>
+              </div>
+            </section>
+
+            <section class="panel" aria-label="Badges with icons and counts">
+              <h3>Common patterns</h3>
+              <p>Demonstrates icon+label and count pills consistent with the reference example. [image]</p>
+              <div class="row">
+                <span class="badge badge--verified">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 2l2.2 4.7 5.1.7-3.7 3.6.9 5.1L12 14.9 7.5 16.1l.9-5.1L4.7 7.4l5.1-.7L12 2z"/>
+                  </svg>
+                  Verified
+                </span>
+
+                <span class="badge badge--default badge--count" aria-label="8 notifications">8</span>
+                <span class="badge badge--count badge--count-strong" aria-label="99 notifications">99</span>
+                <span class="badge badge--secondary badge--count" aria-label="20 or more notifications">20+</span>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

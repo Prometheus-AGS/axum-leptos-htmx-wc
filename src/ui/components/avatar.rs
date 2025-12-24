@@ -30,8 +30,7 @@ pub fn Avatar(
     class: &'static str,
 ) -> impl IntoView {
     let container_classes = format!(
-        "relative flex shrink-0 overflow-hidden rounded-full {} {}",
-        size, class
+        "relative flex shrink-0 overflow-hidden rounded-full {size} {class}"
     );
 
     let has_src = !src.is_empty();

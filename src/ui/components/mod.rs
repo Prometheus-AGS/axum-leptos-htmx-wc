@@ -23,11 +23,7 @@ mod input;
 mod scroll_area;
 mod separator;
 
-pub use avatar::Avatar;
 pub use badge::{Badge, BadgeVariant};
 pub use button::{Button, ButtonSize, ButtonVariant};
-pub use card::{Card, CardContent, CardFooter, CardHeader};
+pub use card::{Card, CardContent, CardHeader};
 pub use icons::*;
-pub use input::Input;
-pub use scroll_area::ScrollArea;
-pub use separator::{Separator, SeparatorOrientation};

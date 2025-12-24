@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Data Table (HTMX single-file) - Sorting/Filtering/Pagination/Selection/Row Actions</title>
+
+    <!-- HTMX included so this file can be dropped into an HTMX app. [10] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         MATERIAL ZONES TOKENS (borderless zones, Material-ish theming)
+         - Dynamic theming via CSS custom properties. [3]
+         - Borderless: avoid borders; use surfaces + shadow. [3]
+      ============================================================ */
+
+      :root {
+        --primary-hue: 210;
+
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --danger: hsl(0 75% 55%);
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 14px 36px rgba(0, 0, 0, 0.14);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 60%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+        padding: var(--space-5);
+      }
+
+      .shell {
+        width: 100%;
+        max-width: 1180px;
+        margin: 0 auto;
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .toprow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 900;
+        letter-spacing: 0.2px;
+      }
+
+      .subtitle {
+        margin: 8px 0 0 0;
+        color: var(--on-surface-variant);
+        line-height: 1.35;
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn-danger { background: color-mix(in oklab, var(--danger) 80%, black); color: white; }
+      .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        align-items: center;
+        justify-content: space-between;
+        margin-top: var(--space-4);
+      }
+
+      .toolbar-left, .toolbar-right {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        align-items: center;
+      }
+
+      .input, .select {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 12px;
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        outline: none;
+      }
+      .input:focus-visible, .select:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: var(--surface-container-high);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+        font-size: 0.92rem;
+        font-weight: 750;
+      }
+
+      /* =========================
+         TABLE (borderless)
+      ========================= */
+      .table-zone {
+        margin-top: var(--space-4);
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        overflow: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+
+      thead th {
+        text-align: left;
+        font-size: 0.82rem;
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: var(--on-surface-variant);
+        padding: 14px 14px;
+        background: color-mix(in oklab, var(--surface-container-high) 92%, transparent);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+
+      tbody td {
+        padding: 12px 14px;
+        vertical-align: middle;
+        color: var(--on-surface);
+      }
+
+      tbody tr {
+        background: color-mix(in oklab, var(--surface-container-high) 82%, transparent);
+      }
+
+      tbody tr:nth-child(2n) {
+        background: color-mix(in oklab, var(--surface-container-high) 72%, transparent);
+      }
+
+      tbody tr[data-selected="true"] {
+        background: color-mix(in oklab, var(--primary) 18%, var(--surface-container-high));
+      }
+
+      .th-sort {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .sort-indicator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--primary) 16%, transparent);
+        color: var(--on-surface);
+        font-size: 0.9rem;
+      }
+
+      .muted { color: var(--on-surface-variant); }
+
+      /* selection controls */
+      .sel {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+      }
+
+      /* row actions menu */
+      .actions {
+        position: relative;
+        display: inline-block;
+      }
+
+      .actions-btn {
+        border: 0;
+        border-radius: 12px;
+        width: 40px;
+        height: 40px;
+        background: var(--surface-container-low);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        cursor: pointer;
+      }
+      .actions-btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 8px);
+        width: 220px;
+        background: var(--surface-container-low);
+        box-shadow: var(--shadow-2);
+        border-radius: var(--radius-lg);
+        padding: 8px;
+        display: none;
+        z-index: 10;
+      }
+
+      .actions[data-open="true"] .menu { display: block; }
+
+      .menu button {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 10px;
+        background: transparent;
+        color: var(--on-surface);
+        cursor: pointer;
+        font-weight: 750;
+      }
+      .menu button:hover { background: var(--surface-container-high); }
+      .menu button.danger { color: color-mix(in oklab, var(--danger) 80%, white); }
+
+      /* pagination */
+      .pager {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: 14px;
+        background: color-mix(in oklab, var(--surface-container-high) 92%, transparent);
+      }
+
+      .pager-left, .pager-right {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: var(--surface-container-low);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+      }
+
+      @media (max-width: 820px) {
+        thead th:nth-child(4),
+        tbody td:nth-child(4) {
+          display: none; /* hide "email" on smaller screens */
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="toprow">
+          <div>
+            <h1>Data Table (HTMX single-file demo)</h1>
+            <p class="subtitle">
+              Sorting, filtering, pagination, row actions, and selection modes (none/single/multiple).
+            </p>
+          </div>
+
+          <div style="display:flex; gap: 10px; align-items:center;">
+            <button class="btn" type="button" id="themeToggle">Toggle Theme</button>
+            <button class="btn btn-primary" type="button" id="resetAll">Reset</button>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             DataTableToolbar (Leptos boundary)
+             - Split as: <DataTableToolbar ... />
+        ============================================================ -->
+        <div class="toolbar" id="toolbar">
+          <div class="toolbar-left">
+            <!-- Global filter -->
+            <!-- Leptos: <GlobalFilterInput /> -->
+            <input class="input" id="globalFilter" type="search" placeholder="Filter all columns…" />
+
+            <!-- Column filter: status -->
+            <!-- Leptos: <ColumnFilter field="status" /> -->
+            <select class="select" id="statusFilter">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="disabled">Disabled</option>
+            </select>
+
+            <!-- Selection mode -->
+            <!-- Leptos: <SelectionModeSelect /> -->
+            <select class="select" id="selectionMode">
+              <option value="multiple">Selection: multiple</option>
+              <option value="single">Selection: single</option>
+              <option value="none">Selection: none</option>
+            </select>
+
+            <span class="chip">
+              <span>Selected:</span>
+              <span id="selectedCount">0</span>
+            </span>
+          </div>
+
+          <div class="toolbar-right">
+            <!-- Per-page -->
+            <!-- Leptos: <PageSizeSelect /> -->
+            <select class="select" id="pageSize">
+              <option value="5">5 / page</option>
+              <option value="10" selected>10 / page</option>
+              <option value="20">20 / page</option>
+            </select>
+
+            <!-- Bulk actions (only meaningful in selection modes) -->
+            <!-- Leptos: <BulkActions /> -->
+            <button class="btn btn-danger" type="button" id="bulkDelete">Delete selected</button>
+
+            <!-- Example HTMX hooks (optional) -->
+            <!-- Replace endpoints in real app; kept inert in standalone to avoid 405s. [3] -->
+            <!--
+            <button class="btn" hx-get="/api/users/table" hx-target="#datatable" hx-swap="outerHTML">Reload (HTMX)</button>
+            -->
+          </div>
+        </div>
+
+        <!-- ============================================================
+             DataTable (Leptos boundary)
+             - Split as: <DataTable ... />
+        ============================================================ -->
+        <div class="table-zone" id="datatable">
+          <!-- ============================================================
+               Table (Leptos boundary)
+               - Split as: <Table> <TableHeader/> <TableBody/> etc.
+          ============================================================ -->
+          <table aria-label="Users data table">
+            <thead>
+              <tr>
+                <!-- ============================================================
+                     SelectionHeaderCell (Leptos boundary)
+                     - Checkbox for "select all" in multiple mode
+                ============================================================ -->
+                <th style="width: 52px;">
+                  <input class="sel" id="selectAll" type="checkbox" aria-label="Select all rows" />
+                </th>
+
+                <!-- ============================================================
+                     HeaderCell (sortable) boundary
+                ============================================================ -->
+                <th>
+                  <span class="th-sort" data-sort-key="name" title="Click to sort. Shift-click to multi-sort.">
+                    Name <span class="sort-indicator" data-sort-ind="name">↕</span>
+                  </span>
+                </th>
+
+                <th>
+                  <span class="th-sort" data-sort-key="status" title="Click to sort. Shift-click to multi-sort.">
+                    Status <span class="sort-indicator" data-sort-ind="status">↕</span>
+                  </span>
+                </th>
+
+                <th>
+                  <span class="th-sort" data-sort-key="email" title="Click to sort. Shift-click to multi-sort.">
+                    Email <span class="sort-indicator" data-sort-ind="email">↕</span>
+                  </span>
+                </th>
+
+                <th>
+                  <span class="th-sort" data-sort-key="created" title="Click to sort. Shift-click to multi-sort.">
+                    Created <span class="sort-indicator" data-sort-ind="created">↕</span>
+                  </span>
+                </th>
+
+                <!-- Row actions column -->
+                <th style="width: 76px; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+
+            <!-- ============================================================
+                 TableBody (Leptos boundary)
+            ============================================================ -->
+            <tbody id="tbody">
+              <!-- rows injected by JS -->
+            </tbody>
+          </table>
+
+          <!-- ============================================================
+               Pagination (Leptos boundary)
+          ============================================================ -->
+          <div class="pager" id="pager">
+            <div class="pager-left">
+              <span class="muted">
+                Showing <strong id="showingRange">0–0</strong> of <strong id="totalCount">0</strong>
+              </span>
+              <span class="kbd">Shift+Click</span>
+              <span class="muted">for multi-sort</span>
+            </div>
+
+            <div class="pager-right">
+              <button class="btn" type="button" id="prevPage">Prev</button>
+              <span class="chip">
+                Page <span id="pageIndex">1</span> / <span id="pageCount">1</span>
+              </span>
+              <button class="btn" type="button" id="nextPage">Next</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <div class="chip">
+          Tip: Replace in-file data with server-driven HTMX fragments later to keep artifacts lean. [3]
+        </div>
+      </section>
+    </div>
+
+    <script>
+      /* ============================================================
+         Theme toggle (data-theme) using token sets. [3]
+      ============================================================ */
+      (function () {
+        const root = document.documentElement;
+        document.getElementById("themeToggle").addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      /* ============================================================
+         DataTable demo implementation (client-side)
+         - Designed to be split into Leptos components later (see comments).
+         - You can also replace render with HTMX server fragments later. [3]
+      ============================================================ */
+
+      (function () {
+        // --- Demo data (small on purpose; in real app fetch). [3]
+        const DATA = [
+          { id: "u1", name: "Ada Lovelace", status: "active", email: "ada@acme.dev", created: "2025-01-04" },
+          { id: "u2", name: "Grace Hopper", status: "active", email: "grace@acme.dev", created: "2025-02-10" },
+          { id: "u3", name: "Alan Turing", status: "disabled", email: "alan@acme.dev", created: "2024-12-21" },
+          { id: "u4", name: "Katherine Johnson", status: "pending", email: "kj@acme.dev", created: "2025-03-18" },
+          { id: "u5", name: "Donald Knuth", status: "active", email: "dk@acme.dev", created: "2024-10-08" },
+          { id: "u6", name: "Barbara Liskov", status: "active", email: "bl@acme.dev", created: "2025-01-22" },
+          { id: "u7", name: "Edsger Dijkstra", status: "disabled", email: "ed@acme.dev", created: "2024-09-14" },
+          { id: "u8", name: "Linus Torvalds", status: "pending", email: "linus@acme.dev", created: "2025-04-02" },
+          { id: "u9", name: "Margaret Hamilton", status: "active", email: "mh@acme.dev", created: "2025-02-28" },
+          { id: "u10", name: "Tim Berners-Lee", status: "active", email: "tbl@acme.dev", created: "2024-11-01" },
+          { id: "u11", name: "Ken Thompson", status: "pending", email: "ken@acme.dev", created: "2024-10-30" },
+          { id: "u12", name: "Dennis Ritchie", status: "disabled", email: "dr@acme.dev", created: "2024-08-19" }
+        ];
+
+        // --- State (Leptos boundaries: could become signals/stores)
+        let globalFilter = "";
+        let statusFilter = "";
+        let selectionMode = "multiple"; // none | single | multiple
+        let pageSize = 10;
+        let page = 0;
+
+        // sortState: array of { key, dir } where dir is "asc"|"desc"
+        let sortState = []; // multi-sort supported with shift-click
+        const selected = new Set(); // selected row ids
+
+        // --- Elements
+        const tbody = document.getElementById("tbody");
+        const globalFilterEl = document.getElementById("globalFilter");
+        const statusFilterEl = document.getElementById("statusFilter");
+        const selectionModeEl = document.getElementById("selectionMode");
+        const pageSizeEl = document.getElementById("pageSize");
+        const selectAllEl = document.getElementById("selectAll");
+
+        const selectedCountEl = document.getElementById("selectedCount");
+        const totalCountEl = document.getElementById("totalCount");
+        const showingRangeEl = document.getElementById("showingRange");
+        const pageIndexEl = document.getElementById("pageIndex");
+        const pageCountEl = document.getElementById("pageCount");
+        const prevPageEl = document.getElementById("prevPage");
+        const nextPageEl = document.getElementById("nextPage");
+
+        const resetAllEl = document.getElementById("resetAll");
+        const bulkDeleteEl = document.getElementById("bulkDelete");
+
+        function normalize(s) {
+          return String(s ?? "").toLowerCase().trim();
+        }
+
+        function applyFilters(rows) {
+          let out = rows;
+
+          if (statusFilter) {
+            out = out.filter(r => r.status === statusFilter);
+          }
+
+          if (globalFilter) {
+            const q = normalize(globalFilter);
+            out = out.filter(r => {
+              return (
+                normalize(r.name).includes(q) ||
+                normalize(r.status).includes(q) ||
+                normalize(r.email).includes(q) ||
+                normalize(r.created).includes(q)
+              );
+            });
+          }
+
+          return out;
+        }
+
+        function compare(a, b, key, dir) {
+          const av = a[key];
+          const bv = b[key];
+
+          // date column
+          if (key === "created") {
+            const ad = new Date(av).getTime();
+            const bd = new Date(bv).getTime();
+            return dir === "asc" ? ad - bd : bd - ad;
+          }
+
+          // string
+          const as = String(av).toLowerCase();
+          const bs = String(bv).toLowerCase();
+          if (as < bs) return dir === "asc" ? -1 : 1;
+          if (as > bs) return dir === "asc" ? 1 : -1;
+          return 0;
+        }
+
+        function applySort(rows) {
+          if (!sortState.length) return rows.slice();
+
+          const sorted = rows.slice().sort((a, b) => {
+            for (const s of sortState) {
+              const c = compare(a, b, s.key, s.dir);
+              if (c !== 0) return c;
+            }
+            return 0;
+          });
+          return sorted;
+        }
+
+        function paginate(rows) {
+          const total = rows.length;
+          const pages = Math.max(1, Math.ceil(total / pageSize));
+          page = Math.min(page, pages - 1);
+
+          const start = page * pageSize;
+          const end = Math.min(total, start + pageSize);
+          return { pageRows: rows.slice(start, end), total, pages, start, end };
+        }
+
+        function updateSortIndicators() {
+          const keys = ["name", "status", "email", "created"];
+          keys.forEach(k => {
+            const el = document.querySelector(`[data-sort-ind="${k}"]`);
+            if (!el) return;
+            const entry = sortState.find(s => s.key === k);
+            if (!entry) el.textContent = "↕";
+            else el.textContent = entry.dir === "asc" ? "↑" : "↓";
+          });
+        }
+
+        function selectionAllowed() {
+          return selectionMode !== "none";
+        }
+
+        function clearSelectionIfModeDisallows() {
+          if (selectionMode === "none") {
+            selected.clear();
+          } else if (selectionMode === "single" && selected.size > 1) {
+            // keep the most recently selected (arbitrary: first in set iteration)
+            const first = selected.values().next().value;
+            selected.clear();
+            if (first) selected.add(first);
+          }
+        }
+
+        function render() {
+          // compute
+          const filtered = applyFilters(DATA);
+          const sorted = applySort(filtered);
+          const { pageRows, total, pages, start, end } = paginate(sorted);
+
+          // update counts
+          totalCountEl.textContent = String(total);
+          showingRangeEl.textContent = total === 0 ? "0–0" : `${start + 1}–${end}`;
+          pageIndexEl.textContent = String(page + 1);
+          pageCountEl.textContent = String(pages);
+
+          // selection ui
+          selectedCountEl.textContent = String(selected.size);
+          selectAllEl.disabled = !selectionAllowed() || selectionMode !== "multiple" || pageRows.length === 0;
+
+          // selectAll checked if all visible selected
+          if (selectionAllowed() && selectionMode === "multiple" && pageRows.length) {
+            const allVisibleSelected = pageRows.every(r => selected.has(r.id));
+            selectAllEl.checked = allVisibleSelected;
+            selectAllEl.indeterminate = !allVisibleSelected && pageRows.some(r => selected.has(r.id));
+          } else {
+            selectAllEl.checked = false;
+            selectAllEl.indeterminate = false;
+          }
+
+          // pager buttons
+          prevPageEl.disabled = page <= 0;
+          nextPageEl.disabled = page >= pages - 1;
+
+          // bulk delete enable
+          bulkDeleteEl.disabled = !selectionAllowed() || selected.size === 0;
+
+          // render rows
+          tbody.innerHTML = pageRows
+            .map((r) => {
+              const isSelected = selected.has(r.id);
+
+              // Selection cell:
+              // - multiple: checkbox
+              // - single: radio
+              // - none: empty
+              let selCell = "";
+              if (selectionMode === "multiple") {
+                selCell = `<input class="sel" type="checkbox" data-row-select="${r.id}" ${isSelected ? "checked" : ""} aria-label="Select row ${r.name}" />`;
+              } else if (selectionMode === "single") {
+                selCell = `<input class="sel" type="radio" name="rowSelectRadio" data-row-select="${r.id}" ${isSelected ? "checked" : ""} aria-label="Select row ${r.name}" />`;
+              } else {
+                selCell = `<span class="muted">—</span>`;
+              }
+
+              // status pill-ish
+              const statusColor =
+                r.status === "active"
+                  ? "color-mix(in oklab, var(--primary) 40%, transparent)"
+                  : r.status === "pending"
+                    ? "color-mix(in oklab, gold 35%, transparent)"
+                    : "color-mix(in oklab, var(--danger) 30%, transparent)";
+
+              return `
+                <!-- ============================================================
+                     DataRow (Leptos boundary)
+                     - Split as: <DataRow row=... selected=...>
+                ============================================================ -->
+                <tr data-row="${r.id}" data-selected="${isSelected ? "true" : "false"}">
+                  <!-- SelectionCell (Leptos boundary) -->
+                  <td>${selCell}</td>
+
+                  <td><strong>${escapeHtml(r.name)}</strong></td>
+
+                  <td>
+                    <span class="chip" style="background:${statusColor}; color: var(--on-surface);">
+                      ${escapeHtml(r.status)}
+                    </span>
+                  </td>
+
+                  <td class="muted">${escapeHtml(r.email)}</td>
+                  <td class="muted">${escapeHtml(r.created)}</td>
+
+                  <!-- ============================================================
+                       RowActions (Leptos boundary)
+                       - Split as: <RowActions row_id=... />
+                  ============================================================ -->
+                  <td style="text-align:right;">
+                    <div class="actions" data-actions="${r.id}" data-open="false">
+                      <button class="actions-btn" type="button" data-actions-btn="${r.id}" aria-label="Row actions">
+                        ⋯
+                      </button>
+                      <div class="menu" role="menu" aria-label="Actions menu">
+                        <button type="button" data-action="view" data-row="${r.id}">View</button>
+                        <button type="button" data-action="edit" data-row="${r.id}">Edit</button>
+                        <button type="button" data-action="duplicate" data-row="${r.id}">Duplicate</button>
+                        <button type="button" class="danger" data-action="delete" data-row="${r.id}">Delete</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          updateSortIndicators();
+        }
+
+        function escapeHtml(str) {
+          return String(str)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+        }
+
+        // --- Events: filters
+        globalFilterEl.addEventListener("input", () => {
+          globalFilter = globalFilterEl.value;
+          page = 0;
+          render();
+        });
+
+        statusFilterEl.addEventListener("change", () => {
+          statusFilter = statusFilterEl.value;
+          page = 0;
+          render();
+        });
+
+        pageSizeEl.addEventListener("change", () => {
+          pageSize = parseInt(pageSizeEl.value, 10) || 10;
+          page = 0;
+          render();
+        });
+
+        selectionModeEl.addEventListener("change", () => {
+          selectionMode = selectionModeEl.value;
+          clearSelectionIfModeDisallows();
+          render();
+        });
+
+        // --- Events: sorting (click header)
+        document.querySelectorAll(".th-sort").forEach((el) => {
+          el.addEventListener("click", (evt) => {
+            const key = el.getAttribute("data-sort-key");
+            const multi = evt.shiftKey;
+
+            const existing = sortState.find(s => s.key === key);
+            let nextDir = "asc";
+            if (existing) nextDir = existing.dir === "asc" ? "desc" : "asc";
+
+            if (!multi) sortState = [];
+            // remove any existing entry for that key, then re-add
+            sortState = sortState.filter(s => s.key !== key);
+            sortState.push({ key, dir: nextDir });
+
+            page = 0;
+            render();
+          });
+        });
+
+        // --- Events: pagination
+        prevPageEl.addEventListener("click", () => { page = Math.max(0, page - 1); render(); });
+        nextPageEl.addEventListener("click", () => { page = page + 1; render(); });
+
+        // --- Events: select all (visible rows)
+        selectAllEl.addEventListener("change", () => {
+          if (!selectionAllowed() || selectionMode !== "multiple") return;
+
+          // compute current visible ids
+          const filtered = applyFilters(DATA);
+          const sorted = applySort(filtered);
+          const { pageRows } = paginate(sorted);
+
+          if (selectAllEl.checked) {
+            pageRows.forEach(r => selected.add(r.id));
+          } else {
+            pageRows.forEach(r => selected.delete(r.id));
+          }
+          render();
+        });
+
+        // --- Events: row selection + row actions (delegated)
+        document.addEventListener("click", (evt) => {
+          // row actions toggle
+          const ab = evt.target.closest("[data-actions-btn]");
+          if (ab) {
+            const id = ab.getAttribute("data-actions-btn");
+            document.querySelectorAll(".actions").forEach(a => {
+              if (a.getAttribute("data-actions") !== id) a.setAttribute("data-open", "false");
+            });
+            const wrap = document.querySelector(`.actions[data-actions="${id}"]`);
+            wrap.setAttribute("data-open", wrap.getAttribute("data-open") === "true" ? "false" : "true");
+            return;
+          }
+
+          // click outside closes menus
+          if (!evt.target.closest(".actions")) {
+            document.querySelectorAll(".actions").forEach(a => a.setAttribute("data-open", "false"));
+          }
+
+          // menu action
+          const actionBtn = evt.target.closest("[data-action]");
+          if (actionBtn) {
+            const action = actionBtn.getAttribute("data-action");
+            const rowId = actionBtn.getAttribute("data-row");
+
+            document.querySelectorAll(".actions").forEach(a => a.setAttribute("data-open", "false"));
+
+            // Placeholder behaviors (Leptos/HTMX would route these)
+            if (action === "delete") {
+              // just unselect & alert; in real app do hx-delete / confirm dialog
+              selected.delete(rowId);
+              alert(`Delete row ${rowId} (demo)`);
+            } else {
+              alert(`${action} row ${rowId} (demo)`);
+            }
+            render();
+            return;
+          }
+        });
+
+        document.addEventListener("change", (evt) => {
+          const sel = evt.target.closest("[data-row-select]");
+          if (!sel) return;
+
+          if (!selectionAllowed()) return;
+
+          const id = sel.getAttribute("data-row-select");
+          if (selectionMode === "single") {
+            selected.clear();
+            selected.add(id);
+          } else if (selectionMode === "multiple") {
+            if (sel.checked) selected.add(id);
+            else selected.delete(id);
+          }
+          render();
+        });
+
+        // --- Bulk delete (demo)
+        bulkDeleteEl.addEventListener("click", () => {
+          if (!selectionAllowed() || selected.size === 0) return;
+          const ids = Array.from(selected.values());
+          alert(`Bulk delete (demo): ${ids.join(", ")}`);
+          selected.clear();
+          render();
+        });
+
+        // --- Reset
+        resetAllEl.addEventListener("click", () => {
+          globalFilter = "";
+          statusFilter = "";
+          selectionMode = "multiple";
+          pageSize = 10;
+          page = 0;
+          sortState = [];
+          selected.clear();
+
+          globalFilterEl.value = "";
+          statusFilterEl.value = "";
+          selectionModeEl.value = "multiple";
+          pageSizeEl.value = "10";
+          render();
+        });
+
+        // init
+        render();
+      })();
+    </script>
+  </body>
+</html>

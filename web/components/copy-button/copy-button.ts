@@ -63,8 +63,8 @@ export class CopyButton extends HTMLElement {
       <button 
         type="button" 
         class="copy-button inline-flex items-center justify-center p-1.5 rounded-md 
-               bg-panel/80 hover:bg-panelBorder text-textMuted hover:text-textPrimary 
-               transition-colors text-xs"
+               bg-surfaceContainerHighest hover:bg-primary/20 text-textPrimary hover:text-primary 
+               transition-colors text-xs shadow-sm"
         aria-label="Copy to clipboard"
         title="Copy to clipboard"
       >
@@ -89,7 +89,13 @@ export class CopyButton extends HTMLElement {
     if (!textToCopy && this._target) {
       const targetEl = document.getElementById(this._target);
       if (targetEl) {
-        textToCopy = targetEl.textContent ?? "";
+        // First check for raw content attribute (for markdown)
+        const rawContent = targetEl.getAttribute("data-raw-content");
+        if (rawContent) {
+          textToCopy = rawContent;
+        } else {
+          textToCopy = targetEl.textContent ?? "";
+        }
       }
     }
 

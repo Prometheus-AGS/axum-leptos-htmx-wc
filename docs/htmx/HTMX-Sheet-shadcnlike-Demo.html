@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTMX Sheet (shadcn-like) • Demo</title>
+
+    <!-- HTMX 2.0.8 -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* Tokens-first theme (centralize colors) */
+      :root {
+        --bg: 0 0% 100%;
+        --fg: 222 47% 11%;
+        --muted: 210 40% 96%;
+        --muted-fg: 215 16% 47%;
+        --border: 214 32% 91%;
+        --ring: 221 83% 53%;
+
+        --card: 0 0% 100%;
+        --card-fg: 222 47% 11%;
+
+        --primary: 222 47% 11%;
+        --primary-fg: 210 40% 98%;
+
+        --radius: 14px;
+        --radius-md: 12px;
+        --control-h: 44px;
+
+        --shadow: 0 20px 60px rgba(0,0,0,.18);
+      }
+
+      .dark {
+        --bg: 222 47% 11%;
+        --fg: 210 40% 98%;
+        --muted: 217 33% 17%;
+        --muted-fg: 215 20% 65%;
+        --border: 217 33% 17%;
+        --ring: 217 91% 60%;
+
+        --card: 222 47% 13%;
+        --card-fg: 210 40% 98%;
+
+        --primary: 210 40% 98%;
+        --primary-fg: 222 47% 11%;
+
+        --shadow: 0 20px 60px rgba(0,0,0,.55);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: hsl(var(--bg));
+        color: hsl(var(--fg));
+      }
+
+      /* Demo surface */
+      .page {
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: hsl(var(--muted));
+      }
+
+      .demo-card {
+        width: min(760px, 100%);
+        background: hsl(var(--card));
+        color: hsl(var(--card-fg));
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .demo-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .demo-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+
+      .demo-subtitle {
+        margin: 6px 0 0 0;
+        font-size: 13px;
+        color: hsl(var(--muted-fg));
+        line-height: 1.35;
+      }
+
+      /* Shadcn-like buttons */
+      .btn {
+        height: 40px;
+        padding: 0 14px;
+        border-radius: var(--radius-md);
+        border: 0;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        background: transparent;
+        color: hsl(var(--fg));
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn:focus-visible {
+        outline: 2px solid hsl(var(--ring));
+        outline-offset: 2px;
+      }
+      .btn-outline {
+        background: hsl(var(--bg));
+        border: 1px solid hsl(var(--border));
+      }
+      .btn-primary {
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-fg));
+      }
+
+      /* ===== Sheet ===== */
+      .sheet-root {
+        /* hidden by default; toggled by [data-open="true"] */
+      }
+
+      .sheet-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 160ms ease;
+      }
+
+      .sheet {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100%;
+        width: min(420px, 92vw);
+        background: hsl(var(--card));
+        color: hsl(var(--card-fg));
+        border-left: 1px solid hsl(var(--border));
+        box-shadow: var(--shadow);
+        transform: translateX(102%);
+        transition: transform 180ms ease;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .sheet-root[data-open="true"] .sheet-overlay {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .sheet-root[data-open="true"] .sheet {
+        transform: translateX(0);
+      }
+
+      /* Header / body / footer (mirrors SheetHeader/Content/Footer intent) */
+      .sheet-header {
+        padding: 18px 18px 10px 18px;
+      }
+      .sheet-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 900;
+        letter-spacing: -0.01em;
+      }
+      .sheet-desc {
+        margin: 6px 0 0 0;
+        font-size: 13px;
+        color: hsl(var(--muted-fg));
+        line-height: 1.35;
+      }
+
+      .sheet-body {
+        padding: 12px 18px 18px 18px;
+        overflow: auto;
+      }
+
+      /* “grid flex-1 auto-rows-min gap-6 px-4” approximation from React sample */
+      .form-grid {
+        display: grid;
+        gap: 16px;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+      label {
+        font-size: 13px;
+        font-weight: 800;
+        color: hsl(var(--muted-fg));
+      }
+      .input {
+        height: var(--control-h);
+        width: 100%;
+        border-radius: var(--radius-md);
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--bg));
+        color: hsl(var(--fg));
+        padding: 0 12px;
+        font-size: 16px;
+        outline: none;
+      }
+      .input:focus {
+        box-shadow: 0 0 0 2px hsl(var(--ring));
+        border-color: transparent;
+      }
+
+      .sheet-footer {
+        padding: 12px 18px 18px 18px;
+        border-top: 1px solid hsl(var(--border));
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+
+      /* Tiny theme toggle pill */
+      .seg {
+        display: inline-flex;
+        padding: 4px;
+        border-radius: 999px;
+        background: hsl(var(--muted));
+        gap: 4px;
+        align-items: center;
+      }
+      .seg button {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: hsl(var(--muted-fg));
+        font-weight: 900;
+        cursor: pointer;
+      }
+      .seg button[aria-selected="true"] {
+        background: hsl(var(--card));
+        color: hsl(var(--fg));
+      }
+
+      /* Demo output area */
+      .result {
+        margin-top: 12px;
+        font-size: 13px;
+        color: hsl(var(--muted-fg));
+      }
+      .result strong { color: hsl(var(--fg)); }
+    </style>
+
+    <script>
+      // Theme (optional)
+      function setTheme(mode) {
+        const root = document.documentElement;
+        if (mode === "dark") root.classList.add("dark");
+        else root.classList.remove("dark");
+        localStorage.setItem("theme", mode);
+        syncThemeToggle();
+      }
+      function bootTheme() {
+        const saved = localStorage.getItem("theme");
+        setTheme(saved === "dark" ? "dark" : "light");
+      }
+      function syncThemeToggle() {
+        const isDark = document.documentElement.classList.contains("dark");
+        const lightBtn = document.getElementById("theme-light");
+        const darkBtn = document.getElementById("theme-dark");
+        if (lightBtn && darkBtn) {
+          lightBtn.setAttribute("aria-selected", isDark ? "false" : "true");
+          darkBtn.setAttribute("aria-selected", isDark ? "true" : "false");
+        }
+      }
+
+      // Sheet open/close + a11y
+      function openSheet() {
+        const root = document.getElementById("sheet-root");
+        root.dataset.open = "true";
+        // focus first input
+        setTimeout(() => document.getElementById("sheet-demo-name")?.focus(), 0);
+      }
+      function closeSheet() {
+        const root = document.getElementById("sheet-root");
+        root.dataset.open = "false";
+        // return focus to trigger
+        setTimeout(() => document.getElementById("open-sheet-btn")?.focus(), 0);
+      }
+      function isSheetOpen() {
+        return document.getElementById("sheet-root")?.dataset.open === "true";
+      }
+
+      // Close on Escape
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && isSheetOpen()) closeSheet();
+      });
+
+      // Standalone demo: intercept HTMX submit so this file runs without a backend. [3][9]
+      document.addEventListener("htmx:configRequest", (evt) => {
+        if (evt.detail.path === "/sheet-demo/save") {
+          evt.preventDefault();
+
+          const name = document.getElementById("sheet-demo-name").value || "(empty)";
+          const username = document.getElementById("sheet-demo-username").value || "(empty)";
+          const target = document.getElementById("save-result");
+
+          // mimic network delay
+          setTimeout(() => {
+            target.innerHTML =
+              "<div class='result'><strong>Saved</strong> — Name: " +
+              escapeHtml(name) +
+              " • Username: " +
+              escapeHtml(username) +
+              "</div>";
+            closeSheet();
+          }, 350);
+        }
+      });
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      document.addEventListener("DOMContentLoaded", bootTheme);
+    </script>
+  </head>
+
+  <body>
+    <div class="page">
+      <div class="demo-card">
+        <div class="demo-header">
+          <div>
+            <h1 class="demo-title">Sheet (shadcn-like) • HTMX</h1>
+            <p class="demo-subtitle">
+              Outline button trigger, header/title/description, labeled inputs, footer actions, ESC + overlay close. [1]
+            </p>
+          </div>
+
+          <div class="seg" role="tablist" aria-label="Theme">
+            <button id="theme-light" type="button" aria-selected="true" onclick="setTheme('light')">Light</button>
+            <button id="theme-dark" type="button" aria-selected="false" onclick="setTheme('dark')">Dark</button>
+          </div>
+        </div>
+
+        <!-- Equivalent to <SheetTrigger asChild><Button variant="outline">Open</Button> -->
+        <button id="open-sheet-btn" class="btn btn-outline" type="button" onclick="openSheet()">
+          Open
+        </button>
+
+        <div id="save-result"></div>
+
+        <!-- Sheet Root -->
+        <div id="sheet-root" class="sheet-root" data-open="false" aria-hidden="true">
+          <!-- Overlay: click to close -->
+          <div class="sheet-overlay" role="presentation" onclick="closeSheet()"></div>
+
+          <!-- Content -->
+          <aside
+            class="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sheet-title"
+            aria-describedby="sheet-desc"
+          >
+            <header class="sheet-header">
+              <h2 id="sheet-title" class="sheet-title">Edit profile</h2>
+              <p id="sheet-desc" class="sheet-desc">
+                Make changes to your profile here. Click save when you&apos;re done.
+              </p>
+            </header>
+
+            <div class="sheet-body">
+              <form id="sheet-form" class="form-grid">
+                <div class="field">
+                  <label for="sheet-demo-name">Name</label>
+                  <input
+                    class="input"
+                    id="sheet-demo-name"
+                    name="name"
+                    value="Pedro Duarte"
+                    autocomplete="name"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="sheet-demo-username">Username</label>
+                  <input
+                    class="input"
+                    id="sheet-demo-username"
+                    name="username"
+                    value="@peduarte"
+                    autocomplete="username"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <footer class="sheet-footer">
+              <!-- Equivalent to <Button type="submit">Save changes</Button> inside SheetFooter -->
+              <button
+                class="btn btn-primary"
+                type="button"
+                hx-post="/sheet-demo/save"
+                hx-include="#sheet-form"
+                hx-target="#save-result"
+                hx-swap="innerHTML"
+              >
+                Save changes
+              </button>
+
+              <!-- Equivalent to <SheetClose asChild><Button variant="outline">Close</Button></SheetClose> -->
+              <button class="btn btn-outline" type="button" onclick="closeSheet()">
+                Close
+              </button>
+            </footer>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

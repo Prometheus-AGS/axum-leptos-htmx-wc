@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /> [11]
+    <title>HTMX 2.0.8 • shadcn-like Button Grid (All Variants)</title>
+
+    <!-- HTMX (2.0.8 required by user; not specified in references, so provided from general knowledge) -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* Design-system enforcement: tokens-first, no hard-coded colors in component rules. [2] */
+      :root {
+        /* Typography */
+        --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+        /* shadcn-like core tokens (sample palette; values are centralized here) [2] */
+        --background: 0 0% 100%;
+        --foreground: 222 47% 11%;
+
+        --muted: 210 40% 96%;
+        --muted-foreground: 215 16% 47%;
+
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+
+        --primary: 221 83% 53%;
+        --primary-foreground: 210 40% 98%;
+
+        --secondary: 210 40% 96%;
+        --secondary-foreground: 222 47% 11%;
+
+        --accent: 210 40% 96%;
+        --accent-foreground: 222 47% 11%;
+
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 210 40% 98%;
+
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --ring: 221 83% 53%;
+
+        --radius: 12px;
+        --radius-md: 10px;
+
+        --shadow-none: none;
+      }
+
+      .dark {
+        /* tokens-first dark mode (still centralized tokens) [2] */
+        --background: 222 47% 11%;
+        --foreground: 210 40% 98%;
+
+        --muted: 217 33% 17%;
+        --muted-foreground: 215 20% 65%;
+
+        --card: 222 47% 13%;
+        --card-foreground: 210 40% 98%;
+
+        --primary: 217 91% 60%;
+        --primary-foreground: 222 47% 11%;
+
+        --secondary: 217 33% 17%;
+        --secondary-foreground: 210 40% 98%;
+
+        --accent: 217 33% 17%;
+        --accent-foreground: 210 40% 98%;
+
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 210 40% 98%;
+
+        --border: 217 33% 17%;
+        --input: 217 33% 17%;
+        --ring: 217 91% 60%;
+      }
+
+      /* Helpers */
+      .hsl-bg { background: hsl(var(--background)); }
+      .hsl-fg { color: hsl(var(--foreground)); }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+      }
+
+      .shell {
+        min-height: 100%;
+        padding: 18px;
+        display: grid;
+        place-items: start center;
+      }
+
+      /* Borderless zone philosophy: use background zones for separation instead of borders where possible. [11] */
+      .zone {
+        width: min(1080px, 100%);
+        background: hsl(var(--muted));
+        border-radius: calc(var(--radius) + 6px);
+        padding: 16px;
+      }
+
+      .card {
+        background: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .subtitle {
+        margin: 6px 0 0 0;
+        font-size: 13px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      /* WCAG + focus states guidance is explicit in the design system. [11] */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+
+        height: 40px;
+        padding: 0 14px;
+
+        border-radius: var(--radius-md);
+        border: 0;
+        box-shadow: var(--shadow-none);
+
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1;
+
+        cursor: pointer;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+
+        transition: background 150ms ease, color 150ms ease, opacity 150ms ease; /* keep durations limited [11] */
+      }
+
+      .btn:disabled {
+        pointer-events: none;
+        opacity: 0.55;
+      }
+
+      .btn:focus-visible {
+        outline: 2px solid hsl(var(--ring));
+        outline-offset: 2px;
+      }
+
+      /* Variants aligned to shadcn buttonVariants mapping. [12] */
+      .btn--default {
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+      }
+      .btn--default:hover { filter: brightness(0.97); }
+
+      .btn--destructive {
+        background: hsl(var(--destructive));
+        color: hsl(var(--destructive-foreground));
+      }
+      .btn--destructive:hover { filter: brightness(0.97); }
+
+      .btn--secondary {
+        background: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground));
+      }
+      .btn--secondary:hover { filter: brightness(0.98); }
+
+      .btn--outline {
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+        border: 1px solid hsl(var(--input));
+      }
+      .btn--outline:hover {
+        background: hsl(var(--accent));
+        color: hsl(var(--accent-foreground));
+      }
+
+      .btn--ghost {
+        background: transparent;
+        color: hsl(var(--foreground));
+      }
+      .btn--ghost:hover {
+        background: hsl(var(--accent));
+        color: hsl(var(--accent-foreground));
+      }
+
+      .btn--link {
+        background: transparent;
+        color: hsl(var(--primary));
+        padding: 0 8px;
+        height: 36px;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+      }
+      .btn--link:hover { filter: brightness(0.95); }
+
+      /* Sizes (shadcn Button supports size variants). [12] */
+      .btn--sm { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
+      .btn--lg { height: 46px; padding: 0 18px; font-size: 14px; border-radius: 12px; }
+      .btn--icon { width: 40px; padding: 0; }
+      .btn--icon.btn--sm { width: 34px; }
+      .btn--icon.btn--lg { width: 46px; }
+
+      /* Grid layout */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+      }
+
+      .panel {
+        grid-column: span 12;
+        background: hsl(var(--card));
+        border-radius: var(--radius);
+        padding: 16px;
+      }
+
+      @media (min-width: 900px) {
+        .panel { grid-column: span 6; }
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      .panel p {
+        margin: 6px 0 12px 0;
+        font-size: 13px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+      }
+
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      /* Icon styling */
+      .icon {
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+      }
+
+      /* Simple HTMX loading indicator */
+      .htmx-indicator {
+        display: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+      }
+      .htmx-request .htmx-indicator { display: inline-block; }
+      .htmx-request.btn { opacity: 0.8; }
+
+      /* Segmented theme toggle (tokens-first; no hard-coded colors). [2] */
+      .seg {
+        display: inline-flex;
+        padding: 4px;
+        border-radius: 999px;
+        background: hsl(var(--muted));
+        gap: 4px;
+      }
+      .seg button {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: hsl(var(--muted-foreground));
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .seg button[aria-selected="true"] {
+        background: hsl(var(--card));
+        color: hsl(var(--foreground));
+      }
+    </style>
+
+    <script>
+      function setTheme(mode) {
+        var root = document.documentElement;
+        if (mode === "dark") root.classList.add("dark");
+        else root.classList.remove("dark");
+        localStorage.setItem("theme", mode);
+        syncThemeToggle();
+      }
+
+      function bootTheme() {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark" || saved === "light") setTheme(saved);
+        else setTheme("light");
+      }
+
+      function syncThemeToggle() {
+        var isDark = document.documentElement.classList.contains("dark");
+        var lightBtn = document.getElementById("theme-light");
+        var darkBtn = document.getElementById("theme-dark");
+        if (lightBtn && darkBtn) {
+          lightBtn.setAttribute("aria-selected", isDark ? "false" : "true");
+          darkBtn.setAttribute("aria-selected", isDark ? "true" : "false");
+        }
+      }
+
+      /* Standalone demo: intercept specific HTMX requests and inject fake server responses. */
+      document.addEventListener("htmx:configRequest", function (evt) {
+        if (evt.detail.path === "/demo/click") {
+          evt.preventDefault();
+          var target = document.getElementById("demo-output");
+          var payload = (evt.detail.parameters && evt.detail.parameters.variant) ? evt.detail.parameters.variant : "unknown";
+          setTimeout(function () {
+            target.textContent = "HTMX received click: " + payload + " (demo response).";
+          }, 250);
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", bootTheme);
+    </script>
+  </head>
+
+  <body>
+    <div class="shell">
+      <div class="zone">
+        <div class="card">
+          <div class="header">
+            <div>
+              <h1 class="title">shadcn-like Button Grid • HTMX 2.0.8</h1>
+              <p class="subtitle">
+                Variants + sizes + icon/no-icon samples; token-driven colors; focus-visible ring; no style hard-coding in component rules. [2][11][12]
+              </p>
+            </div>
+
+            <div class="toolbar">
+              <div class="seg" role="tablist" aria-label="Theme toggle">
+                <button id="theme-light" type="button" aria-selected="true" onclick="setTheme('light')">Light</button>
+                <button id="theme-dark" type="button" aria-selected="false" onclick="setTheme('dark')">Dark</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="demo-output" class="subtitle" style="margin: 0 0 12px 0;">
+            Click any button; HTMX will POST to a demo endpoint and update this line.
+          </div>
+
+          <div class="grid">
+            <!-- Panel 1: Core variants (no icons) -->
+            <section class="panel" aria-label="Core button variants">
+              <h3>Variants (no icons)</h3>
+              <p>Matches the canonical shadcn variant mapping for default/destructive/outline/secondary/ghost/link. [12]</p>
+              <div class="btn-row">
+                <button class="btn btn--default"
+                        hx-post="/demo/click" hx-vals='{"variant":"default"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Default
+                </button>
+
+                <button class="btn btn--secondary"
+                        hx-post="/demo/click" hx-vals='{"variant":"secondary"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Secondary
+                </button>
+
+                <button class="btn btn--outline"
+                        hx-post="/demo/click" hx-vals='{"variant":"outline"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Outline
+                </button>
+
+                <button class="btn btn--ghost"
+                        hx-post="/demo/click" hx-vals='{"variant":"ghost"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Ghost
+                </button>
+
+                <button class="btn btn--destructive"
+                        hx-post="/demo/click" hx-vals='{"variant":"destructive"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Destructive
+                </button>
+
+                <button class="btn btn--link"
+                        hx-post="/demo/click" hx-vals='{"variant":"link"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Link
+                </button>
+              </div>
+            </section>
+
+            <!-- Panel 2: Variants with leading icons + ARIA labels guidance -->
+            <section class="panel" aria-label="Variants with icons">
+              <h3>Variants (with icons)</h3>
+              <p>Icons are decorative here and marked aria-hidden; icon-only buttons use aria-label. [11]</p>
+              <div class="btn-row">
+                <button class="btn btn--default"
+                        hx-post="/demo/click" hx-vals='{"variant":"default+icon"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 14h-2v-2h2v2zm0-4h-2V6h2v6z"/>
+                  </svg>
+                  Notify
+                </button>
+
+                <button class="btn btn--secondary"
+                        hx-post="/demo/click" hx-vals='{"variant":"secondary+icon"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M9 16.2l-3.5-3.5L4 14.2 9 19l12-12-1.5-1.5z"/>
+                  </svg>
+                  Confirm
+                </button>
+
+                <button class="btn btn--outline"
+                        hx-post="/demo/click" hx-vals='{"variant":"outline+icon"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M3 17.25V21h3.75L17.8 9.95l-3.75-3.75L3 17.25zm18-11.5a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.13 1.13 3.75 3.75L21 5.75z"/>
+                  </svg>
+                  Edit
+                </button>
+
+                <button class="btn btn--destructive"
+                        hx-post="/demo/click" hx-vals='{"variant":"destructive+icon"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/>
+                  </svg>
+                  Delete
+                </button>
+
+                <button class="btn btn--ghost"
+                        hx-post="/demo/click" hx-vals='{"variant":"ghost+icon"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 0 1-9.9 1h-2.02A7 7 0 0 0 19 13c0-3.87-3.13-7-7-7z"/>
+                  </svg>
+                  Refresh
+                </button>
+
+                <button class="btn btn--link"
+                        hx-post="/demo/click" hx-vals='{"variant":"link+icon"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M10 17l5-5-5-5v10z"/>
+                  </svg>
+                  Learn more
+                </button>
+              </div>
+            </section>
+
+            <!-- Panel 3: Sizes -->
+            <section class="panel" aria-label="Button sizes">
+              <h3>Sizes</h3>
+              <p>Shows small/default/large plus icon-only sizing patterns. [12]</p>
+              <div class="btn-row">
+                <button class="btn btn--default btn--sm"
+                        hx-post="/demo/click" hx-vals='{"variant":"default-sm"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Small
+                </button>
+
+                <button class="btn btn--default"
+                        hx-post="/demo/click" hx-vals='{"variant":"default-md"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Default
+                </button>
+
+                <button class="btn btn--default btn--lg"
+                        hx-post="/demo/click" hx-vals='{"variant":"default-lg"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  Large
+                </button>
+
+                <button class="btn btn--outline btn--icon btn--sm"
+                        aria-label="Small icon button"
+                        hx-post="/demo/click" hx-vals='{"variant":"icon-sm"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 5v14m-7-7h14"/>
+                  </svg>
+                </button>
+
+                <button class="btn btn--outline btn--icon"
+                        aria-label="Default icon button"
+                        hx-post="/demo/click" hx-vals='{"variant":"icon-md"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 5v14m-7-7h14"/>
+                  </svg>
+                </button>
+
+                <button class="btn btn--outline btn--icon btn--lg"
+                        aria-label="Large icon button"
+                        hx-post="/demo/click" hx-vals='{"variant":"icon-lg"}'
+                        hx-target="#demo-output" hx-swap="innerHTML">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 5v14m-7-7h14"/>
+                  </svg>
+                </button>
+              </div>
+            </section>
+
+            <!-- Panel 4: States (disabled + loading indicator) -->
+            <section class="panel" aria-label="Button states">
+              <h3>States</h3>
+              <p>Shows disabled and loading indicator patterns; focus-visible ring is required. [11][12]</p>
+              <div class="btn-row">
+                <button class="btn btn--secondary" disabled>Disabled</button>
+
+                <button class="btn btn--destructive" disabled>Disabled destructive</button>
+
+                <button class="btn btn--default"
+                        hx-post="/demo/click"
+                        hx-vals='{"variant":"loading-demo"}'
+                        hx-target="#demo-output"
+                        hx-swap="innerHTML">
+                  <span class="htmx-indicator">
+                    <span aria-hidden="true">Loading…</span>
+                  </span>
+                  Submit
+                </button>
+
+                <button class="btn btn--ghost"
+                        hx-post="/demo/click"
+                        hx-vals='{"variant":"ghost-click"}'
+                        hx-target="#demo-output"
+                        hx-swap="innerHTML">
+                  Click me
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div class="subtitle" style="margin-top: 14px;">
+            Note: This prototype follows tokens-first styling and the shadcn button variant mappings; do not hard-code colors outside token definitions. [2][12]
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

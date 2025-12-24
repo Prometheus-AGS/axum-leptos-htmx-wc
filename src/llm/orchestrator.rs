@@ -59,6 +59,7 @@ pub struct Orchestrator {
     driver: Arc<dyn LlmDriver>,
 }
 
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for Orchestrator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Orchestrator")
@@ -70,16 +71,15 @@ impl std::fmt::Debug for Orchestrator {
 
 impl Orchestrator {
     /// Create a new orchestrator with the given settings and MCP registry.
+    #[allow(dead_code)]
     pub fn new(settings: LlmSettings, mcp: Arc<McpRegistry>) -> Self {
         let driver: Arc<dyn LlmDriver> = match settings.protocol {
             LlmProtocol::Responses => Arc::new(ResponsesDriver::new(settings.clone())),
             LlmProtocol::Chat => Arc::new(ChatCompletionsDriver::new(settings.clone())),
             LlmProtocol::Auto => {
-                if settings.base_url.contains("openai.com") {
-                    Arc::new(ResponsesDriver::new(settings.clone()))
-                } else {
-                    Arc::new(ChatCompletionsDriver::new(settings.clone()))
-                }
+                // Default to Chat Completions API as it's more widely supported
+                // Responses API is only for specific models that explicitly support it
+                Arc::new(ChatCompletionsDriver::new(settings.clone()))
             }
         };
 
@@ -92,12 +92,14 @@ impl Orchestrator {
 
     /// Get the LLM settings.
     #[must_use]
+    #[allow(dead_code)]
     pub fn settings(&self) -> &LlmSettings {
         &self.settings
     }
 
     /// Get the MCP registry.
     #[must_use]
+    #[allow(dead_code)]
     pub fn mcp(&self) -> &McpRegistry {
         &self.mcp
     }
@@ -113,6 +115,7 @@ impl Orchestrator {
     ///
     /// The orchestrator will automatically execute tool calls and feed
     /// results back to the LLM until a final response is produced.
+    #[allow(dead_code)]
     pub async fn chat(
         &self,
         user_message: &str,
@@ -127,12 +130,32 @@ impl Orchestrator {
     }
 
     /// Start a chat interaction with existing message history.
+    #[allow(clippy::too_many_lines)]
     pub async fn chat_with_history(
         &self,
         messages: Vec<Message>,
     ) -> anyhow::Result<impl Stream<Item = NormalizedEvent> + Send> {
         let request_id = Uuid::new_v4().to_string();
         let tools = self.mcp.openai_tools_json();
+
+        tracing::info!(
+            request_id = %request_id,
+            message_count = messages.len(),
+            tool_count = tools.len(),
+            "Starting orchestrator chat"
+        );
+
+        // Log initial message history
+        for (idx, msg) in messages.iter().enumerate() {
+            tracing::debug!(
+                request_id = %request_id,
+                message_index = idx,
+                role = ?msg.role,
+                content_length = msg.content.len(),
+                has_tool_calls = msg.tool_calls.is_some(),
+                "Initial message"
+            );
+        }
 
         let orchestrator = self.clone();
         let messages = messages.clone();
@@ -149,10 +172,21 @@ impl Orchestrator {
                 .map(|m| serde_json::to_value(m).unwrap_or_default())
                 .collect();
 
+            tracing::debug!(
+                request_id = %request_id,
+                "Converted messages to JSON for driver"
+            );
+
             let mut iteration = 0;
 
             loop {
                 if iteration >= MAX_TOOL_ITERATIONS {
+                    tracing::error!(
+                        request_id = %request_id,
+                        iteration = iteration,
+                        max_iterations = MAX_TOOL_ITERATIONS,
+                        "Maximum tool loop iterations exceeded"
+                    );
                     yield NormalizedEvent::Error {
                         message: "Maximum tool loop iterations exceeded".to_string(),
                         code: Some("MAX_ITERATIONS".to_string()),
@@ -161,15 +195,44 @@ impl Orchestrator {
                 }
                 iteration += 1;
 
+                tracing::info!(
+                    request_id = %request_id,
+                    iteration = iteration,
+                    message_count = message_json.len(),
+                    "Starting tool loop iteration"
+                );
+
                 let req = LlmRequest {
                     messages: message_json.clone(),
                     tools: tools.clone(),
                 };
 
+                // Log the full request being sent to the LLM
+                tracing::debug!(
+                    request_id = %request_id,
+                    iteration = iteration,
+                    messages = ?req.messages,
+                    tool_count = req.tools.len(),
+                    "Sending request to LLM driver"
+                );
+
                 // Stream from the driver
                 let driver_stream = match orchestrator.driver.stream(req).await {
-                    Ok(s) => s,
+                    Ok(s) => {
+                        tracing::debug!(
+                            request_id = %request_id,
+                            iteration = iteration,
+                            "Driver stream created successfully"
+                        );
+                        s
+                    }
                     Err(e) => {
+                        tracing::error!(
+                            request_id = %request_id,
+                            iteration = iteration,
+                            error = %e,
+                            "Failed to create driver stream"
+                        );
                         yield NormalizedEvent::Error {
                             message: e.to_string(),
                             code: None,
@@ -242,9 +305,23 @@ impl Orchestrator {
 
                 // If no tool calls, we're done
                 if !has_tool_calls || finish_reason.as_deref() != Some("tool_calls") {
+                    tracing::info!(
+                        request_id = %request_id,
+                        iteration = iteration,
+                        has_tool_calls = has_tool_calls,
+                        finish_reason = ?finish_reason,
+                        "No tool calls to process, completing stream"
+                    );
                     yield NormalizedEvent::Done;
                     break;
                 }
+
+                tracing::info!(
+                    request_id = %request_id,
+                    iteration = iteration,
+                    accumulator_count = tool_accumulators.len(),
+                    "Building tool calls from accumulators"
+                );
 
                 // Build tool calls from accumulators
                 let tool_calls: Vec<ToolCall> = tool_accumulators
@@ -264,8 +341,39 @@ impl Orchestrator {
                     .collect();
 
                 if tool_calls.is_empty() {
+                    tracing::warn!(
+                        request_id = %request_id,
+                        iteration = iteration,
+                        "No valid tool calls built from accumulators"
+                    );
                     yield NormalizedEvent::Done;
                     break;
+                }
+
+                tracing::info!(
+                    request_id = %request_id,
+                    iteration = iteration,
+                    tool_call_count = tool_calls.len(),
+                    "Built tool calls, adding to message history"
+                );
+
+                // Log each tool call
+                for (idx, tc) in tool_calls.iter().enumerate() {
+                    tracing::info!(
+                        request_id = %request_id,
+                        iteration = iteration,
+                        tool_index = idx,
+                        tool_id = %tc.id,
+                        tool_name = %tc.function.name,
+                        args_length = tc.function.arguments.len(),
+                        "Tool call to execute"
+                    );
+                    tracing::debug!(
+                        request_id = %request_id,
+                        tool_id = %tc.id,
+                        arguments = %tc.function.arguments,
+                        "Tool call arguments"
+                    );
                 }
 
                 // Add assistant message with tool calls to history
@@ -284,19 +392,57 @@ impl Orchestrator {
                     }).collect::<Vec<_>>()
                 }));
 
+                tracing::debug!(
+                    request_id = %request_id,
+                    iteration = iteration,
+                    "Added assistant message with tool calls to history"
+                );
+
                 // Execute each tool call and emit results
-                for tool_call in &tool_calls {
+                for (idx, tool_call) in tool_calls.iter().enumerate() {
                     let tool_name = &tool_call.function.name;
                     let arguments: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
                         .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
 
-                    let (content, success) = match orchestrator.mcp.call_namespaced_tool(tool_name, arguments).await {
+                    tracing::info!(
+                        request_id = %request_id,
+                        iteration = iteration,
+                        tool_index = idx,
+                        tool_id = %tool_call.id,
+                        tool_name = %tool_name,
+                        "Executing tool call"
+                    );
+
+                    let (content, success) = match orchestrator.mcp.call_namespaced_tool(tool_name, arguments.clone()).await {
                         Ok(result) => {
                             let content = serde_json::to_string(&result).unwrap_or_default();
+                            tracing::info!(
+                                request_id = %request_id,
+                                iteration = iteration,
+                                tool_id = %tool_call.id,
+                                tool_name = %tool_name,
+                                result_length = content.len(),
+                                "Tool call succeeded"
+                            );
+                            tracing::debug!(
+                                request_id = %request_id,
+                                tool_id = %tool_call.id,
+                                result = %content,
+                                "Tool call result"
+                            );
                             (content, true)
                         }
                         Err(e) => {
-                            (format!("Error: {e}"), false)
+                            let error_msg = format!("Error: {e}");
+                            tracing::error!(
+                                request_id = %request_id,
+                                iteration = iteration,
+                                tool_id = %tool_call.id,
+                                tool_name = %tool_name,
+                                error = %e,
+                                "Tool call failed"
+                            );
+                            (error_msg, false)
                         }
                     };
 
@@ -314,12 +460,74 @@ impl Orchestrator {
                         "tool_call_id": tool_call.id,
                         "content": content
                     }));
+
+                    tracing::debug!(
+                        request_id = %request_id,
+                        iteration = iteration,
+                        tool_id = %tool_call.id,
+                        "Added tool result to message history"
+                    );
                 }
+
+                tracing::info!(
+                    request_id = %request_id,
+                    iteration = iteration,
+                    "All tool calls executed, continuing to next iteration"
+                );
 
                 // Continue the loop to get the next response
             }
         };
 
         Ok(stream)
+    }
+
+    /// Non-streaming chat for simple requests (e.g., title generation).
+    /// 
+    /// This collects all message deltas into a single string response.
+    pub async fn chat_non_streaming(&self, messages: Vec<Message>) -> anyhow::Result<String> {
+        let request_id = Uuid::new_v4().to_string();
+        let tools = Vec::new(); // No tools for simple requests
+
+        tracing::debug!(
+            request_id = %request_id,
+            message_count = messages.len(),
+            "Starting non-streaming chat"
+        );
+
+        let message_json: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|m| serde_json::to_value(m).unwrap_or_default())
+            .collect();
+
+        let req = LlmRequest {
+            messages: message_json,
+            tools,
+        };
+
+        // Stream from the driver and collect message deltas
+        let mut stream = self.driver.stream(req).await?;
+        let mut content = String::new();
+
+        while let Some(event_result) = stream.next().await {
+            match event_result {
+                Ok(NormalizedEvent::MessageDelta { text }) => {
+                    content.push_str(&text);
+                }
+                Err(e) => {
+                    tracing::error!(request_id = %request_id, error = %e, "Error in stream");
+                    return Err(e);
+                }
+                _ => {} // Ignore other events
+            }
+        }
+
+        tracing::debug!(
+            request_id = %request_id,
+            content_length = content.len(),
+            "Non-streaming chat completed"
+        );
+
+        Ok(content)
     }
 }

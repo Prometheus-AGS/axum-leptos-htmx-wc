@@ -25,8 +25,7 @@ pub fn ScrollArea(
 ) -> impl IntoView {
     let classes = format!(
         "relative overflow-auto scrollbar-thin scrollbar-thumb-panelBorder \
-         scrollbar-track-transparent {}",
-        class
+         scrollbar-track-transparent {class}"
     );
 
     view! {

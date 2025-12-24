@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Navigation Menu (shadcn-like) - HTMX single file</title>
+
+    <!-- HTMX (drop-in ready) -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         MATERIAL ZONES TOKENS + BORDERLESS PHILOSOPHY
+         - No borders; use surface containers for zones. [2][12]
+         - Dynamic theming via --primary-hue. [2][12]
+         - Responsive breakpoint: mobile <768px. [2][12]
+      ============================================================ */
+      :root {
+        --primary-hue: 210;
+
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.14);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 60%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+        padding: var(--space-5);
+      }
+
+      .shell { max-width: 1180px; margin: 0 auto; display: grid; gap: var(--space-4); }
+
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .row { display:flex; flex-wrap:wrap; gap: var(--space-3); align-items:center; justify-content:space-between; }
+      h1 { margin:0; font-size: 1.1rem; font-weight: 900; letter-spacing: .2px; }
+      .subtitle { margin: 8px 0 0 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      /* ============================================================
+         NAV MENU STYLES (shadcn-like, but frameworkless)
+      ============================================================ */
+      .nav-shell {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        padding: 12px;
+      }
+
+      .nav-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+
+      .brand {
+        display:flex; align-items:center; gap: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-container-high) 65%, transparent);
+        font-weight: 950;
+      }
+      .dot { width: 10px; height: 10px; border-radius: 999px; background: var(--primary); box-shadow: var(--shadow-1); }
+
+      .nav-items {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .trigger, .linklike {
+        border: 0;
+        background: transparent;
+        color: var(--on-surface);
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 850;
+        letter-spacing: .1px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .trigger:hover, .linklike:hover {
+        background: color-mix(in oklab, var(--surface-container-low) 80%, transparent);
+      }
+      .trigger:focus-visible, .linklike:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .chev { opacity: .8; font-weight: 900; }
+
+      .item { position: relative; }
+
+      /* Popover panel (dropdown / mega) */
+      .panel {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        width: 560px;
+        max-width: min(92vw, 560px);
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-2);
+        padding: 12px;
+        display: none;
+        z-index: 30;
+      }
+
+      .item[data-open="true"] .panel { display: block; }
+
+      .panel-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 12px;
+      }
+
+      .panel-hero {
+        border-radius: var(--radius-xl);
+        padding: 14px;
+        background: radial-gradient(
+          circle at top left,
+          color-mix(in oklab, var(--primary) 28%, transparent),
+          color-mix(in oklab, var(--surface-container-high) 75%, transparent)
+        );
+        min-height: 160px;
+      }
+
+      .panel-hero h3 { margin: 0 0 8px 0; font-size: 1rem; font-weight: 950; }
+      .panel-hero p { margin: 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .panel-list { display: grid; gap: 8px; }
+      .panel-link {
+        display: grid;
+        gap: 3px;
+        padding: 10px 10px;
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-container-high) 70%, transparent);
+        box-shadow: var(--shadow-1);
+        text-decoration: none;
+        color: var(--on-surface);
+        cursor: pointer;
+      }
+      .panel-link:hover { background: color-mix(in oklab, var(--surface-container-high) 84%, transparent); }
+      .panel-link strong { font-weight: 950; }
+      .panel-link span { color: var(--on-surface-variant); font-size: .92rem; }
+
+      /* Simple dropdown variation */
+      .panel-simple {
+        width: 320px;
+      }
+
+      /* Mobile drawer-ish menu */
+      .mobile-toggle { display: none; }
+
+      @media (max-width: 768px) {
+        .nav-items { display: none; } /* mobile <768 [2][12] */
+        .mobile-toggle { display: inline-flex; }
+        .mobile-sheet {
+          margin-top: 10px;
+          background: var(--surface-container-low);
+          border-radius: var(--radius-xl);
+          box-shadow: var(--shadow-2);
+          padding: 10px;
+          display: none;
+        }
+        .nav-shell[data-mobile-open="true"] .mobile-sheet { display: grid; gap: 8px; }
+        .mobile-sheet .panel-link { box-shadow: none; }
+      }
+
+      /* Demo content region */
+      .content {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        padding: var(--space-5);
+        min-height: 220px;
+      }
+      .content h2 { margin: 0 0 8px 0; font-size: 1.05rem; }
+      .content p { margin: 0; color: var(--on-surface-variant); line-height: 1.4; }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Navigation Menu (HTMX single file)</h1>
+            <p class="subtitle">
+              “A collection of links for navigating websites.” [1]
+              Includes an “asChild” style link that looks like a trigger. [1]
+            </p>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" type="button" id="themeToggle">Toggle Theme</button>
+            <button class="btn btn-primary" type="button" id="resetState">Reset</button>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <!-- ============================================================
+             NavigationMenuRoot (Leptos boundary)
+             Suggested props:
+               - items: Vec<NavItem>
+               - active: Option<String>
+               - align: Start|Center|End
+               - viewport_width: Option<u16>
+               - mobile_breakpoint_px: u16 (=768) [2][12]
+               - hx_target: String (for hx-boost / hx-target integration) [10]
+        ============================================================ -->
+        <nav class="nav-shell" id="navRoot" aria-label="Primary navigation">
+          <div class="nav-bar">
+            <!-- Brand -->
+            <!-- Leptos: <NavBrand label=... href=... /> -->
+            <a class="brand linklike"
+               href="#home"
+               hx-boost="true"
+               hx-target="#main"
+               hx-swap="innerHTML transition:true">
+              <span class="dot" aria-hidden="true"></span>
+              <span>Acme</span>
+            </a>
+
+            <!-- Desktop menu -->
+            <!-- Leptos: <NavigationMenuList> ... </NavigationMenuList> -->
+            <div class="nav-items" role="menubar" aria-label="Navigation menu list">
+
+              <!-- ============================================================
+                   Variation 1: Mega menu dropdown (Products)
+                   Leptos: <NavItem kind="mega" label="Products" ... />
+              ============================================================ -->
+              <div class="item" data-item="products" data-open="false">
+                <button class="trigger" type="button" data-trigger="products" aria-haspopup="true" aria-expanded="false">
+                  Products <span class="chev" aria-hidden="true">▾</span>
+                </button>
+
+                <div class="panel" role="menu" aria-label="Products menu">
+                  <div class="panel-grid">
+                    <div class="panel-hero">
+                      <h3>Build faster</h3>
+                      <p>
+                        A “shadcn-like” mega panel: hero + link list (frameworkless). This is a common navigation-menu formation pattern.
+                      </p>
+                    </div>
+
+                    <div class="panel-list">
+                      <!-- Leptos: <NavLink title desc href hx... /> -->
+                      <a class="panel-link"
+                         href="#product-1"
+                         hx-boost="true"
+                         hx-target="#main"
+                         hx-swap="innerHTML transition:true">
+                        <strong>Overview</strong>
+                        <span>What’s included and how it works.</span>
+                      </a>
+
+                      <a class="panel-link"
+                         href="#product-2"
+                         hx-boost="true"
+                         hx-target="#main"
+                         hx-swap="innerHTML transition:true">
+                        <strong>Pricing</strong>
+                        <span>Plans for teams of all sizes.</span>
+                      </a>
+
+                      <a class="panel-link"
+                         href="#product-3"
+                         hx-boost="true"
+                         hx-target="#main"
+                         hx-swap="innerHTML transition:true">
+                        <strong>Changelog</strong>
+                        <span>What shipped recently.</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ============================================================
+                   Variation 2: Simple dropdown (Resources)
+                   Leptos: <NavItem kind="dropdown" label="Resources" ... />
+              ============================================================ -->
+              <div class="item" data-item="resources" data-open="false">
+                <button class="trigger" type="button" data-trigger="resources" aria-haspopup="true" aria-expanded="false">
+                  Resources <span class="chev" aria-hidden="true">▾</span>
+                </button>
+
+                <div class="panel panel-simple" role="menu" aria-label="Resources menu">
+                  <div class="panel-list">
+                    <a class="panel-link"
+                       href="#docs"
+                       hx-boost="true"
+                       hx-target="#main"
+                       hx-swap="innerHTML transition:true">
+                      <strong>Docs</strong>
+                      <span>Guides and API reference.</span>
+                    </a>
+                    <a class="panel-link"
+                       href="#blog"
+                       hx-boost="true"
+                       hx-target="#main"
+                       hx-swap="innerHTML transition:true">
+                      <strong>Blog</strong>
+                      <span>Updates and announcements.</span>
+                    </a>
+                    <a class="panel-link"
+                       href="#support"
+                       hx-boost="true"
+                       hx-target="#main"
+                       hx-swap="innerHTML transition:true">
+                      <strong>Support</strong>
+                      <span>Get help and contact us.</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ============================================================
+                   Variation 3: "Link looks like trigger" (asChild concept)
+                   The shadcn page says you can use `asChild` to make another
+                   component look like a navigation menu trigger. [1]
+                   Here we show an <a> styled like a trigger.
+                   Leptos: <NavigationMenuLink as_child=true ...>...</NavigationMenuLink>
+              ============================================================ -->
+              <div class="item" data-item="linkish">
+                <a class="trigger"
+                   href="#trigger-link"
+                   role="menuitem"
+                   hx-boost="true"
+                   hx-target="#main"
+                   hx-swap="innerHTML transition:true">
+                  Trigger-like Link <span class="chev" aria-hidden="true">→</span>
+                </a>
+              </div>
+
+              <!-- Plain link -->
+              <!-- Leptos: <NavLink href label /> -->
+              <div class="item" data-item="about">
+                <a class="linklike"
+                   href="#about"
+                   role="menuitem"
+                   hx-boost="true"
+                   hx-target="#main"
+                   hx-swap="innerHTML transition:true">
+                  About
+                </a>
+              </div>
+            </div>
+
+            <!-- Mobile toggle (<768px) [2][12] -->
+            <button class="btn mobile-toggle" type="button" id="mobileBtn" aria-label="Open menu">
+              Menu
+            </button>
+          </div>
+
+          <!-- ============================================================
+               MobileMenu (Leptos boundary)
+               - Uses the same links but stacked.
+               - Breakpoint behavior at 768px. [2][12]
+          ============================================================ -->
+          <div class="mobile-sheet" id="mobileSheet" aria-label="Mobile navigation">
+            <a class="panel-link" href="#product-1" hx-boost="true" hx-target="#main" hx-swap="innerHTML transition:true">
+              <strong>Products</strong><span>Overview / Pricing / Changelog</span>
+            </a>
+            <a class="panel-link" href="#docs" hx-boost="true" hx-target="#main" hx-swap="innerHTML transition:true">
+              <strong>Resources</strong><span>Docs / Blog / Support</span>
+            </a>
+            <a class="panel-link" href="#trigger-link" hx-boost="true" hx-target="#main" hx-swap="innerHTML transition:true">
+              <strong>Trigger-like Link</strong><span>asChild-style link. [1]</span>
+            </a>
+            <a class="panel-link" href="#about" hx-boost="true" hx-target="#main" hx-swap="innerHTML transition:true">
+              <strong>About</strong><span>Company and team</span>
+            </a>
+          </div>
+        </nav>
+
+        <div style="height: var(--space-4)"></div>
+
+        <!-- Main content region (HTMX swap target) -->
+        <main class="content" id="main" aria-live="polite">
+          <h2>Content region</h2>
+          <p>
+            In a full app shell, navigation swaps this region using HTMX attributes like <code>hx-boost</code>,
+            <code>hx-target</code>, and <code>hx-swap</code>. [10]
+          </p>
+        </main>
+      </section>
+    </div>
+
+    <script>
+      // Theme toggle (token-driven)
+      (function () {
+        const root = document.documentElement;
+        document.getElementById("themeToggle").addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      // Navigation interactions: open/close dropdowns + basic keyboard ESC close
+      (function () {
+        const nav = document.getElementById("navRoot");
+        const reset = document.getElementById("resetState");
+        const mobileBtn = document.getElementById("mobileBtn");
+
+        function closeAll() {
+          nav.querySelectorAll(".item[data-open='true']").forEach((el) => {
+            el.setAttribute("data-open", "false");
+            const btn = el.querySelector("[data-trigger]");
+            if (btn) btn.setAttribute("aria-expanded", "false");
+          });
+        }
+
+        function toggleItem(key) {
+          const item = nav.querySelector(`.item[data-item="${key}"]`);
+          if (!item) return;
+
+          const isOpen = item.getAttribute("data-open") === "true";
+          closeAll();
+          item.setAttribute("data-open", String(!isOpen));
+          const btn = item.querySelector("[data-trigger]");
+          if (btn) btn.setAttribute("aria-expanded", String(!isOpen));
+        }
+
+        document.addEventListener("click", (evt) => {
+          const t = evt.target.closest("[data-trigger]");
+          if (t) {
+            toggleItem(t.getAttribute("data-trigger"));
+            return;
+          }
+
+          // click outside closes menus
+          if (!evt.target.closest(".nav-shell")) closeAll();
+        });
+
+        document.addEventListener("keydown", (evt) => {
+          if (evt.key === "Escape") closeAll();
+        });
+
+        // Mobile menu toggle (<768px behavior set by CSS). [2][12]
+        mobileBtn?.addEventListener("click", () => {
+          const open = nav.getAttribute("data-mobile-open") === "true";
+          nav.setAttribute("data-mobile-open", open ? "false" : "true");
+        });
+
+        reset.addEventListener("click", () => {
+          closeAll();
+          nav.setAttribute("data-mobile-open", "false");
+          document.getElementById("main").innerHTML =
+            "<h2>Content region</h2><p>Reset. Use the navigation to swap content.</p>";
+        });
+      })();
+    </script>
+  </body>
+</html>

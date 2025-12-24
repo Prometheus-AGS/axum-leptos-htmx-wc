@@ -1,0 +1,766 @@
+<!--
+HTMX Field/FieldSet demo
+- Intended to run in an iframe + Shadow DOM for isolation (HTMX/HTML artifacts). [1]
+- Uses Material 3-inspired “borderless / zones” approach: no visible borders; use surface containers. [6]
+- Theme is controlled via data-theme="light|dark" on <html>. [25]
+- Uses HTMX 2.0.8 style attributes (hx-get/hx-post/hx-target/hx-swap) + hx-indicator. [28][29]
+-->
+
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTMX Field Demo (Token + data-theme)</title>
+
+    <!-- HTMX included so this can be dropped into an HTMX app. [7] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* -----------------------------
+         DESIGN TOKENS (Material-ish)
+         - Dynamic theming via CSS custom properties. [6]
+         - All colors come from variables (tokens-first). [6]
+         - data-theme toggles the token set. [25]
+      ------------------------------*/
+
+      :root {
+        /* Primary hue can be changed at runtime for dynamic theming. [6] */
+        --primary-hue: 210;
+
+        /* Core color roles */
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+        --outline-variant: hsl(var(--primary-hue) 10% 80%);
+
+        --danger: hsl(0 75% 55%);
+        --on-danger: hsl(0 0% 100%);
+
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.12);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+        --radius-sm: 10px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Segoe UI", sans-serif;
+      }
+
+      /* Dark tokens */
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+        --outline-variant: hsl(var(--primary-hue) 10% 28%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 10px 28px rgba(0, 0, 0, 0.55);
+      }
+
+      /* -----------------------------
+         BASE
+      ------------------------------*/
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 55%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+        padding: var(--space-5);
+      }
+
+      .demo-shell {
+        width: 100%;
+        max-width: 560px;
+        margin: 0 auto;
+      }
+
+      /* “Borderless / zones” surface container (no borders). [6] */
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        margin-bottom: var(--space-4);
+      }
+
+      .title {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+      }
+
+      .subtitle {
+        margin: 6px 0 0 0;
+        color: var(--on-surface-variant);
+        font-size: 0.95rem;
+        line-height: 1.35;
+      }
+
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 12px;
+        cursor: pointer;
+        box-shadow: var(--shadow-1);
+      }
+
+      .theme-toggle:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      /* -----------------------------
+         FIELD SYSTEM (Leptos-ish boundaries in markup below)
+      ------------------------------*/
+      .field-group {
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .field-set {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        min-width: 0;
+      }
+
+      .field-legend {
+        font-weight: 650;
+        font-size: 0.98rem;
+        margin: 0 0 6px 0;
+      }
+
+      .field-description {
+        margin: 0 0 var(--space-3) 0;
+        color: var(--on-surface-variant);
+        font-size: 0.93rem;
+        line-height: 1.35;
+      }
+
+      .field-separator {
+        height: 1px;
+        border: 0;
+        background: color-mix(in oklab, var(--outline-variant) 55%, transparent);
+        margin: var(--space-2) 0;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field--horizontal {
+        grid-auto-flow: column;
+        grid-auto-columns: max-content 1fr;
+        align-items: center;
+        gap: 12px;
+        justify-content: start;
+      }
+
+      .field-label {
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+
+      .field-label--normal {
+        font-weight: 500;
+      }
+
+      .field-help {
+        margin: 0;
+        color: var(--on-surface-variant);
+        font-size: 0.88rem;
+        line-height: 1.35;
+      }
+
+      .field-error {
+        margin: 0;
+        color: var(--danger);
+        font-size: 0.88rem;
+        line-height: 1.35;
+      }
+
+      /* Inputs: borderless “filled” style (zones). [6] */
+      .control {
+        width: 100%;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        padding: 12px 12px;
+        box-shadow: var(--shadow-1);
+        outline: none;
+      }
+
+      .control::placeholder {
+        color: color-mix(in oklab, var(--on-surface-variant) 70%, transparent);
+      }
+
+      .control:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .control[aria-invalid="true"] {
+        outline: 3px solid color-mix(in oklab, var(--danger) 55%, transparent);
+        outline-offset: 2px;
+      }
+
+      .textarea {
+        min-height: 110px;
+        resize: none;
+      }
+
+      .checkbox {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+      }
+
+      /* Layout helper replacing “grid grid-cols-3 gap-4” utilities */
+      .field-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+
+      @media (max-width: 420px) {
+        .field-grid-3 {
+          grid-template-columns: 1fr;
+        }
+        .field--horizontal {
+          grid-auto-flow: row;
+          grid-auto-columns: unset;
+          align-items: start;
+        }
+      }
+
+      /* -----------------------------
+         BUTTONS
+      ------------------------------*/
+      .button-row {
+        display: flex;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+        box-shadow: var(--shadow-1);
+      }
+
+      .btn:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+
+      .btn-outline {
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+
+      /* -----------------------------
+         HTMX: loading + error feedback
+         - hx-indicator pattern. [28]
+      ------------------------------*/
+      .htmx-indicator {
+        display: none;
+      }
+      .htmx-request .htmx-indicator {
+        display: inline-flex;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 8px 10px;
+        background: var(--surface-container-high);
+        color: var(--on-surface-variant);
+        box-shadow: var(--shadow-1);
+        font-size: 0.9rem;
+      }
+
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid color-mix(in oklab, var(--on-surface-variant) 35%, transparent);
+        border-top-color: var(--primary);
+        animation: spin 0.85s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation: none;
+        }
+      }
+
+      /* Simple inline “toast-like” region for server messages */
+      .server-area {
+        margin-top: var(--space-3);
+        padding: var(--space-3);
+        border-radius: var(--radius-lg);
+        background: var(--surface-container);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+      }
+
+      .server-area[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="demo-shell">
+      <div class="zone">
+        <div class="title-row">
+          <div>
+            <h1 class="title">Field / FieldSet (HTMX + tokens)</h1>
+            <p class="subtitle">
+              Demonstrates token-based styling, <code>data-theme</code> switching, and HTMX form posting with loading + error regions. [28][29]
+            </p>
+          </div>
+
+          <button
+            class="theme-toggle"
+            type="button"
+            id="themeToggle"
+            aria-label="Toggle theme"
+          >
+            <span aria-hidden="true">Theme</span>
+            <strong id="themeLabel">light</strong>
+          </button>
+        </div>
+
+        <!--
+          Example usage #1: HTMX form post
+          - hx-post on the form, target a result region, swap innerHTML. [28]
+          - hx-indicator for loading feedback. [28]
+        -->
+        <!-- <Form> -->
+        <form
+          hx-post="/checkout"
+          hx-target="#checkoutResult"
+          hx-swap="innerHTML"
+          hx-indicator="#checkoutIndicator"
+        >
+          <!-- <FieldGroup> -->
+          <div class="field-group">
+            <!-- <FieldSet> -->
+            <fieldset class="field-set">
+              <!-- <FieldLegend> -->
+              <legend class="field-legend">Payment Method</legend>
+              <!-- </FieldLegend> -->
+
+              <!-- <FieldDescription> -->
+              <p class="field-description">
+                All transactions are secure and encrypted.
+              </p>
+              <!-- </FieldDescription> -->
+
+              <!-- <FieldGroup> -->
+              <div class="field-group">
+                <!-- <Field> -->
+                <div class="field">
+                  <!-- <FieldLabel> -->
+                  <label class="field-label" for="checkout-card-name">
+                    Name on Card
+                  </label>
+                  <!-- </FieldLabel> -->
+
+                  <!-- <Input> -->
+                  <input
+                    class="control"
+                    id="checkout-card-name"
+                    name="card_name"
+                    placeholder="Evil Rabbit"
+                    required
+                    aria-describedby="checkout-card-name__help checkout-card-name__error"
+                  />
+                  <!-- </Input> -->
+
+                  <!-- <FieldDescription> -->
+                  <p id="checkout-card-name__help" class="field-help">
+                    Enter the full name shown on your card.
+                  </p>
+                  <!-- </FieldDescription> -->
+
+                  <!-- <FieldError> (server can return this populated) -->
+                  <p id="checkout-card-name__error" class="field-error" hidden>
+                    Name is required.
+                  </p>
+                  <!-- </FieldError> -->
+                </div>
+                <!-- </Field> -->
+
+                <!-- <Field> -->
+                <div class="field">
+                  <!-- <FieldLabel> -->
+                  <label class="field-label" for="checkout-card-number">
+                    Card Number
+                  </label>
+                  <!-- </FieldLabel> -->
+
+                  <!-- <Input> -->
+                  <input
+                    class="control"
+                    id="checkout-card-number"
+                    name="card_number"
+                    placeholder="1234 5678 9012 3456"
+                    required
+                    inputmode="numeric"
+                    autocomplete="cc-number"
+                    aria-describedby="checkout-card-number__help checkout-card-number__error"
+                  />
+                  <!-- </Input> -->
+
+                  <!-- <FieldDescription> -->
+                  <p id="checkout-card-number__help" class="field-help">
+                    Enter your 16-digit card number.
+                  </p>
+                  <!-- </FieldDescription> -->
+
+                  <!-- <FieldError> -->
+                  <p id="checkout-card-number__error" class="field-error" hidden>
+                    Card number must be 16 digits.
+                  </p>
+                  <!-- </FieldError> -->
+                </div>
+                <!-- </Field> -->
+
+                <!-- Layout container (could be a Leptos component too) -->
+                <div class="field-grid-3">
+                  <!-- <Field> -->
+                  <div class="field">
+                    <label class="field-label" for="checkout-exp-month">
+                      Month
+                    </label>
+                    <select
+                      class="control"
+                      id="checkout-exp-month"
+                      name="exp_month"
+                      required
+                      aria-describedby="checkout-exp-month__help checkout-exp-month__error"
+                    >
+                      <option value="" selected disabled>MM</option>
+                      <option value="01">01</option>
+                      <option value="02">02</option>
+                      <option value="03">03</option>
+                      <option value="04">04</option>
+                      <option value="05">05</option>
+                      <option value="06">06</option>
+                      <option value="07">07</option>
+                      <option value="08">08</option>
+                      <option value="09">09</option>
+                      <option value="10">10</option>
+                      <option value="11">11</option>
+                      <option value="12">12</option>
+                    </select>
+                    <p id="checkout-exp-month__help" class="field-help">
+                      Expiry month.
+                    </p>
+                    <p id="checkout-exp-month__error" class="field-error" hidden>
+                      Select a month.
+                    </p>
+                  </div>
+                  <!-- </Field> -->
+
+                  <!-- <Field> -->
+                  <div class="field">
+                    <label class="field-label" for="checkout-exp-year">
+                      Year
+                    </label>
+                    <select
+                      class="control"
+                      id="checkout-exp-year"
+                      name="exp_year"
+                      required
+                      aria-describedby="checkout-exp-year__help checkout-exp-year__error"
+                    >
+                      <option value="" selected disabled>YYYY</option>
+                      <option value="2024">2024</option>
+                      <option value="2025">2025</option>
+                      <option value="2026">2026</option>
+                      <option value="2027">2027</option>
+                      <option value="2028">2028</option>
+                      <option value="2029">2029</option>
+                    </select>
+                    <p id="checkout-exp-year__help" class="field-help">
+                      Expiry year.
+                    </p>
+                    <p id="checkout-exp-year__error" class="field-error" hidden>
+                      Select a year.
+                    </p>
+                  </div>
+                  <!-- </Field> -->
+
+                  <!-- <Field> -->
+                  <div class="field">
+                    <label class="field-label" for="checkout-cvv">CVV</label>
+                    <input
+                      class="control"
+                      id="checkout-cvv"
+                      name="cvv"
+                      placeholder="123"
+                      required
+                      inputmode="numeric"
+                      autocomplete="cc-csc"
+                      aria-describedby="checkout-cvv__help checkout-cvv__error"
+                    />
+                    <p id="checkout-cvv__help" class="field-help">
+                      3–4 digit security code.
+                    </p>
+                    <p id="checkout-cvv__error" class="field-error" hidden>
+                      CVV must be 3–4 digits.
+                    </p>
+                  </div>
+                  <!-- </Field> -->
+                </div>
+              </div>
+              <!-- </FieldGroup> -->
+            </fieldset>
+            <!-- </FieldSet> -->
+
+            <!-- <FieldSeparator> -->
+            <hr class="field-separator" />
+            <!-- </FieldSeparator> -->
+
+            <!-- <FieldSet> -->
+            <fieldset class="field-set">
+              <legend class="field-legend">Billing Address</legend>
+              <p class="field-description">
+                The billing address associated with your payment method.
+              </p>
+
+              <div class="field-group">
+                <!-- <Field orientation="horizontal"> -->
+                <div class="field field--horizontal">
+                  <input
+                    class="checkbox"
+                    type="checkbox"
+                    id="checkout-same-as-shipping"
+                    name="same_as_shipping"
+                    checked
+                  />
+                  <label
+                    class="field-label field-label--normal"
+                    for="checkout-same-as-shipping"
+                  >
+                    Same as shipping address
+                  </label>
+                </div>
+                <!-- </Field> -->
+              </div>
+            </fieldset>
+            <!-- </FieldSet> -->
+
+            <!-- <FieldSet> -->
+            <fieldset class="field-set">
+              <div class="field-group">
+                <!-- <Field> -->
+                <div class="field">
+                  <label class="field-label" for="checkout-comments">
+                    Comments
+                  </label>
+                  <textarea
+                    class="control textarea"
+                    id="checkout-comments"
+                    name="comments"
+                    placeholder="Add any additional comments"
+                    aria-describedby="checkout-comments__help"
+                  ></textarea>
+                  <p id="checkout-comments__help" class="field-help">
+                    Optional. Don’t include sensitive card details.
+                  </p>
+                </div>
+                <!-- </Field> -->
+              </div>
+            </fieldset>
+            <!-- </FieldSet> -->
+
+            <!-- <Field orientation="horizontal"> -->
+            <div class="button-row">
+              <button class="btn btn-primary" type="submit">
+                Submit
+              </button>
+
+              <button class="btn btn-outline" type="button">
+                Cancel
+              </button>
+
+              <!-- Loading indicator hooked up via hx-indicator. [28] -->
+              <span id="checkoutIndicator" class="status-pill htmx-indicator">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Submitting…</span>
+              </span>
+            </div>
+            <!-- </Field> -->
+          </div>
+          <!-- </FieldGroup> -->
+        </form>
+        <!-- </Form> -->
+
+        <!-- Result target (server can return a fragment here) -->
+        <div id="checkoutResult" class="server-area" hidden></div>
+
+        <!--
+          Example usage #2: Minimal “load content into a target div” button pattern. [28]
+          This is intentionally simple and shows hx-get + hx-target + hx-swap + hx-indicator. [28]
+        -->
+        <div style="height: var(--space-4)"></div>
+
+        <div class="field-group">
+          <button
+            class="btn btn-outline"
+            type="button"
+            hx-get="/pricing-fragment"
+            hx-target="#pricingTarget"
+            hx-swap="innerHTML"
+            hx-indicator="#pricingIndicator"
+          >
+            Load Pricing Info (hx-get)
+          </button>
+
+          <span id="pricingIndicator" class="status-pill htmx-indicator">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Loading…</span>
+          </span>
+
+          <div id="pricingTarget" class="server-area">
+            <strong>Pricing info:</strong>
+            <div style="margin-top: 8px; color: var(--on-surface-variant);">
+              Click “Load Pricing Info” to fetch a server fragment into this region.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Theme switching using data-theme on the root element (html). [25]
+      (function () {
+        const root = document.documentElement;
+        const btn = document.getElementById("themeToggle");
+        const label = document.getElementById("themeLabel");
+
+        function setTheme(next) {
+          root.setAttribute("data-theme", next);
+          label.textContent = next;
+        }
+
+        btn.addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          setTheme(current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      // Optional: show server result region when HTMX swaps content into it.
+      document.body.addEventListener("htmx:afterSwap", function (evt) {
+        const target = evt.detail && evt.detail.target;
+        if (target && target.id === "checkoutResult") {
+          target.hidden = false;
+        }
+      });
+
+      // Optional: basic error feedback hook (server should return an error fragment ideally). [28]
+      document.body.addEventListener("htmx:responseError", function (evt) {
+        const checkoutResult = document.getElementById("checkoutResult");
+        checkoutResult.hidden = false;
+        checkoutResult.innerHTML =
+          "<strong>Request failed.</strong><div style='margin-top:8px;color:var(--on-surface-variant)'>Check your connection and try again.</div>";
+      });
+    </script>
+
+    <!--
+      SERVER FRAGMENT EXAMPLES (what your backend would return)
+      These are examples only; HTMX expects HTML fragments from endpoints. [28]
+    -->
+
+    <!-- Example: response for POST /checkout (success)
+    <div>
+      <strong>Payment submitted.</strong>
+      <div style="margin-top: 8px; color: var(--on-surface-variant);">
+        Thanks! Your payment method was saved.
+      </div>
+    </div>
+    -->
+
+    <!-- Example: response for POST /checkout (validation errors) [28]
+    <div>
+      <strong>Please fix the highlighted fields.</strong>
+      <div style="margin-top: 8px; color: var(--on-surface-variant);">
+        Card number looks invalid.
+      </div>
+    </div>
+
+    And (optionally) your server could return an out-of-band fragment to update a field error:
+    <p id="checkout-card-number__error" class="field-error" hx-swap-oob="true">
+      Card number must be 16 digits.
+    </p>
+    -->
+  </body>
+</html>

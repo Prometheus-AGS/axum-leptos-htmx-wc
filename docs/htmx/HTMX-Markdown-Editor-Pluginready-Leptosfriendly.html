@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTMX Markdown Editor (Plugin-ready, Leptos-friendly)</title>
+
+    <!-- HTMX is included so this file can be dropped into an HTMX app. [7] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <!-- Optional integrations (enabled/disabled via config below):
+         - Marked.js: markdown rendering [8][10]
+         - Highlight.js: code syntax highlighting [8][10]
+         - Mermaid.js: diagram rendering [8][10]
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.2.0/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <style>
+      /* ============================================================
+         Material Zones + Borderless (no borders) [6]
+         Dynamic theming via CSS custom properties [6]
+         Responsive breakpoint at 768px [6]
+      ============================================================ */
+      :root {
+        --primary-hue: 210;
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.58);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+
+      html[data-theme="light"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(circle at top left, var(--surface-container-lowest) 0%, var(--surface-container) 60%, #000 140%);
+        padding: var(--space-5);
+      }
+
+      .shell { max-width: 1160px; margin: 0 auto; display: grid; gap: var(--space-4); }
+
+      .zone {
+        background: var(--surface-container-low);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+      }
+
+      .row { display:flex; flex-wrap:wrap; gap: var(--space-3); align-items:center; justify-content:space-between; }
+
+      h1 { margin: 0; font-size: 1.1rem; font-weight: 950; letter-spacing: .2px; }
+      .subtitle { margin: 8px 0 0 0; color: var(--on-surface-variant); line-height: 1.35; }
+
+      .btn {
+        border: 0; /* borderless [6] */
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: var(--shadow-1);
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+      .btn-primary { background: var(--primary); color: var(--on-primary); }
+      .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .pill {
+        display:inline-flex; align-items:center; gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: var(--surface-container-high);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+        font-weight: 800;
+        font-size: 0.92rem;
+      }
+
+      /* ============================================================
+         Editor layout (two-pane shell pattern) [12]
+      ============================================================ */
+      .editor-shell {
+        background: var(--surface-container-high);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-1);
+        overflow: clip;
+      }
+
+      .toolbar {
+        display:flex;
+        flex-wrap:wrap;
+        gap: 8px;
+        align-items:center;
+        justify-content: space-between;
+        padding: 12px;
+        background: color-mix(in oklab, var(--surface-container-high) 75%, transparent);
+      }
+
+      .toolbar-left { display:flex; flex-wrap:wrap; gap: 8px; align-items:center; }
+      .toolbar-right { display:flex; flex-wrap:wrap; gap: 8px; align-items:center; justify-content:flex-end; }
+
+      .toolbtn {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 10px;
+        min-width: 40px;
+        cursor: pointer;
+        font-weight: 900;
+        background: var(--surface-container);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+      }
+      .toolbtn:hover { background: color-mix(in oklab, var(--surface-container) 80%, transparent); }
+      .toolbtn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .panes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 520px; /* matches config idea [9] */
+      }
+
+      .pane {
+        padding: 12px;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 10px;
+      }
+
+      .pane-title { font-weight: 950; letter-spacing: .2px; }
+      .muted { color: var(--on-surface-variant); font-weight: 750; font-size: 0.92rem; }
+
+      textarea.editor {
+        width: 100%;
+        height: 100%;
+        resize: none;
+        border: 0;
+        outline: none;
+        border-radius: 16px;
+        padding: 14px;
+        background: var(--surface-container-low);
+        color: var(--on-surface);
+        box-shadow: var(--shadow-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.98rem;
+        line-height: 1.5;
+      }
+      textarea.editor:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+      .preview {
+        border-radius: 16px;
+        padding: 14px;
+        background: var(--surface-container-low);
+        box-shadow: var(--shadow-1);
+        overflow: auto;
+      }
+
+      /* basic markdown preview styling */
+      .preview h1, .preview h2, .preview h3 { margin: 0.8em 0 0.3em; }
+      .preview p { margin: 0.6em 0; color: var(--on-surface); }
+      .preview code { background: color-mix(in oklab, var(--surface-container-high) 70%, transparent); padding: 2px 6px; border-radius: 8px; }
+      .preview pre { padding: 12px; border-radius: 14px; overflow:auto; background: #0b1220; }
+      .preview pre code { background: transparent; padding: 0; }
+
+      /* Responsive: stack panes on mobile <768px [6] */
+      @media (max-width: 768px) {
+        .panes { grid-template-columns: 1fr; }
+      }
+
+      /* If preview is off, make it single pane */
+      .editor-shell[data-preview="none"] .panes { grid-template-columns: 1fr; }
+      .editor-shell[data-preview="none"] .pane-preview { display: none; }
+      .editor-shell[data-preview="bottom"] .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <section class="zone">
+        <div class="row">
+          <div>
+            <h1>Markdown Editor (HTMX + vanilla JS, plugin-ready)</h1>
+            <p class="subtitle">
+              Markdown is the single source of truth; UI is textarea + toolbar + optional marked preview; optional Mermaid/SVG/Highlight.js supported. [8][10]
+            </p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" type="button" id="themeToggle">Toggle Theme</button>
+            <button class="btn btn-primary" type="button" id="demoFill">Load Demo</button>
+          </div>
+        </div>
+
+        <div style="height: var(--space-4)"></div>
+
+        <!-- ============================================================
+             MarkdownEditorRoot (Leptos boundary)
+             Suggested props based on the reference parameter object: [9]
+               - editor_id: String
+               - field_name: String (name attribute for hidden textarea) [12]
+               - label: String
+               - description: String
+               - initial_markdown: String [12]
+               - toolbar_features: Vec<String> [9][12]
+               - layout_preview_pane: "right" | "bottom" | "none" [9][12]
+               - integrations: { use_marked, use_mermaid, use_highlight_js } [9][12]
+               - htmx_integration: { enabled, post_url, post_method, post_on, extra_fields... } [9][12]
+               - plugins: Vec<MarkdownPlugin> (see JS plugin interface below) [8][12]
+        ============================================================ -->
+
+        <!-- HTMX integration: wrap in a <form> when enabled and configure hx-post/hx-method + extra hidden fields. [12] -->
+        <form id="mdForm"
+              hx-post="/api/save-markdown"
+              hx-method="POST"
+              hx-swap="none"
+              style="display:grid; gap: var(--space-3);">
+
+          <!-- extraFields example (Leptos prop -> hidden input) [9][12] -->
+          <input type="hidden" name="documentId" value="demo-123" />
+
+          <div class="editor-shell" id="mdEditor"
+               data-editor-id="article_body_editor"
+               data-preview="right">
+
+            <!-- ============================================================
+                 Toolbar (Leptos boundary)
+                 - Render buttons based on toolbarFeatures [12]
+                 - Buttons manipulate the markdown string (wrap selection / insert blocks). [8]
+            ============================================================ -->
+            <div class="toolbar" role="toolbar" aria-label="Markdown editor toolbar">
+              <div class="toolbar-left" id="toolbarLeft"></div>
+
+              <div class="toolbar-right">
+                <span class="pill">Preview: <strong id="previewModeLabel">right</strong></span>
+                <button class="btn" type="button" id="togglePreview">Toggle Preview</button>
+
+                <!-- Submit can be HTMX-triggered (postOn="button") [9] -->
+                <button class="btn btn-primary" type="submit" id="saveBtn">Save</button>
+              </div>
+            </div>
+
+            <div class="panes">
+              <!-- ============================================================
+                   Editor Pane (Leptos boundary)
+                   - Textarea is the source of truth. [8]
+                   - Hidden textarea fieldName also set for HTMX post. [8][12]
+              ============================================================ -->
+              <section class="pane pane-editor">
+                <div>
+                  <div class="pane-title">Editor</div>
+                  <div class="muted" id="desc">Markdown content for this post.</div>
+                </div>
+
+                <!-- Visual surface -->
+                <textarea class="editor" id="mdInput" placeholder="Write your content here..."></textarea>
+
+                <!-- Hidden field required by spec: name=fieldName [8][12] -->
+                <textarea id="mdHiddenField" name="body" style="display:none;"></textarea>
+              </section>
+
+              <!-- ============================================================
+                   Preview Pane (Leptos boundary)
+                   - Only render if previewPane != "none". [12]
+                   - Render markdown -> HTML via marked. [8]
+              ============================================================ -->
+              <section class="pane pane-preview">
+                <div>
+                  <div class="pane-title">Preview</div>
+                  <div class="muted">Rendered with marked; plugins can post-process (mermaid, highlight). [8][10]</div>
+                </div>
+                <div class="preview" id="mdPreview" aria-live="polite"></div>
+              </section>
+            </div>
+          </div>
+        </form>
+
+        <p class="subtitle" style="margin-top: var(--space-4);">
+          Design system: avoid borders (use zones), Material 3 tokens via CSS custom properties, and responsive behavior at &lt;768px. [6]
+        </p>
+      </section>
+    </div>
+
+    <script>
+      /* ============================================================
+         CONFIG (maps to the parameter object described in the reference) [9]
+         In Leptos: these become component props.
+      ============================================================ */
+      const config = {
+        editorId: "article_body_editor",
+        fieldName: "body",
+        label: "Body",
+        description: "Markdown content for this post.",
+        initialMarkdown: "",
+        placeholder: "Write your content here...",
+        toolbarFeatures: ["h1","h2","bold","italic","inline-code","code-block","bullet-list","quote","mermaid","svg"],
+        layout: { previewPane: "right" }, // right | bottom | none [9][12]
+        integrations: { useMarked: true, useMermaid: true, useHighlightJs: true }, // [9][12]
+        htmxIntegration: { enabled: true, postUrl: "/api/save-markdown", postMethod: "POST", postOn: "button" } // [9]
+      };
+
+      /* ============================================================
+         Minimal plugin system (HTMX-friendly, vanilla JS)
+         - Toolbar plugins: contribute buttons, enabled by toolbarFeatures. [12]
+         - Preview plugins: post-process rendered HTML (mermaid/highlight). [8][12]
+      ============================================================ */
+      function createPluginHost() {
+        const toolbarButtons = [];
+        const previewHooks = [];
+        return {
+          registerToolbarButton(btn) { toolbarButtons.push(btn); },
+          registerPreviewHook(hook) { previewHooks.push(hook); },
+          getToolbarButtons() { return toolbarButtons; },
+          getPreviewHooks() { return previewHooks; },
+        };
+      }
+
+      const pluginHost = createPluginHost();
+
+      /* ---- Built-in “plugins” for optional integrations ---- */
+
+      // Highlight.js preview hook (optional) [8][10]
+      pluginHost.registerPreviewHook(async (ctx) => {
+        if (!config.integrations.useHighlightJs) return;
+        if (!window.hljs) return;
+        ctx.previewEl.querySelectorAll("pre code").forEach((block) => window.hljs.highlightElement(block));
+      });
+
+      // Mermaid preview hook (optional) [8][10]
+      pluginHost.registerPreviewHook(async (ctx) => {
+        if (!config.integrations.useMermaid) return;
+        if (!window.mermaid) return;
+
+        // Replace ```mermaid fenced blocks: we rely on marked output being <pre><code class="language-mermaid">...</code></pre>
+        const mermaidBlocks = Array.from(ctx.previewEl.querySelectorAll("pre code.language-mermaid"));
+        if (mermaidBlocks.length === 0) return;
+
+        // Initialize once
+        window.mermaid.initialize({ startOnLoad: false });
+
+        for (const codeEl of mermaidBlocks) {
+          const source = codeEl.textContent || "";
+          const wrapper = document.createElement("div");
+          wrapper.className = "mermaid";
+          wrapper.textContent = source;
+
+          const pre = codeEl.closest("pre");
+          pre.replaceWith(wrapper);
+        }
+
+        // Let Mermaid render after DOM changes
+        try { await window.mermaid.run({ querySelector: ".mermaid" }); } catch (e) { /* keep graceful */ }
+      });
+
+      /* ============================================================
+         Toolbar commands (must manipulate underlying markdown string) [<sup data-citation='{&quot;id&quot;:8,&quot;url&quot;:&quot;http://file/c4b94ad8-8207-48da-ac3b-aa33d9cef14f.md&quot;,&quot;title&quot;:&quot;HTMX Markdown Editor Prompting.md&quot;,&quot;content&quot;:&quot;behavior The editor must treat markdown as the single source of truth The UI consists of: A textarea or contenteditable surface for markdown input A toolbar with configurable buttons based on toolbarF&quot;}'>8</sup>](http://file/c4b94ad8-8207-48da-ac3b-aa33d9cef14f.md)
+      ============================================================ */
+      function withSelection(textarea, fn) {
+        const start = textarea.selectionStart ?? 0;
+        const end = textarea.selectionEnd ?? 0;
+        const before = textarea.value.slice(0, start);
+        const sel = textarea.value.slice(start, end);
+        const after = textarea.value.slice(end);
+        const result = fn({ before, sel, after, start, end });
+        textarea.value = result.value;
+        textarea.focus();
+        textarea.selectionStart = result.selectionStart;
+        textarea.selectionEnd = result.selectionEnd;
+      }
+
+      const commands = {
+        wrap: (ta, left, right = left) => withSelection(ta, ({ before, sel, after, start }) => {
+          const value = before + left + sel + right + after;
+          const selectionStart = start + left.length;
+          const selectionEnd = selectionStart + sel.length;
+          return { value, selectionStart, selectionEnd };
+        }),
+        insertLine: (ta, line) => withSelection(ta, ({ before, sel, after, start }) => {
+          const prefix = before.endsWith("\n") || before.length === 0 ? "" : "\n";
+          const value = before + prefix + line + "\n" + sel + after;
+          const cursor = start + prefix.length + line.length + 1;
+          return { value, selectionStart: cursor, selectionEnd: cursor };
+        }),
+      };
+
+      /* ============================================================
+         Toolbar button registry (feature gated by toolbarFeatures) [<sup data-citation='{&quot;id&quot;:12,&quot;url&quot;:&quot;http://file/c4b94ad8-8207-48da-ac3b-aa33d9cef14f.md&quot;,&quot;title&quot;:&quot;HTMX Markdown Editor Prompting.md&quot;,&quot;content&quot;:&quot;function names Use fieldName as the name attribute for the markdown field Use initialMarkdown as the initial textarea content Enable or disable toolbar buttons based on toolbarFeatures Only render a p&quot;}'>12</sup>](http://file/c4b94ad8-8207-48da-ac3b-aa33d9cef14f.md)
+      ============================================================ */
+      function registerDefaultToolbarButtons() {
+        const ta = document.getElementById("mdInput");
+
+        const defs = [
+          { key: "h1", label: "H1", run: () => commands.insertLine(ta, "# ") },
+          { key: "h2", label: "H2", run: () => commands.insertLine(ta, "## ") },
+          { key: "bold", label: "B", run: () => commands.wrap(ta, "**") },
+          { key: "italic", label: "I", run: () => commands.wrap(ta, "*") },
+          { key: "inline-code", label: "<>", run: () => commands.wrap(ta, "`") },
+          { key: "code-block", label: "```", run: () => commands.insertLine(ta, "```js\n\n```") },
+          { key: "bullet-list", label: "•", run: () => commands.insertLine(ta, "- ") },
+          { key: "quote", label: "❝", run: () => commands.insertLine(ta, "> ") },
+          { key: "mermaid", label: "M", run: () => commands.insertLine(ta, "```mermaid\ngraph TD\n  A-->B\n```") },
+          { key: "svg", label: "SVG", run: () => commands.insertLine(ta, "```svg\n<svg width=\"120\" height=\"80\" xmlns=\"http://www.w3.org/2000/svg\">\n  <rect x=\"10\" y=\"10\" width=\"100\" height=\"60\" rx=\"10\" fill=\"#3b82f6\" />\n</svg>\n```") },
+        ];
+
+        defs.forEach((d) => {
+          if (config.toolbarFeatures.includes(d.key)) {
+            pluginHost.registerToolbarButton(d);
+          }
+        });
+      }
+
+      /* ============================================================
+         Rendering pipeline
+         - Markdown -> HTML via marked (optional) [8]
+         - Run preview hooks (mermaid/highlight plugins) [8][10]
+         - Keep hidden field in sync for HTMX posting [8][12]
+      ============================================================ */
+      async function render() {
+        const input = document.getElementById("mdInput");
+        const hidden = document.getElementById("mdHiddenField");
+        const preview = document.getElementById("mdPreview");
+
+        // source of truth: textarea [8]
+        hidden.value = input.value; // ensure form posts the markdown fieldName [8][12]
+
+        if (document.getElementById("mdEditor").getAttribute("data-preview") === "none") return;
+
+        if (!config.integrations.useMarked || !window.marked) {
+          preview.textContent = input.value;
+          return;
+        }
+
+        preview.innerHTML = window.marked.parse(input.value);
+
+        const ctx = { markdown: input.value, previewEl: preview };
+        for (const hook of pluginHost.getPreviewHooks()) {
+          try { await hook(ctx); } catch (e) { /* graceful */ }
+        }
+      }
+
+      function mountToolbar() {
+        const left = document.getElementById("toolbarLeft");
+        left.innerHTML = "";
+        for (const btn of pluginHost.getToolbarButtons()) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "toolbtn";
+          b.textContent = btn.label;
+          b.setAttribute("data-feature", btn.key);
+          b.addEventListener("click", () => {
+            btn.run();
+            render();
+            // standardized event hook (artifact pattern) [3]
+            document.dispatchEvent(new CustomEvent("md:toolbar", { detail: { editorId: config.editorId, feature: btn.key } }));
+          });
+          left.appendChild(b);
+        }
+      }
+
+      function setLayout(mode) {
+        const root = document.getElementById("mdEditor");
+        root.setAttribute("data-preview", mode);
+        document.getElementById("previewModeLabel").textContent = mode;
+        render();
+      }
+
+      // Theme toggle (token-driven)
+      document.getElementById("themeToggle").addEventListener("click", () => {
+        const root = document.documentElement;
+        const current = root.getAttribute("data-theme") || "dark";
+        root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+      });
+
+      // Toggle preview layout: right -> bottom -> none -> right [9][12]
+      document.getElementById("togglePreview").addEventListener("click", () => {
+        const current = document.getElementById("mdEditor").getAttribute("data-preview") || "right";
+        const next = current === "right" ? "bottom" : current === "bottom" ? "none" : "right";
+        setLayout(next);
+      });
+
+      // Demo content
+      document.getElementById("demoFill").addEventListener("click", () => {
+        const ta = document.getElementById("mdInput");
+        ta.value =
+`# HTMX Markdown Editor
+
+This editor treats **markdown as the single source of truth**. [8]
+
+## Code
+\`\`\`js
+console.log("hello");
+\`\`\`
+
+## Mermaid
+\`\`\`mermaid
+graph TD
+  A[Write markdown] --> B[Preview]
+  B --> C[HTMX post]
+\`\`\`
+`;
+        render();
+      });
+
+      // Input -> render (debounce-lite)
+      let t = null;
+      document.getElementById("mdInput").addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(render, 80);
+      });
+
+      // Apply config onto DOM (Leptos would do this in view)
+      (function initFromConfig() {
+        const editor = document.getElementById("mdEditor");
+        editor.setAttribute("data-editor-id", config.editorId);
+        editor.setAttribute("data-preview", config.layout.previewPane); // [9][12]
+        document.getElementById("desc").textContent = config.description;
+        const input = document.getElementById("mdInput");
+        input.placeholder = config.placeholder || "";
+        input.value = config.initialMarkdown || ""; // [12]
+        document.getElementById("mdHiddenField").setAttribute("name", config.fieldName); // [12]
+        document.getElementById("previewModeLabel").textContent = config.layout.previewPane;
+
+        // HTMX integration wiring (hx-post, hx-method, extra fields) [12]
+        const form = document.getElementById("mdForm");
+        if (config.htmxIntegration?.enabled) {
+          form.setAttribute("hx-post", config.htmxIntegration.postUrl);
+          form.setAttribute("hx-method", config.htmxIntegration.postMethod);
+        }
+
+        registerDefaultToolbarButtons();
+        mountToolbar();
+        render();
+      })();
+    </script>
+  </body>
+</html>

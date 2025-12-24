@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sidebar (shadcn/ui structure) - HTMLX artifact</title>
+
+    <!-- Optional: HTMX present because this is an HTML/HTMX artifact class of output. [1] -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         TOKENS (Material-ish + Zones)
+         - Borderless: use surface containers, not borders. [2][6]
+         - Dynamic theming via CSS custom properties. [2]
+         - Theme controlled via data-theme attribute (light/dark). [2]
+      ============================================================ */
+
+      :root {
+        --primary-hue: 210;
+
+        --primary: hsl(var(--primary-hue) 60% 50%);
+        --on-primary: hsl(var(--primary-hue) 100% 98%);
+
+        --surface-container-lowest: hsl(var(--primary-hue) 8% 98%);
+        --surface-container-low: hsl(var(--primary-hue) 10% 96%);
+        --surface-container: hsl(var(--primary-hue) 12% 94%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 92%);
+
+        --on-surface: hsl(var(--primary-hue) 15% 14%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 35%);
+
+        --danger: hsl(0 75% 55%);
+        --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.14);
+
+        --radius-xl: 20px;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+
+      html[data-theme="dark"] {
+        --surface-container-lowest: hsl(var(--primary-hue) 10% 8%);
+        --surface-container-low: hsl(var(--primary-hue) 11% 10%);
+        --surface-container: hsl(var(--primary-hue) 12% 12%);
+        --surface-container-high: hsl(var(--primary-hue) 14% 16%);
+
+        --on-surface: hsl(var(--primary-hue) 18% 92%);
+        --on-surface-variant: hsl(var(--primary-hue) 10% 70%);
+
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-2: 0 14px 36px rgba(0, 0, 0, 0.58);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font);
+        color: var(--on-surface);
+        background: radial-gradient(
+          circle at top left,
+          var(--surface-container-lowest) 0%,
+          var(--surface-container) 60%,
+          hsl(var(--primary-hue) 10% 6%) 120%
+        );
+      }
+
+      /* ============================================================
+         APP LAYOUT
+         - This mirrors the docs idea: Sidebar + main content.
+         - If using "inset" variant, main content should be wrapped
+           in SidebarInset. [1]
+      ============================================================ */
+
+      .app-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: auto 1fr;
+      }
+
+      /* Mobile: collapse sidebar into offcanvas overlay feel */
+      @media (max-width: 900px) {
+        .app-shell {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ============================================================
+         SIDEBAR PROVIDER (state via data attributes)
+         - In shadcn, SidebarProvider handles collapsible state. [1]
+         - Here we model it with data-sidebar-state:
+           "expanded" | "collapsed" and data-sidebar-open for mobile.
+      ============================================================ */
+
+      .sidebar-provider {
+        --sidebar-width: 288px;
+        --sidebar-width-collapsed: 72px;
+        --sidebar-z: 50;
+        position: relative;
+      }
+
+      .sidebar-provider[data-sidebar-state="expanded"] .sidebar {
+        width: var(--sidebar-width);
+      }
+
+      .sidebar-provider[data-sidebar-state="collapsed"] .sidebar {
+        width: var(--sidebar-width-collapsed);
+      }
+
+      /* Mobile offcanvas: sidebar overlays content when open */
+      @media (max-width: 900px) {
+        .sidebar {
+          position: fixed;
+          inset: 0 auto 0 0;
+          height: 100vh;
+          width: min(86vw, var(--sidebar-width)) !important;
+          transform: translateX(-105%);
+          transition: transform 200ms ease;
+          z-index: var(--sidebar-z);
+        }
+
+        .sidebar-provider[data-sidebar-open="true"] .sidebar {
+          transform: translateX(0%);
+        }
+
+        .sidebar-backdrop {
+          position: fixed;
+          inset: 0;
+          background: color-mix(in oklab, black 55%, transparent);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 200ms ease;
+          z-index: calc(var(--sidebar-z) - 1);
+        }
+
+        .sidebar-provider[data-sidebar-open="true"] .sidebar-backdrop {
+          opacity: 1;
+          pointer-events: auto;
+        }
+      }
+
+      /* ============================================================
+         SIDEBAR (container)
+         - Docs: "Sidebar - The sidebar container." [1]
+         - We keep it borderless: it's a surface "zone". [2][6]
+      ============================================================ */
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+
+        background: var(--surface-container-low);
+        box-shadow: var(--shadow-2);
+
+        /* borderless */
+        border: 0;
+      }
+
+      /* ============================================================
+         SIDEBAR HEADER / FOOTER (sticky)
+         - Docs: SidebarHeader & SidebarFooter are sticky. [1]
+      ============================================================ */
+
+      .sidebar-header,
+      .sidebar-footer {
+        position: sticky;
+        background: var(--surface-container-low);
+        padding: var(--space-4);
+        z-index: 1;
+      }
+
+      .sidebar-header {
+        top: 0;
+      }
+
+      .sidebar-footer {
+        bottom: 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: var(--primary);
+        box-shadow: var(--shadow-1);
+      }
+
+      .brand-title {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .brand-title strong {
+        font-size: 0.95rem;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .brand-title span {
+        font-size: 0.84rem;
+        color: var(--on-surface-variant);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Collapse behavior: hide text labels when collapsed */
+      .sidebar-provider[data-sidebar-state="collapsed"] .brand-title {
+        display: none;
+      }
+
+      /* ============================================================
+         SIDEBAR CONTENT (scrollable)
+         - Docs: SidebarContent is scrollable and contains groups. [1]
+      ============================================================ */
+
+      .sidebar-content {
+        padding: 0 var(--space-3) var(--space-3) var(--space-3);
+        overflow: auto;
+        flex: 1 1 auto;
+      }
+
+      /* ============================================================
+         SIDEBAR GROUP (section)
+         - Docs: SidebarGroup with Label/Content (+ optional Action). [1]
+      ============================================================ */
+
+      .sidebar-group {
+        margin-top: var(--space-4);
+      }
+
+      .sidebar-group-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: 0 var(--space-2);
+        margin-bottom: var(--space-2);
+      }
+
+      .sidebar-group-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: var(--on-surface-variant);
+      }
+
+      .sidebar-group-action {
+        border: 0;
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        border-radius: 999px;
+        padding: 8px 10px;
+        box-shadow: var(--shadow-1);
+        cursor: pointer;
+      }
+
+      .sidebar-group-action:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .sidebar-provider[data-sidebar-state="collapsed"] .sidebar-group-label {
+        display: none;
+      }
+
+      /* ============================================================
+         SIDEBAR MENU (menu list)
+         - Docs: SidebarMenu composed of SidebarMenuItem, SidebarMenuButton,
+           SidebarMenuAction, SidebarMenuSub, etc. [1]
+      ============================================================ */
+
+      .sidebar-menu {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .sidebar-menu-item {
+        display: grid;
+        gap: 6px;
+      }
+
+      .sidebar-menu-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      /* Menu button (link-like but rendered as <a> here) */
+      .sidebar-menu-button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        width: 100%;
+        text-decoration: none;
+        color: var(--on-surface);
+        background: var(--surface-container-high);
+
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-1);
+
+        /* borderless */
+        border: 0;
+      }
+
+      .sidebar-menu-button:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .sidebar-menu-button[data-active="true"] {
+        background: color-mix(in oklab, var(--primary) 18%, var(--surface-container-high));
+      }
+
+      .sidebar-icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--primary) 28%, transparent);
+        flex: 0 0 auto;
+      }
+
+      .sidebar-label {
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+      }
+
+      .sidebar-provider[data-sidebar-state="collapsed"] .sidebar-label {
+        display: none;
+      }
+
+      /* Menu action: independent click target (like docs describe). [1] */
+      .sidebar-menu-action {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        border: 0;
+        border-radius: 12px;
+        background: var(--surface-container-high);
+        color: var(--on-surface-variant);
+        box-shadow: var(--shadow-1);
+        cursor: pointer;
+      }
+
+      .sidebar-menu-action:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      /* Badge (SidebarMenuBadge concept) */
+      .sidebar-menu-badge {
+        margin-left: auto;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--primary) 22%, var(--surface-container-high));
+        color: var(--on-surface);
+      }
+
+      .sidebar-provider[data-sidebar-state="collapsed"] .sidebar-menu-badge {
+        display: none;
+      }
+
+      /* Submenu (SidebarMenuSub) */
+      .sidebar-menu-sub {
+        list-style: none;
+        margin: 0;
+        padding: 0 0 0 12px;
+        display: grid;
+        gap: 6px;
+      }
+
+      .sidebar-menu-sub a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: var(--on-surface-variant);
+        background: color-mix(in oklab, var(--surface-container-high) 70%, transparent);
+        padding: 9px 12px;
+        border-radius: 12px;
+        box-shadow: var(--shadow-1);
+      }
+
+      .sidebar-menu-sub a:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .sidebar-provider[data-sidebar-state="collapsed"] .sidebar-menu-sub {
+        display: none;
+      }
+
+      /* ============================================================
+         SIDEBAR TRIGGER (toggle button)
+         - Docs: SidebarTrigger toggles sidebar; must be within Provider. [1]
+      ============================================================ */
+
+      .sidebar-trigger {
+        border: 0;
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+        border-radius: 999px;
+        padding: 10px 12px;
+        box-shadow: var(--shadow-1);
+        cursor: pointer;
+      }
+
+      .sidebar-trigger:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      /* ============================================================
+         MAIN CONTENT + SIDEBAR INSET (for inset variant)
+         - Docs: If using inset variant, wrap main content in SidebarInset. [1]
+      ============================================================ */
+
+      .main {
+        padding: var(--space-5);
+      }
+
+      .sidebar-inset {
+        background: var(--surface-container);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        box-shadow: var(--shadow-2);
+        min-height: calc(100vh - (var(--space-5) * 2));
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        margin-bottom: var(--space-4);
+      }
+
+      .title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 750;
+        letter-spacing: 0.2px;
+      }
+
+      .muted {
+        margin: 8px 0 0 0;
+        color: var(--on-surface-variant);
+        line-height: 1.35;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: 999px;
+        padding: 10px 12px;
+        background: var(--surface-container-high);
+        box-shadow: var(--shadow-1);
+        color: var(--on-surface-variant);
+        font-size: 0.92rem;
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 750;
+        box-shadow: var(--shadow-1);
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+
+      .btn-surface {
+        background: var(--surface-container-high);
+        color: var(--on-surface);
+      }
+
+      /* Mobile: show trigger in topbar; sidebar overlays */
+      @media (max-width: 900px) {
+        .sidebar-provider {
+          grid-column: 1 / -1;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- ============================================================
+         <SidebarProvider>
+         - Handles collapsible state. [1]
+         - In this HTMLX version we model the state with:
+           data-sidebar-state="expanded|collapsed"
+           data-sidebar-open="true|false" (mobile overlay)
+         - Split point for Leptos: SidebarProvider wrapper component.
+    ============================================================ -->
+    <div
+      class="sidebar-provider"
+      id="sidebarProvider"
+      data-sidebar-state="expanded"
+      data-sidebar-open="false"
+    >
+      <!-- Backdrop for mobile offcanvas -->
+      <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+
+      <div class="app-shell">
+        <!-- ============================================================
+             <Sidebar>
+             - The sidebar container. [1]
+             - Split point for Leptos: Sidebar root component.
+        ============================================================ -->
+        <aside class="sidebar" aria-label="Application sidebar">
+          <!-- ============================================================
+               <SidebarHeader> (sticky top) [1]
+               - Split point: SidebarHeader
+          ============================================================ -->
+          <header class="sidebar-header">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
+              <div class="brand">
+                <div class="brand-mark" aria-hidden="true"></div>
+                <div class="brand-title">
+                  <strong>Acme Workspace</strong>
+                  <span>Team Plan</span>
+                </div>
+              </div>
+
+              <!-- Optional: internal sidebar collapse trigger (icon mode feel) -->
+              <button
+                type="button"
+                class="sidebar-trigger"
+                id="sidebarCollapseBtn"
+                aria-label="Toggle collapse"
+                title="Toggle collapse"
+              >
+                ⫶
+              </button>
+            </div>
+          </header>
+
+          <!-- ============================================================
+               <SidebarContent> (scrollable) [1]
+               - Split point: SidebarContent
+          ============================================================ -->
+          <div class="sidebar-content">
+            <!-- ============================================================
+                 <SidebarGroup> [1]
+                 - Has label + content + optional action. [1]
+                 - Split point: SidebarGroup
+            ============================================================ -->
+            <section class="sidebar-group" aria-label="Main navigation group">
+              <!-- <SidebarGroupLabel> + optional <SidebarGroupAction> [1] -->
+              <div class="sidebar-group-header">
+                <div class="sidebar-group-label">Navigation</div>
+                <!-- <SidebarGroupAction> -->
+                <button class="sidebar-group-action" type="button" aria-label="New item">
+                  +
+                </button>
+              </div>
+
+              <!-- <SidebarGroupContent> -->
+              <!-- ============================================================
+                   <SidebarMenu> [1]
+                   - Split point: SidebarMenu
+              ============================================================ -->
+              <ul class="sidebar-menu" aria-label="Primary menu">
+                <!-- ============================================================
+                     <SidebarMenuItem> [1]
+                     - Split point: SidebarMenuItem
+                ============================================================ -->
+                <li class="sidebar-menu-item">
+                  <div class="sidebar-menu-row">
+                    <!-- <SidebarMenuButton> (as link/anchor supported via asChild in React) [1] -->
+                    <a class="sidebar-menu-button" href="#dashboard" data-active="true">
+                      <span class="sidebar-icon" aria-hidden="true"></span>
+                      <span class="sidebar-label">Dashboard</span>
+                      <span class="sidebar-menu-badge" aria-label="Unread count">3</span>
+                    </a>
+
+                    <!-- <SidebarMenuAction> (independent from the button) [1] -->
+                    <button class="sidebar-menu-action" type="button" aria-label="Dashboard actions">
+                      ⋯
+                    </button>
+                  </div>
+
+                  <!-- Optional: <SidebarMenuSub> [1] -->
+                  <ul class="sidebar-menu-sub" aria-label="Dashboard submenu">
+                    <!-- <SidebarMenuSubItem> + <SidebarMenuSubButton> concept [1] -->
+                    <li><a href="#overview"><span class="sidebar-icon" aria-hidden="true"></span><span class="sidebar-label">Overview</span></a></li>
+                    <li><a href="#reports"><span class="sidebar-icon" aria-hidden="true"></span><span class="sidebar-label">Reports</span></a></li>
+                  </ul>
+                </li>
+
+                <li class="sidebar-menu-item">
+                  <div class="sidebar-menu-row">
+                    <a class="sidebar-menu-button" href="#projects" data-active="false">
+                      <span class="sidebar-icon" aria-hidden="true"></span>
+                      <span class="sidebar-label">Projects</span>
+                    </a>
+                    <button class="sidebar-menu-action" type="button" aria-label="Projects actions">
+                      ⋯
+                    </button>
+                  </div>
+                </li>
+
+                <li class="sidebar-menu-item">
+                  <div class="sidebar-menu-row">
+                    <a class="sidebar-menu-button" href="#settings" data-active="false">
+                      <span class="sidebar-icon" aria-hidden="true"></span>
+                      <span class="sidebar-label">Settings</span>
+                    </a>
+                    <button class="sidebar-menu-action" type="button" aria-label="Settings actions">
+                      ⋯
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Another group -->
+            <section class="sidebar-group" aria-label="Secondary navigation group">
+              <div class="sidebar-group-header">
+                <div class="sidebar-group-label">Workspace</div>
+              </div>
+
+              <ul class="sidebar-menu" aria-label="Workspace menu">
+                <li class="sidebar-menu-item">
+                  <div class="sidebar-menu-row">
+                    <a class="sidebar-menu-button" href="#members">
+                      <span class="sidebar-icon" aria-hidden="true"></span>
+                      <span class="sidebar-label">Members</span>
+                    </a>
+                    <button class="sidebar-menu-action" type="button" aria-label="Members actions">
+                      ⋯
+                    </button>
+                  </div>
+                </li>
+
+                <li class="sidebar-menu-item">
+                  <div class="sidebar-menu-row">
+                    <a class="sidebar-menu-button" href="#billing">
+                      <span class="sidebar-icon" aria-hidden="true"></span>
+                      <span class="sidebar-label">Billing</span>
+                    </a>
+                    <button class="sidebar-menu-action" type="button" aria-label="Billing actions">
+                      ⋯
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </div>
+
+          <!-- ============================================================
+               <SidebarFooter> (sticky bottom) [1]
+               - Split point: SidebarFooter
+          ============================================================ -->
+          <footer class="sidebar-footer">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
+              <div style="min-width:0;">
+                <div style="font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  Evil Rabbit
+                </div>
+                <div style="color:var(--on-surface-variant); font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  evil@rabbit.dev
+                </div>
+              </div>
+              <button class="btn btn-surface" type="button">Sign out</button>
+            </div>
+          </footer>
+        </aside>
+
+        <!-- ============================================================
+             MAIN CONTENT AREA
+             - If using shadcn Sidebar variant="inset", wrap with SidebarInset. [1]
+             - Split point: SidebarInset wrapper component.
+        ============================================================ -->
+        <main class="main">
+          <!-- <SidebarInset> -->
+          <div class="sidebar-inset">
+            <div class="topbar">
+              <div style="display:grid; gap: 6px;">
+                <h1 class="title">Main content</h1>
+                <p class="muted">
+                  This area is wrapped in <code>SidebarInset</code> for the “inset” sidebar variant concept. [1]
+                </p>
+              </div>
+
+              <div style="display:flex; gap: 10px; align-items:center;">
+                <!-- ============================================================
+                     <SidebarTrigger> [1]
+                     - In docs: Trigger for the Sidebar; used within SidebarProvider. [1]
+                     - Split point: SidebarTrigger component.
+                ============================================================ -->
+                <button class="sidebar-trigger" type="button" id="sidebarTrigger">
+                  Toggle Sidebar
+                </button>
+
+                <button class="btn btn-primary" type="button" id="themeToggle">
+                  Theme
+                </button>
+              </div>
+            </div>
+
+            <div class="pill">
+              <strong>State:</strong>
+              <span id="stateReadout">expanded</span>
+              <span style="opacity:.7;">·</span>
+              <span>Resize below 900px to see offcanvas behavior.</span>
+            </div>
+
+            <div style="height: var(--space-4)"></div>
+
+            <!-- Example content zone -->
+            <div
+              style="
+                background: var(--surface-container-high);
+                border-radius: var(--radius-lg);
+                padding: var(--space-5);
+                box-shadow: var(--shadow-1);
+              "
+            >
+              <div style="font-weight: 800; letter-spacing: .2px;">Content Zone</div>
+              <p class="muted" style="margin-bottom:0;">
+                Borderless zones separate content via background surfaces rather than borders. [2][6]
+              </p>
+
+              <!-- HTMX example placeholder -->
+              <div style="height: var(--space-3)"></div>
+              <button
+                class="btn btn-surface"
+                type="button"
+                hx-get="/sidebar-demo-fragment"
+                hx-target="#htmxTarget"
+                hx-swap="innerHTML"
+              >
+                HTMX Load (example)
+              </button>
+              <div id="htmxTarget" class="muted" style="margin-top: 10px;">
+                (Server fragment will render here.)
+              </div>
+            </div>
+          </div>
+          <!-- </SidebarInset> -->
+        </main>
+      </div>
+    </div>
+
+    <script>
+      // ============================================================
+      // Theme toggle via data-theme (light/dark), per requirement. [2]
+      // ============================================================
+      (function () {
+        const root = document.documentElement;
+        const themeBtn = document.getElementById("themeToggle");
+
+        themeBtn.addEventListener("click", () => {
+          const current = root.getAttribute("data-theme") || "light";
+          root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+        });
+      })();
+
+      // ============================================================
+      // Sidebar state model (Provider state)
+      // - Docs: SidebarProvider handles collapsible state. [1]
+      // - Here: collapsed/expanded + mobile open/close.
+      // ============================================================
+      (function () {
+        const provider = document.getElementById("sidebarProvider");
+        const trigger = document.getElementById("sidebarTrigger");
+        const collapseBtn = document.getElementById("sidebarCollapseBtn");
+        const backdrop = document.getElementById("sidebarBackdrop");
+        const stateReadout = document.getElementById("stateReadout");
+
+        function isMobile() {
+          return window.matchMedia("(max-width: 900px)").matches;
+        }
+
+        function setCollapsed(next) {
+          provider.setAttribute("data-sidebar-state", next ? "collapsed" : "expanded");
+          stateReadout.textContent = provider.getAttribute("data-sidebar-state");
+        }
+
+        function toggleCollapsed() {
+          const state = provider.getAttribute("data-sidebar-state") || "expanded";
+          setCollapsed(state !== "collapsed");
+        }
+
+        function setMobileOpen(open) {
+          provider.setAttribute("data-sidebar-open", open ? "true" : "false");
+        }
+
+        function toggleSidebar() {
+          if (isMobile()) {
+            const open = provider.getAttribute("data-sidebar-open") === "true";
+            setMobileOpen(!open);
+          } else {
+            toggleCollapsed();
+          }
+        }
+
+        trigger.addEventListener("click", toggleSidebar);
+        collapseBtn.addEventListener("click", toggleCollapsed);
+
+        backdrop.addEventListener("click", () => setMobileOpen(false));
+
+        // Close mobile sidebar on resize to desktop
+        window.addEventListener("resize", () => {
+          if (!isMobile()) setMobileOpen(false);
+        });
+
+        // init
+        stateReadout.textContent = provider.getAttribute("data-sidebar-state") || "expanded";
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /> [7]
+    <title>Isolated HTMX shadcn-like Card Prototype</title>
+
+    <!-- HTMX (standalone prototype) -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* =========================
+         TOKENS-FIRST THEME
+         - Do not hard-code colors in component CSS; define tokens in :root/.dark and consume them. [1]
+         - Default to a neutral palette; use a tasteful accent for UI/UX emphasis. [1]
+         ========================= */
+      :root {
+        --font-sans: "Source Sans 3", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-head: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+        /* Material 3 dynamic theming: drive palette from a primary hue + surface levels. [6] */
+        --primary-hue: 210; /* neutral-leaning blue accent for UX clarity (not branding) */
+
+        /* Core tokens */
+        --background: hsl(var(--primary-hue), 8%, 98%); [6]
+        --foreground: hsl(var(--primary-hue), 18%, 12%);
+
+        --primary: hsl(var(--primary-hue), 60%, 50%); [6]
+        --primary-foreground: hsl(0, 0%, 100%);
+
+        --accent: hsl(var(--primary-hue), 65%, 94%);
+        --accent-foreground: hsl(var(--primary-hue), 35%, 22%);
+
+        /* Borderless zones: separate by surface colors, not borders. [4][6] */
+        --surface-container-lowest: hsl(var(--primary-hue), 8%, 98%); [6]
+        --surface-container-low: hsl(var(--primary-hue), 10%, 96%); [6]
+        --surface-container: hsl(var(--primary-hue), 12%, 94%);
+        --surface-container-high: hsl(var(--primary-hue), 14%, 92%);
+
+        --muted-foreground: hsl(var(--primary-hue), 10%, 40%);
+        --ring: hsl(var(--primary-hue), 60%, 50%);
+
+        /* Component geometry */
+        --radius: 16px; /* rounded-xl card feel aligns with the borderless rounded example. [6] */
+        --radius-control: 12px;
+        --space-1: 6px;
+        --space-2: 10px;
+        --space-3: 14px;
+        --space-4: 18px;
+        --space-5: 24px;
+        --control-h: 44px;
+      }
+
+      .dark {
+        /* Material 3 dynamic theming with the same primary hue driver. [6] */
+        --background: hsl(var(--primary-hue), 18%, 10%);
+        --foreground: hsl(0, 0%, 96%);
+
+        --primary: hsl(var(--primary-hue), 70%, 70%);
+        --primary-foreground: hsl(var(--primary-hue), 28%, 10%);
+
+        --accent: hsl(var(--primary-hue), 22%, 18%);
+        --accent-foreground: hsl(var(--primary-hue), 70%, 82%);
+
+        --surface-container-lowest: hsl(var(--primary-hue), 18%, 10%);
+        --surface-container-low: hsl(var(--primary-hue), 18%, 12%);
+        --surface-container: hsl(var(--primary-hue), 18%, 14%);
+        --surface-container-high: hsl(var(--primary-hue), 18%, 16%);
+
+        --muted-foreground: hsl(0, 0%, 72%);
+        --ring: hsl(var(--primary-hue), 70%, 70%);
+      }
+
+      /* =========================
+         BASE
+         ========================= */
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        background: var(--background);
+        color: var(--foreground);
+      }
+
+      .page {
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--surface-container-low);
+      }
+
+      /* =========================
+         BORDERLESS ZONES (NO BORDERS)
+         Correct: bg-surface-container-low p-4 rounded-xl (conceptually). [6]
+         Incorrect: borders. [6]
+         ========================= */
+      .zone {
+        width: min(560px, 100%);
+        background: var(--surface-container-low);
+        border-radius: calc(var(--radius) + 8px);
+        padding: var(--space-4);
+      }
+
+      /* =========================
+         SHADCN-LIKE CARD (flat, rounded)
+         Separation comes from surface contrast (no border, no shadow). [4][6]
+         ========================= */
+      .card {
+        background: var(--surface-container-lowest);
+        border-radius: var(--radius);
+        padding: var(--space-5);
+      }
+
+      .card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+
+      .title {
+        margin: 0;
+        font-family: var(--font-head);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        font-size: 20px;
+        line-height: 1.15;
+      }
+
+      .subtitle {
+        margin: 8px 0 0 0;
+        color: var(--muted-foreground);
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: var(--accent-foreground);
+        font-family: var(--font-head);
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .card-body {
+        margin-top: var(--space-4);
+        display: grid;
+        gap: var(--space-3);
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .label {
+        font-family: var(--font-head);
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--muted-foreground);
+      }
+
+      /* Input: flat, token-driven */
+      .input {
+        height: var(--control-h);
+        width: 100%;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: 0 14px;
+        background: var(--surface-container);
+        color: var(--foreground);
+        font-size: 16px;
+        outline: none;
+      }
+
+      .input::placeholder { color: var(--muted-foreground); }
+      .input:focus {
+        box-shadow: 0 0 0 2px var(--ring);
+      }
+
+      /* Buttons: token-driven mapping (primary + ghost) */
+      .actions {
+        margin-top: var(--space-4);
+        display: flex;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        height: var(--control-h);
+        padding: 0 16px;
+        border: 0;
+        border-radius: var(--radius-control);
+        font-family: var(--font-head);
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: transparent;
+        color: var(--foreground);
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--ring);
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+
+      .btn-ghost {
+        background: var(--accent);
+        color: var(--accent-foreground);
+      }
+
+      /* Small helper row for HTMX status */
+      .status-row {
+        margin-top: var(--space-3);
+        background: var(--surface-container);
+        border-radius: var(--radius);
+        padding: var(--space-3);
+        color: var(--muted-foreground);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      /* Minimal “htmx-indicator” spinner (pure CSS) */
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        border: 2px solid var(--accent-foreground);
+        border-top-color: transparent;
+        display: inline-block;
+        animation: spin 0.9s linear infinite;
+        vertical-align: -3px;
+        margin-right: 8px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* Theme toggle */
+      .top-controls {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: var(--space-3);
+      }
+      .toggle {
+        display: inline-flex;
+        background: var(--surface-container);
+        border-radius: 999px;
+        padding: 4px;
+        gap: 4px;
+      }
+      .toggle button {
+        height: 34px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 999px;
+        font-family: var(--font-head);
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        background: transparent;
+        color: var(--muted-foreground);
+      }
+      .toggle button[aria-selected="true"] {
+        background: var(--surface-container-high);
+        color: var(--foreground);
+      }
+    </style>
+
+    <script>
+      function setTheme(mode) {
+        var root = document.documentElement;
+        if (mode === "dark") root.classList.add("dark");
+        else root.classList.remove("dark");
+        localStorage.setItem("theme", mode);
+        syncThemeToggle();
+      }
+
+      function bootTheme() {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark" || saved === "light") setTheme(saved);
+        else setTheme("light");
+      }
+
+      function syncThemeToggle() {
+        var isDark = document.documentElement.classList.contains("dark");
+        var lightBtn = document.getElementById("theme-light");
+        var darkBtn = document.getElementById("theme-dark");
+        if (lightBtn && darkBtn) {
+          lightBtn.setAttribute("aria-selected", isDark ? "false" : "true");
+          darkBtn.setAttribute("aria-selected", isDark ? "true" : "false");
+        }
+      }
+
+      /* HTMX demo: since this is standalone, we emulate a backend response to avoid 405s. [7] */
+      document.addEventListener("htmx:configRequest", function (evt) {
+        var path = evt.detail.path;
+        if (path === "/card-demo/save") {
+          evt.preventDefault();
+          var target = document.getElementById("status-target");
+          var title = document.getElementById("title-input").value || "Untitled";
+          var note = document.getElementById("note-input").value || "(empty)";
+          window.setTimeout(function () {
+            target.innerHTML =
+              "<div class='status-row'><span class='spinner' aria-hidden='true'></span><strong>Saved</strong> — “"
+              + escapeHtml(title)
+              + "” • Note: "
+              + escapeHtml(note)
+              + "</div>";
+          }, 500);
+        }
+      });
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      document.addEventListener("DOMContentLoaded", bootTheme);
+    </script>
+  </head>
+
+  <body>
+    <div class="page">
+      <div class="zone" role="region" aria-label="Prototype container">
+        <div class="top-controls">
+          <div class="toggle" role="tablist" aria-label="Theme">
+            <button id="theme-light" type="button" aria-selected="true" onclick="setTheme('light')">Light</button>
+            <button id="theme-dark" type="button" aria-selected="false" onclick="setTheme('dark')">Dark</button>
+          </div>
+        </div>
+
+        <article class="card" aria-label="shadcn-like card component">
+          <header class="card-header">
+            <div>
+              <h1 class="title">Project Status</h1>
+              <p class="subtitle">
+                A flat, borderless, token-driven card prototype for HTMX artifacts. [1][4][6]
+              </p>
+            </div>
+            <div class="badge" aria-label="Status badge">Healthy</div>
+          </header>
+
+          <div class="card-body">
+            <div class="field">
+              <div class="label">Title</div>
+              <input id="title-input" class="input" type="text" placeholder="e.g., Q4 Roadmap Review" />
+            </div>
+
+            <div class="field">
+              <div class="label">Note</div>
+              <input id="note-input" class="input" type="text" placeholder="Short note for the team…" />
+            </div>
+
+            <div class="actions">
+              <button
+                class="btn btn-primary"
+                type="button"
+                hx-post="/card-demo/save"
+                hx-target="#status-target"
+                hx-swap="innerHTML"
+              >
+                Save
+              </button>
+
+              <button class="btn btn-ghost" type="button" onclick="document.getElementById('title-input').value=''; document.getElementById('note-input').value=''; document.getElementById('status-target').innerHTML='';">
+                Clear
+              </button>
+
+              <button
+                class="btn"
+                type="button"
+                onclick="setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
+              >
+                Toggle Theme
+              </button>
+            </div>
+
+            <div id="status-target" aria-live="polite"></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </body>
+</html>

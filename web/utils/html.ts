@@ -7,7 +7,10 @@ import DOMPurify from "dompurify";
 /**
  * Escape HTML special characters to prevent XSS.
  */
-export function escapeHtml(str: string): string {
+export function escapeHtml(str: string | undefined | null): string {
+  if (str === undefined || str === null) {
+    return "";
+  }
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

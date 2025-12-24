@@ -24,4 +24,4 @@
 
 mod thread;
 
-pub use thread::{Session, SessionStore};
+pub use thread::SessionStore;

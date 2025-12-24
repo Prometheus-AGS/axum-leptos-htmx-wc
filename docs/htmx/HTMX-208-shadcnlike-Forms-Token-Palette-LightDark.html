@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTMX 2.0.8 • shadcn-like Forms (Token Palette + Light/Dark)</title>
+
+    <!-- HTMX 2.0.8 via CDN (allowed for HTMX artifacts) -->
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+    <style>
+      /* ============================================================
+         TOKENS (same palette approach as prior examples)
+         - Tokens-first: components consume these variables. [1]
+         ============================================================ */
+      :root {
+        --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+        --background: 0 0% 100%;
+        --foreground: 222 47% 11%;
+
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+
+        --muted: 210 40% 96%;
+        --muted-foreground: 215 16% 47%;
+
+        --primary: 222 47% 11%;
+        --primary-foreground: 210 40% 98%;
+
+        --secondary: 210 40% 96%;
+        --secondary-foreground: 222 47% 11%;
+
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 210 40% 98%;
+
+        --border: 214 32% 91%;
+        --ring: 221 83% 53%;
+
+        --radius: 14px;
+        --radius-md: 12px;
+        --radius-pill: 999px;
+
+        --shadow: 0 18px 60px hsl(var(--foreground) / 0.12);
+      }
+
+      .dark {
+        --background: 222 47% 11%;
+        --foreground: 210 40% 98%;
+
+        --card: 222 47% 13%;
+        --card-foreground: 210 40% 98%;
+
+        --muted: 217 33% 17%;
+        --muted-foreground: 215 20% 65%;
+
+        --primary: 210 40% 98%;
+        --primary-foreground: 222 47% 11%;
+
+        --secondary: 217 33% 17%;
+        --secondary-foreground: 210 40% 98%;
+
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 210 40% 98%;
+
+        --border: 217 33% 17%;
+        --ring: 217 91% 60%;
+
+        --shadow: 0 18px 60px hsl(0 0% 0% / 0.45);
+      }
+
+      /* ============================================================
+         BASE / LAYOUT
+         ============================================================ */
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+      }
+
+      .shell {
+        min-height: 100%;
+        padding: 18px;
+        display: grid;
+        place-items: start center;
+        background: hsl(var(--muted));
+      }
+
+      .frame {
+        width: min(1040px, 100%);
+        background: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        border-radius: var(--radius);
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+
+      .header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 900;
+        letter-spacing: -0.01em;
+      }
+
+      .subtitle {
+        margin: 6px 0 0 0;
+        font-size: 13px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+        max-width: 70ch;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .panel {
+        grid-column: span 12;
+        background: hsl(var(--muted));
+        border-radius: var(--radius);
+        padding: 14px;
+      }
+
+      @media (min-width: 980px) {
+        .panel { grid-column: span 6; }
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .panel p {
+        margin: 6px 0 12px 0;
+        font-size: 13px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+      }
+
+      /* ============================================================
+         “SHADCN-LIKE” COMPONENTS (Button, Badge, Card, Form parts)
+         - Consistent, semantic, accessible patterns. [1]
+         ============================================================ */
+
+      /* Segmented theme toggle */
+      .seg {
+        display: inline-flex;
+        padding: 4px;
+        border-radius: var(--radius-pill);
+        background: hsl(var(--muted));
+        gap: 4px;
+        align-items: center;
+      }
+      .seg button {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--radius-pill);
+        background: transparent;
+        color: hsl(var(--muted-foreground));
+        font-weight: 900;
+        cursor: pointer;
+      }
+      .seg button[aria-selected="true"] {
+        background: hsl(var(--card));
+        color: hsl(var(--foreground));
+      }
+
+      /* Buttons */
+      .btn {
+        height: 40px;
+        padding: 0 14px;
+        border-radius: var(--radius-md);
+        border: 0;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        background: transparent;
+        color: hsl(var(--foreground));
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn:focus-visible {
+        outline: 2px solid hsl(var(--ring));
+        outline-offset: 2px;
+      }
+      .btn-primary {
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+      }
+      .btn-outline {
+        background: hsl(var(--background));
+        border: 1px solid hsl(var(--border));
+      }
+      .btn-destructive {
+        background: hsl(var(--destructive));
+        color: hsl(var(--destructive-foreground));
+      }
+
+      /* Badges (same set as before) */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 24px;
+        padding: 0 10px;
+        border-radius: var(--radius-pill);
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
+        user-select: none;
+      }
+      .badge--default { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+      .badge--secondary { background: hsl(var(--secondary)); color: hsl(var(--secondary-foreground)); }
+      .badge--destructive { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
+      .badge--outline { background: transparent; color: hsl(var(--foreground)); border: 1px solid hsl(var(--border)); }
+
+      /* Form primitives */
+      .card {
+        background: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        border-radius: var(--radius);
+        padding: 14px;
+      }
+
+      .form {
+        display: grid;
+        gap: 12px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .label {
+        font-size: 13px;
+        font-weight: 900;
+        color: hsl(var(--muted-foreground));
+      }
+
+      .control {
+        height: 44px;
+        width: 100%;
+        border-radius: var(--radius-md);
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+        padding: 0 12px;
+        font-size: 16px;
+        outline: none;
+      }
+
+      .control:focus {
+        box-shadow: 0 0 0 2px hsl(var(--ring));
+        border-color: transparent;
+      }
+
+      .help {
+        font-size: 12px;
+        color: hsl(var(--muted-foreground));
+        line-height: 1.35;
+      }
+
+      .error {
+        font-size: 12px;
+        color: hsl(var(--destructive));
+        line-height: 1.35;
+        font-weight: 800;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+      }
+
+      /* Inline alert blocks */
+      .alert {
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        background: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground));
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .alert--error {
+        background: hsl(var(--destructive));
+        color: hsl(var(--destructive-foreground));
+      }
+
+      .alert--success {
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+      }
+
+      /* HTMX indicator */
+      .htmx-indicator {
+        display: none;
+        font-size: 12px;
+        font-weight: 800;
+        margin-left: 8px;
+        color: hsl(var(--muted-foreground));
+      }
+      .htmx-request .htmx-indicator { display: inline; }
+
+      /* Small code-ish pill */
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: var(--radius-pill);
+        background: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground));
+        font-size: 12px;
+        font-weight: 900;
+      }
+    </style>
+
+    <script>
+      /* Theme controls (light/dark) */
+      function setTheme(mode) {
+        const root = document.documentElement;
+        if (mode === "dark") root.classList.add("dark");
+        else root.classList.remove("dark");
+        localStorage.setItem("theme", mode);
+        syncThemeToggle();
+      }
+      function bootTheme() {
+        const saved = localStorage.getItem("theme");
+        setTheme(saved === "dark" ? "dark" : "light");
+      }
+      function syncThemeToggle() {
+        const isDark = document.documentElement.classList.contains("dark");
+        const lightBtn = document.getElementById("theme-light");
+        const darkBtn = document.getElementById("theme-dark");
+        if (lightBtn && darkBtn) {
+          lightBtn.setAttribute("aria-selected", isDark ? "false" : "true");
+          darkBtn.setAttribute("aria-selected", isDark ? "true" : "false");
+        }
+      }
+
+      /* Client-side validation helpers (semantic + ARIA expectations). [1] */
+      function setFieldError(inputId, msg) {
+        const input = document.getElementById(inputId);
+        const err = document.getElementById(inputId + "-error");
+        if (!input || !err) return;
+
+        if (msg) {
+          input.setAttribute("aria-invalid", "true");
+          input.setAttribute("aria-describedby", inputId + "-help " + inputId + "-error");
+          err.textContent = msg;
+          err.hidden = false;
+        } else {
+          input.removeAttribute("aria-invalid");
+          input.setAttribute("aria-describedby", inputId + "-help");
+          err.textContent = "";
+          err.hidden = true;
+        }
+      }
+
+      function validateEmail(value) {
+        if (!value) return "Email is required.";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Enter a valid email address.";
+        return "";
+      }
+
+      function validateUsername(value) {
+        if (!value) return "Username is required.";
+        if (!/^[a-zA-Z0-9_]{3,16}$/.test(value)) return "3–16 chars, letters/numbers/underscore.";
+        return "";
+      }
+
+      function validatePassword(value) {
+        if (!value) return "Password is required.";
+        if (value.length < 8) return "Must be at least 8 characters.";
+        return "";
+      }
+
+      /* Standalone demo approach: intercept HTMX requests so no backend is required. [3] */
+      document.addEventListener("htmx:configRequest", (evt) => {
+        const path = evt.detail.path;
+
+        /* Field-level validation endpoint simulation */
+        if (path === "/validate/username") {
+          evt.preventDefault();
+          const username = (evt.detail.parameters?.username ?? "").toString();
+          const err = validateUsername(username);
+
+          // mimic server delay
+          setTimeout(() => {
+            const target = document.querySelector("#username-inline-slot");
+            if (!target) return;
+
+            if (err) {
+              target.innerHTML =
+                `<p class="error" id="inline-username-error">` + escapeHtml(err) + `</p>`;
+              setFieldError("inline-username", err);
+            } else {
+              target.innerHTML =
+                `<p class="help">Looks good. <span class="badge badge--secondary">Available</span></p>`;
+              setFieldError("inline-username", "");
+            }
+          }, 250);
+        }
+
+        /* Full form submit simulation with “server-side validation” */
+        if (path === "/forms/profile") {
+          evt.preventDefault();
+
+          const email = (evt.detail.parameters?.email ?? "").toString();
+          const username = (evt.detail.parameters?.username ?? "").toString();
+          const password = (evt.detail.parameters?.password ?? "").toString();
+
+          const emailErr = validateEmail(email);
+          const userErr = validateUsername(username);
+          const passErr = validatePassword(password);
+
+          // mimic server delay
+          setTimeout(() => {
+            const target = document.querySelector("#profile-form-host");
+            if (!target) return;
+
+            if (emailErr || userErr || passErr) {
+              // Return a “server-rendered” updated form fragment (common HTMX pattern). [1]
+              target.outerHTML = renderProfileForm({
+                email,
+                username,
+                password,
+                emailErr,
+                userErr,
+                passErr,
+                serverMsg: "Please fix the highlighted fields and try again."
+              });
+              return;
+            }
+
+            // Success state replaces the form
+            target.outerHTML = `
+              <div class="card" id="profile-form-host">
+                <div class="row" style="justify-content:space-between; align-items:center;">
+                  <div>
+                    <div class="row">
+                      <span class="badge badge--default">Success</span>
+                      <span class="badge badge--outline">HTMX swap</span>
+                    </div>
+                    <p class="subtitle" style="margin:10px 0 0 0;">
+                      Saved profile for <strong>${escapeHtml(username)}</strong>.
+                    </p>
+                  </div>
+                  <button class="btn btn-outline" type="button" onclick="resetProfileDemo()">Edit again</button>
+                </div>
+              </div>
+            `;
+          }, 450);
+        }
+
+        /* Simple “newsletter” endpoint: demonstrates hx-target + inner swap */
+        if (path === "/forms/newsletter") {
+          evt.preventDefault();
+
+          const email = (evt.detail.parameters?.nl_email ?? "").toString();
+          const err = validateEmail(email);
+
+          setTimeout(() => {
+            const slot = document.querySelector("#newsletter-result");
+            if (!slot) return;
+
+            if (err) {
+              slot.innerHTML = `<div class="alert alert--error">` + escapeHtml(err) + `</div>`;
+            } else {
+              slot.innerHTML =
+                `<div class="alert alert--success">Subscribed <strong>${escapeHtml(email)}</strong>.</div>`;
+            }
+          }, 350);
+        }
+      });
+
+      function renderProfileForm(state) {
+        const email = escapeHtml(state.email ?? "");
+        const username = escapeHtml(state.username ?? "");
+        const password = escapeHtml(state.password ?? "");
+
+        const emailErr = state.emailErr ?? "";
+        const userErr = state.userErr ?? "";
+        const passErr = state.passErr ?? "";
+        const serverMsg = state.serverMsg ?? "";
+
+        // NOTE: IDs + aria-describedby are consistent to support accessibility. [1]
+        return `
+          <div class="card" id="profile-form-host">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <div>
+                <div class="row">
+                  <span class="badge badge--default">Form</span>
+                  <span class="badge badge--secondary">Client + Server validation</span>
+                  <span class="badge badge--outline">HTMX 2.0.8</span>
+                </div>
+                <p class="subtitle" style="margin:10px 0 0 0;">
+                  Semantic fields with labels, ARIA, and validation feedback. [1]
+                </p>
+              </div>
+              <span class="kbd">Tip: try “ab” as username</span>
+            </div>
+
+            ${serverMsg ? `<div class="alert alert--error" style="margin-top:12px;">${escapeHtml(serverMsg)}</div>` : ""}
+
+            <form
+              class="form"
+              style="margin-top:12px;"
+              hx-post="/forms/profile"
+              hx-target="#profile-form-host"
+              hx-swap="outerHTML"
+            >
+              <div class="field">
+                <label class="label" for="profile-email">Email</label>
+                <input
+                  class="control"
+                  id="profile-email"
+                  name="email"
+                  value="${email}"
+                  autocomplete="email"
+                  inputmode="email"
+                  aria-describedby="profile-email-help profile-email-error"
+                  ${emailErr ? `aria-invalid="true"` : ``}
+                  required
+                />
+                <p class="help" id="profile-email-help">We’ll only use this for account recovery.</p>
+                <p class="error" id="profile-email-error" ${emailErr ? "" : "hidden"}>${escapeHtml(emailErr)}</p>
+              </div>
+
+              <div class="field">
+                <label class="label" for="profile-username">Username</label>
+                <input
+                  class="control"
+                  id="profile-username"
+                  name="username"
+                  value="${username}"
+                  autocomplete="username"
+                  aria-describedby="profile-username-help profile-username-error"
+                  ${userErr ? `aria-invalid="true"` : ``}
+                  required
+                />
+                <p class="help" id="profile-username-help">3–16 characters. Letters, numbers, underscore.</p>
+                <p class="error" id="profile-username-error" ${userErr ? "" : "hidden"}>${escapeHtml(userErr)}</p>
+              </div>
+
+              <div class="field">
+                <label class="label" for="profile-password">Password</label>
+                <input
+                  class="control"
+                  id="profile-password"
+                  name="password"
+                  type="password"
+                  value="${password}"
+                  autocomplete="new-password"
+                  aria-describedby="profile-password-help profile-password-error"
+                  ${passErr ? `aria-invalid="true"` : ``}
+                  required
+                />
+                <p class="help" id="profile-password-help">At least 8 characters.</p>
+                <p class="error" id="profile-password-error" ${passErr ? "" : "hidden"}>${escapeHtml(passErr)}</p>
+              </div>
+
+              <div class="footer">
+                <button class="btn btn-primary" type="submit">
+                  Save changes
+                  <span class="htmx-indicator" aria-live="polite">Saving…</span>
+                </button>
+                <button class="btn btn-outline" type="button" onclick="resetProfileDemo()">Reset</button>
+              </div>
+            </form>
+          </div>
+        `;
+      }
+
+      function resetProfileDemo() {
+        const host = document.getElementById("profile-form-host");
+        if (!host) return;
+        host.outerHTML = renderProfileForm({
+          email: "pedro@example.com",
+          username: "peduarte",
+          password: "",
+          emailErr: "",
+          userErr: "",
+          passErr: "",
+          serverMsg: ""
+        });
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        bootTheme();
+
+        // Mount initial profile form
+        const host = document.getElementById("profile-form-host");
+        if (host) host.outerHTML = renderProfileForm({
+          email: "pedro@example.com",
+          username: "peduarte",
+          password: "",
+          emailErr: "",
+          userErr: "",
+          passErr: "",
+          serverMsg: ""
+        });
+
+        // Wire client-side validation on the profile form (as-you-type)
+        document.addEventListener("input", (e) => {
+          const t = e.target;
+          if (!(t instanceof HTMLElement)) return;
+
+          if (t.id === "profile-email") setFieldError("profile-email", validateEmail(t.value));
+          if (t.id === "profile-username") setFieldError("profile-username", validateUsername(t.value));
+          if (t.id === "profile-password") setFieldError("profile-password", validatePassword(t.value));
+        });
+      });
+    </script>
+  </head>
+
+  <body>
+    <div class="shell">
+      <div class="frame">
+        <div class="header">
+          <div>
+            <h1 class="title">HTMX Forms (shadcn-like): variations + validation</h1>
+            <p class="subtitle">
+              Uses semantic markup, labels/ARIA, and both client + server validation patterns, while keeping styling consistent and token-driven. [1]
+            </p>
+          </div>
+
+          <div class="seg" role="tablist" aria-label="Theme">
+            <button id="theme-light" type="button" aria-selected="true" onclick="setTheme('light')">Light</button>
+            <button id="theme-dark" type="button" aria-selected="false" onclick="setTheme('dark')">Dark</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <!-- VARIATION A: “Full form” with client+server validation and outerHTML swap -->
+          <section class="panel" aria-label="Variation A: Profile form">
+            <h3>Variation A — Full form + validation + HTMX swap</h3>
+            <p>
+              Demonstrates “well-designed HTML forms”: semantic fields, keyboard-friendly inputs, labels/ARIA, and client+server validation with consistent styling. [1]
+            </p>
+
+            <!-- Will be replaced by JS with initial renderProfileForm() -->
+            <div class="card" id="profile-form-host"></div>
+          </section>
+
+          <!-- VARIATION B: Field-level validation (simulated server check) -->
+          <section class="panel" aria-label="Variation B: Field-level validation">
+            <h3>Variation B — Field-level validation (server check)</h3>
+            <p>
+              Shows incremental validation while keeping full control over markup/styling and maintaining accessibility via ARIA feedback. [1]
+            </p>
+
+            <div class="card">
+              <div class="row" style="justify-content:space-between; align-items:center;">
+                <div class="row">
+                  <span class="badge badge--default">Inline</span>
+                  <span class="badge badge--secondary">Validation</span>
+                  <span class="badge badge--outline">hx-get</span>
+                </div>
+                <span class="kbd">Type: ab</span>
+              </div>
+
+              <form class="form" style="margin-top:12px;" onsubmit="return false;">
+                <div class="field">
+                  <label class="label" for="inline-username">Username</label>
+                  <input
+                    class="control"
+                    id="inline-username"
+                    name="username"
+                    value="peduarte"
+                    autocomplete="username"
+                    aria-describedby="inline-username-help inline-username-error"
+                    hx-get="/validate/username"
+                    hx-trigger="keyup changed delay:300ms"
+                    hx-target="#username-inline-slot"
+                    hx-swap="innerHTML"
+                  />
+                  <p class="help" id="inline-username-help">
+                    Simulated “check availability” call (no backend required).
+                  </p>
+                  <p class="error" id="inline-username-error" hidden></p>
+
+                  <div id="username-inline-slot" class="help"></div>
+                </div>
+
+                <div class="footer">
+                  <button class="btn btn-outline" type="button" onclick="document.getElementById('inline-username').value=''; document.getElementById('username-inline-slot').innerHTML=''; setFieldError('inline-username','');">
+                    Clear
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <!-- VARIATION C: Compact newsletter form with hx-target for result -->
+          <section class="panel" aria-label="Variation C: Newsletter form">
+            <h3>Variation C — Compact subscribe + result slot</h3>
+            <p>
+              A smaller pattern: submit to an endpoint and swap only a result region, supporting clear feedback while keeping consistent styling. [1]
+            </p>
+
+            <div class="card">
+              <div class="row" style="justify-content:space-between; align-items:center;">
+                <div class="row">
+                  <span class="badge badge--default">Newsletter</span>
+                  <span class="badge badge--outline">hx-post</span>
+                </div>
+              </div>
+
+              <form
+                class="form"
+                style="margin-top:12px;"
+                hx-post="/forms/newsletter"
+                hx-target="#newsletter-result"
+                hx-swap="innerHTML"
+              >
+                <div class="field">
+                  <label class="label" for="nl_email">Email</label>
+                  <input
+                    class="control"
+                    id="nl_email"
+                    name="nl_email"
+                    placeholder="you@example.com"
+                    autocomplete="email"
+                    inputmode="email"
+                    aria-describedby="nl_email_help"
+                    required
+                  />
+                  <p class="help" id="nl_email_help">We’ll send occasional product updates.</p>
+                </div>
+
+                <div class="footer">
+                  <button class="btn btn-primary" type="submit">
+                    Subscribe
+                    <span class="htmx-indicator" aria-live="polite">Working…</span>
+                  </button>
+                  <button class="btn btn-outline" type="reset" onclick="document.getElementById('newsletter-result').innerHTML=''">
+                    Reset
+                  </button>
+                </div>
+              </form>
+
+              <div id="newsletter-result" style="margin-top:12px;"></div>
+            </div>
+          </section>
+
+          <!-- VARIATION D: Destructive confirm / “danger zone” -->
+          <section class="panel" aria-label="Variation D: Destructive action form">
+            <h3>Variation D — Destructive form pattern</h3>
+            <p>
+              Uses a destructive button variant and explicit confirmation input for safer interactions, while keeping consistent styling. [1]
+            </p>
+
+            <div class="card">
+              <div class="row">
+                <span class="badge badge--destructive">Danger zone</span>
+                <span class="badge badge--outline">Pattern</span>
+              </div>
+
+              <form class="form" style="margin-top:12px;" onsubmit="return false;">
+                <div class="field">
+                  <label class="label" for="confirm_text">Type <span class="kbd">DELETE</span> to confirm</label>
+                  <input
+                    class="control"
+                    id="confirm_text"
+                    name="confirm_text"
+                    placeholder="DELETE"
+                    aria-describedby="confirm_help confirm_error"
+                  />
+                  <p class="help" id="confirm_help">This is a demo; nothing is actually deleted.</p>
+                  <p class="error" id="confirm_error" hidden></p>
+                </div>
+
+                <div class="footer">
+                  <button
+                    class="btn btn-destructive"
+                    type="button"
+                    onclick="
+                      const v = document.getElementById('confirm_text').value.trim();
+                      const ok = (v === 'DELETE');
+                      const err = ok ? '' : 'Please type DELETE exactly.';
+                      const e = document.getElementById('confirm_error');
+                      if (err) { e.textContent = err; e.hidden = false; }
+                      else { e.hidden = true; e.textContent=''; alert('Demo: confirmed.'); }
+                    "
+                  >
+                    Delete account
+                  </button>
+                  <button class="btn btn-outline" type="button" onclick="document.getElementById('confirm_text').value=''; document.getElementById('confirm_error').hidden=true; document.getElementById('confirm_error').textContent='';">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        </div>
+
+        <p class="subtitle" style="margin-top:14px;">
+          Implementation note: the shadcn/ui Form docs stress that you have full control over markup and styling; this artifact follows that by keeping everything semantic and token-driven. [1]
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

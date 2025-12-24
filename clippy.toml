@@ -1,0 +1,13 @@
+# Clippy configuration for axum-leptos-htmx-wc
+# This file configures which clippy lints to allow/deny
+
+# Allow longer functions for complex LLM orchestration logic
+too-many-lines-threshold = 500
+
+# Disable pedantic warnings that don't add value
+# These are intentional design choices
+avoid-breaking-exported-api = false
+
+# Disable cargo lints (metadata warnings, multiple dependency versions)
+# These are managed separately and don't affect code quality
+cargo-ignore-publish = true

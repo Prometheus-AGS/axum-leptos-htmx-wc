@@ -30,8 +30,7 @@ pub fn Card(
     children: Children,
 ) -> impl IntoView {
     let classes = format!(
-        "rounded-xl border border-panelBorder bg-panel text-textPrimary shadow-sm {}",
-        class
+        "rounded-xl border border-panelBorder bg-panel text-textPrimary shadow-sm {class}"
     );
 
     view! {
@@ -50,7 +49,7 @@ pub fn CardHeader(
     /// Header content.
     children: Children,
 ) -> impl IntoView {
-    let classes = format!("flex flex-col space-y-1.5 p-6 {}", class);
+    let classes = format!("flex flex-col space-y-1.5 p-6 {class}");
 
     view! {
         <div class=classes>
@@ -68,7 +67,7 @@ pub fn CardContent(
     /// Content.
     children: Children,
 ) -> impl IntoView {
-    let classes = format!("p-6 pt-0 {}", class);
+    let classes = format!("p-6 pt-0 {class}");
 
     view! {
         <div class=classes>
@@ -86,7 +85,7 @@ pub fn CardFooter(
     /// Footer content.
     children: Children,
 ) -> impl IntoView {
-    let classes = format!("flex items-center p-6 pt-0 {}", class);
+    let classes = format!("flex items-center p-6 pt-0 {class}");
 
     view! {
         <div class=classes>
