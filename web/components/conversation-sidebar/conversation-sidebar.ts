@@ -2,17 +2,20 @@
  * Conversation Sidebar Component
  * 
  * Collapsible sidebar for conversation management with search, pin, and delete.
- * Based on Sidebar-shadcnui-structure example from docs/htmx.
+ * Features date grouping and inline renaming.
  */
 
 import { pgliteStore } from '../../stores/pglite-store';
 import type { ConversationSearchResult } from '../../types/database';
+
+type DateGroup = 'Today' | 'Yesterday' | 'Previous 7 Days' | 'Previous 30 Days' | 'Older';
 
 export class ConversationSidebar extends HTMLElement {
   private isCollapsed = false;
   private searchQuery = '';
   private conversations: ConversationSearchResult[] = [];
   private activeConversationId: string | null = null;
+  private editingId: string | null = null; // ID of conversation being renamed
 
   async connectedCallback(): Promise<void> {
     this.render();
@@ -25,71 +28,134 @@ export class ConversationSidebar extends HTMLElement {
     } catch (error) {
       console.error('[ConversationSidebar] Failed to initialize:', error);
     }
+
+    // Listen for outside clicks to cancel editing
+    document.addEventListener('click', (e) => {
+      if (this.editingId && !(e.target as HTMLElement).closest('.rename-input')) {
+        this.editingId = null;
+        this.render();
+        this.attachEventListeners();
+      }
+    });
   }
 
   private render(): void {
-    const collapsedClass = this.isCollapsed ? 'collapsed' : '';
     
     this.innerHTML = `
-      <aside class="conversation-sidebar ${collapsedClass}" data-collapsed="${this.isCollapsed}">
+      <aside class="conversation-sidebar flex flex-col h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ${this.isCollapsed ? 'w-16' : 'w-64'}" data-collapsed="${this.isCollapsed}">
         <!-- Header -->
-        <div class="sidebar-header">
-          <button class="collapse-btn" aria-label="${this.isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              ${this.isCollapsed 
-                ? '<path d="M9 18l6-6-6-6"/>' // ChevronRight
-                : '<path d="M15 18l-6-6 6-6"/>' // ChevronLeft
-              }
-            </svg>
-          </button>
-          ${!this.isCollapsed ? `
-            <h2 class="sidebar-title">Conversations</h2>
-            <button class="new-chat-btn" aria-label="New conversation">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14m-7-7h14"/>
-              </svg>
-            </button>
-          ` : ''}
+        <div class="h-14 flex items-center justify-between px-3 border-b border-gray-200 dark:border-gray-800">
+           ${!this.isCollapsed ? `
+            <div class="flex items-center gap-2 overflow-hidden">
+                <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 text-nowrap">Chats</span>
+            </div>
+           ` : ''}
+           <div class="flex items-center gap-1 ${this.isCollapsed ? 'w-full justify-center flex-col gap-3' : ''}">
+               ${!this.isCollapsed ? `
+                <button class="new-chat-btn p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-md transition-colors text-gray-600 dark:text-gray-400" aria-label="New conversation">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+                </button>
+               ` : ''}
+               <button class="collapse-btn p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-md transition-colors text-gray-600 dark:text-gray-400" aria-label="${this.isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    ${this.isCollapsed 
+                    ? '<path d="M9 18l6-6-6-6"/>' // ChevronRight
+                    : '<path d="M15 18l-6-6 6-6"/>' // ChevronLeft
+                    }
+                </svg>
+               </button>
+           </div>
         </div>
 
         <!-- Search (only when expanded) -->
         ${!this.isCollapsed ? `
-          <div class="sidebar-search">
-            <input 
-              type="search" 
-              class="search-input" 
-              placeholder="Search conversations..."
-              value="${this.searchQuery}"
-            />
-            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
+          <div class="p-3">
+            <div class="relative">
+                <input 
+                type="search" 
+                class="search-input w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1.5 pl-8 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow" 
+                placeholder="Search..."
+                value="${this.searchQuery}"
+                />
+                <svg class="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+            </div>
           </div>
         ` : ''}
 
         <!-- Conversation List -->
-        <div class="sidebar-content">
-          ${this.isCollapsed ? this.renderCollapsedList() : this.renderExpandedList()}
+        <div class="sidebar-content flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 px-2 pb-2">
+          ${this.isCollapsed ? this.renderCollapsedList() : this.renderGroupedList()}
+        </div>
+        
+        <!-- User / Settings (Bottom) -->
+        <div class="mt-auto p-3 border-t border-gray-200 dark:border-gray-800">
+             <token-counter 
+                input-tokens="0" 
+                output-tokens="0" 
+                context-limit="128000" 
+                model-id="claude-3-5-sonnet-20241022" 
+                is-estimate="true"
+            ></token-counter>
         </div>
       </aside>
     `;
   }
 
-  private renderExpandedList(): string {
+  private renderGroupedList(): string {
     if (this.conversations.length === 0) {
       return `
-        <div class="empty-state">
-          <p>No conversations yet</p>
-          <p class="empty-hint">Start a new chat to begin</p>
+        <div class="flex flex-col items-center justify-center h-48 text-gray-400 text-xs">
+          <p>No conversations</p>
         </div>
       `;
     }
 
-    return `
-      <ul class="conversation-list">
-        ${this.conversations.map(conv => this.renderConversationItem(conv)).join('')}
-      </ul>
-    `;
+    const groups: Record<DateGroup, ConversationSearchResult[]> = {
+      'Today': [],
+      'Yesterday': [],
+      'Previous 7 Days': [],
+      'Previous 30 Days': [],
+      'Older': []
+    };
+
+    // Group conversations
+    this.conversations.forEach(conv => {
+        const date = new Date(conv.updated_at);
+        const group = this.getDateGroup(date);
+        groups[group].push(conv);
+    });
+
+    return Object.entries(groups)
+      .filter(([_, items]) => items.length > 0)
+      .map(([group, items]) => `
+        <div class="mb-4">
+            <h3 class="px-2 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide sticky top-0 bg-gray-50 dark:bg-gray-900 z-10">${group}</h3>
+            <ul class="space-y-0.5">
+                ${items.map(conv => this.renderConversationItem(conv)).join('')}
+            </ul>
+        </div>
+      `).join('');
+  }
+
+  private getDateGroup(date: Date): DateGroup {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const lastWeek = new Date(today);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      const lastMonth = new Date(today);
+      lastMonth.setDate(lastMonth.getDate() - 30);
+
+      const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+      if (compareDate.getTime() === today.getTime()) return 'Today';
+      if (compareDate.getTime() === yesterday.getTime()) return 'Yesterday';
+      if (compareDate > lastWeek) return 'Previous 7 Days';
+      if (compareDate > lastMonth) return 'Previous 30 Days';
+      return 'Older';
   }
 
   private renderCollapsedList(): string {
@@ -97,53 +163,65 @@ export class ConversationSidebar extends HTMLElement {
     const recent = this.conversations.slice(0, 5);
     
     return `
-      <ul class="conversation-list-collapsed">
+      <ul class="space-y-2 mt-2">
         ${recent.map(conv => `
-          <li class="conversation-item-collapsed ${conv.id === this.activeConversationId ? 'active' : ''}" 
-              data-conversation-id="${conv.id}"
-              title="${this.escapeHtml(conv.title)}">
-            <button class="conversation-btn-collapsed">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <li class="relative group">
+            <button 
+                class="w-10 h-10 mx-auto flex items-center justify-center rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${conv.id === this.activeConversationId ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-500'}"
+                data-conversation-id="${conv.id}"
+                title="${this.escapeHtml(conv.title)}"
+            >
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
             </button>
           </li>
         `).join('')}
+        
+        <li class="pt-2 border-t border-gray-200 dark:border-gray-800 mt-2">
+             <button class="new-chat-btn w-10 h-10 mx-auto flex items-center justify-center rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500" aria-label="New conversation">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+            </button>
+        </li>
       </ul>
     `;
   }
 
   private renderConversationItem(conv: ConversationSearchResult): string {
     const isActive = conv.id === this.activeConversationId;
-    const isPinned = conv.is_pinned;
+    const isEditing = conv.id === this.editingId;
     
     return `
-      <li class="conversation-item ${isActive ? 'active' : ''}" data-conversation-id="${conv.id}">
-        <button class="conversation-btn">
-          <div class="conversation-content">
-            <div class="conversation-title-row">
-              ${isPinned ? `
-                <svg class="pin-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-                </svg>
-              ` : ''}
-              <span class="conversation-title">${this.escapeHtml(conv.title)}</span>
+      <li class="group relative rounded-md overflow-hidden ${isActive ? 'bg-gray-200 dark:bg-gray-800' : 'hover:bg-gray-100 dark:hover:bg-gray-800/50'}" data-conversation-id="${conv.id}">
+        ${isEditing ? `
+            <div class="px-2 py-2">
+                <input type="text" 
+                    class="rename-input w-full text-xs px-1.5 py-1 rounded bg-white dark:bg-gray-900 border border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                    value="${this.escapeHtml(conv.title)}"
+                    autofocus
+                />
             </div>
-            <span class="conversation-meta">${conv.message_count} messages • ${this.formatDate(conv.updated_at)}</span>
-          </div>
-          <div class="conversation-actions">
-            <button class="action-btn pin-btn" data-action="pin" aria-label="${isPinned ? 'Unpin' : 'Pin'} conversation">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-              </svg>
+        ` : `
+            <button class="conversation-btn w-full text-left px-3 py-2 flex items-start gap-3">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2 mb-0.5">
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate block">${this.escapeHtml(conv.title)}</span>
+                    </div>
+                    <!-- Assuming message_count can proxy for length, theoretically we could store 'last_message_preview' in DB for better UX -->
+                    <span class="text-[10px] text-gray-500 truncate block">${conv.message_count} messages</span>
+                </div>
             </button>
-            <button class="action-btn delete-btn" data-action="delete" aria-label="Delete conversation">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-            </button>
-          </div>
-        </button>
+
+            <!-- Hover Actions -->
+            <div class="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-linear-to-l from-gray-100 dark:from-gray-800 from-60% to-transparent pl-4 flex items-center gap-1">
+                 <button class="action-btn rename-btn p-1 hover:text-blue-600 text-gray-400" data-action="rename" title="Rename">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                 </button>
+                 <button class="action-btn delete-btn p-1 hover:text-red-600 text-gray-400" data-action="delete" title="Delete">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                 </button>
+            </div>
+        `}
       </li>
     `;
   }
@@ -157,10 +235,13 @@ export class ConversationSidebar extends HTMLElement {
       this.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { collapsed: this.isCollapsed } }));
     });
 
-    // New chat button
-    this.querySelector('.new-chat-btn')?.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('new-conversation'));
-    });
+    // New chat button (both locations)
+    this.querySelectorAll('.new-chat-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+             this.dispatchEvent(new CustomEvent('new-conversation'));
+        });
+    })
+
 
     // Search input
     this.querySelector('.search-input')?.addEventListener('input', (e) => {
@@ -168,34 +249,94 @@ export class ConversationSidebar extends HTMLElement {
       this.handleSearch();
     });
 
-    // Conversation items
-    this.querySelectorAll('.conversation-item, .conversation-item-collapsed').forEach(item => {
-      const conversationId = item.getAttribute('data-conversation-id');
-      if (!conversationId) return;
-
-      // Click on conversation
-      const btn = item.querySelector('.conversation-btn, .conversation-btn-collapsed');
-      btn?.addEventListener('click', (e) => {
-        // Don't trigger if clicking on action buttons
-        if ((e.target as HTMLElement).closest('.action-btn')) return;
+    // Rename Input Logic (Save on blur/enter)
+    const renameInput = this.querySelector('.rename-input') as HTMLInputElement;
+    if (renameInput) {
+        // Focus is auto via attribute, but ensure selection
+        renameInput.select();
         
-        this.activeConversationId = conversationId;
-        this.dispatchEvent(new CustomEvent('conversation-select', { detail: { conversationId } }));
-        this.render();
-        this.attachEventListeners();
-      });
+        const save = async () => {
+            if (!this.editingId) return;
+            const newTitle = renameInput.value.trim();
+            if (newTitle) {
+                await pgliteStore.updateTitle(this.editingId, newTitle);
+                await this.refresh();
+            }
+            this.editingId = null;
+            this.render();
+            this.attachEventListeners();
+        };
 
-      // Pin button
-      item.querySelector('[data-action="pin"]')?.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await this.handlePin(conversationId);
-      });
+        renameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                save();
+            } else if (e.key === 'Escape') {
+                this.editingId = null;
+                this.render();
+                this.attachEventListeners();
+            }
+        });
+        
+        // Use a slight delay or specific check for blur to avoid race conditions with clicks
+        renameInput.addEventListener('blur', () => {
+             // Optional: save on blur? often annoying if accidental. Let's save.
+             save();
+        });
+    }
 
-      // Delete button
-      item.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await this.handleDelete(conversationId);
-      });
+
+    // Conversation items
+    this.querySelectorAll('.conversation-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const li = btn.closest('li');
+            const conversationId = li?.getAttribute('data-conversation-id');
+            if (conversationId && conversationId !== this.activeConversationId) {
+                this.activeConversationId = conversationId;
+                this.dispatchEvent(new CustomEvent('conversation-changed', { 
+                    detail: { conversationId },
+                    bubbles: true,
+                    composed: true
+                }));
+                this.render();
+                this.attachEventListeners();
+            }
+        });
+    });
+    
+    // Collapsed buttons
+    this.querySelectorAll('[data-conversation-id] > button').forEach(btn => {
+         if (btn.classList.contains('conversation-btn')) return; // handled above
+         btn.addEventListener('click', () => {
+            const conversationId = btn.parentElement?.getAttribute('data-conversation-id');
+            if (conversationId) {
+                this.activeConversationId = conversationId;
+                this.dispatchEvent(new CustomEvent('conversation-changed', { 
+                    detail: { conversationId },
+                    bubbles: true,
+                    composed: true
+                }));
+            }
+         });
+    });
+
+
+    // Action Buttons
+    this.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const li = btn.closest('li');
+            const conversationId = li?.getAttribute('data-conversation-id');
+            if (!conversationId) return;
+
+            const action = btn.getAttribute('data-action');
+            if (action === 'rename') {
+                this.editingId = conversationId;
+                this.render();
+                this.attachEventListeners();
+            } else if (action === 'delete') {
+                await this.handleDelete(conversationId);
+            }
+        });
     });
   }
 
@@ -223,20 +364,11 @@ export class ConversationSidebar extends HTMLElement {
     }
   }
 
-  private async handlePin(conversationId: string): Promise<void> {
-    try {
-      await pgliteStore.togglePin(conversationId);
-      await this.loadConversations();
-    } catch (error) {
-      console.error('[ConversationSidebar] Pin failed:', error);
-    }
-  }
-
   private async handleDelete(conversationId: string): Promise<void> {
     const conv = this.conversations.find(c => c.id === conversationId);
     if (!conv) return;
 
-    if (!confirm(`Delete "${conv.title}"? This cannot be undone.`)) {
+    if (!confirm(`Delete "${conv.title}"?`)) {
       return;
     }
 
@@ -253,22 +385,6 @@ export class ConversationSidebar extends HTMLElement {
     } catch (error) {
       console.error('[ConversationSidebar] Delete failed:', error);
     }
-  }
-
-  private formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString();
   }
 
   private escapeHtml(text: string): string {

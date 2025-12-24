@@ -2,8 +2,8 @@
  * SSE (Server-Sent Events) connection management.
  */
 
-import type { NormalizedEvent, AguiEvent } from "../types/events";
-import { parseNormalizedEvent, parseAguiEvent } from "../types/events";
+import type { NormalizedEvent } from "../types/events";
+import { parseNormalizedEvent } from "../types/events";
 
 /**
  * Event handler types for SSE connection.
@@ -27,6 +27,7 @@ export interface SSEConnectionOptions {
 
 /**
  * SSE connection wrapper with automatic event parsing.
+ * @deprecated Use HTMX SSE extension instead.
  */
 export class SSEConnection {
   private eventSource: EventSource | null = null;

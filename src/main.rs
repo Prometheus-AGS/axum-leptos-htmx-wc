@@ -117,7 +117,10 @@ async fn main() {
         .route("/api/sessions", get(api_list_sessions))
         .route("/api/sessions", post(api_create_session))
         .route("/api/sessions/{id}", get(api_get_session))
-        .route("/api/sessions/{id}", axum::routing::delete(api_delete_session))
+        .route(
+            "/api/sessions/{id}",
+            axum::routing::delete(api_delete_session),
+        )
         .route("/api/sessions/{id}/messages", get(api_get_messages))
         // Legacy streaming endpoint (for backward compatibility)
         .route("/stream", get(legacy_stream_chat))
@@ -147,7 +150,8 @@ async fn main() {
 
 /// Generate the HTML shell for the application.
 fn html_shell(title: &str, content: &str) -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="utf-8">
@@ -197,7 +201,8 @@ fn html_shell(title: &str, content: &str) -> String {
         </footer>
     </div>
 </body>
-</html>"#)
+</html>"#
+    )
 }
 
 /// Chat page content.
@@ -433,6 +438,8 @@ struct StreamQuery {
 struct GenerateTitleRequest {
     /// First user message in the conversation.
     message: String,
+    /// Assistant response.
+    assistant_message: String,
 }
 
 /// Response from title generation.
@@ -504,8 +511,9 @@ async fn api_generate_title(
 
     // Create a simple prompt for title generation
     let prompt = format!(
-        "Generate a concise 3-6 word title for a conversation that starts with this message: \"{}\"\n\nRespond with ONLY the title, no quotes, no explanation.",
-        req.message.chars().take(200).collect::<String>()
+        "Generate a concise 3-6 word title for a conversation that starts with this:\n\nUser: \"{}\"\nAssistant: \"{}\"\n\nRespond with ONLY the title, no quotes, no explanation.",
+        req.message.chars().take(200).collect::<String>(),
+        req.assistant_message.chars().take(200).collect::<String>()
     );
 
     let messages = vec![Message {
@@ -543,21 +551,24 @@ async fn api_chat_stream(
         "Starting SSE stream"
     );
 
-    let session = if let Some(s) = state.sessions.get(&query.session_id) { s } else {
+    let session = if let Some(s) = state.sessions.get(&query.session_id) {
+        s
+    } else {
         tracing::error!(session_id = %query.session_id, "Session not found");
         return single_error_sse("Session not found");
     };
 
     // If a message was provided, add it
     if let Some(msg) = &query.message
-        && !msg.is_empty() {
-            session.add_user_message(msg);
-            tracing::debug!(
-                session_id = %query.session_id,
-                message = %msg,
-                "Added message from query parameter"
-            );
-        }
+        && !msg.is_empty()
+    {
+        session.add_user_message(msg);
+        tracing::debug!(
+            session_id = %query.session_id,
+            message = %msg,
+            "Added message from query parameter"
+        );
+    }
 
     let messages = session.messages_with_system();
     let request_id = uuid::Uuid::new_v4().to_string();
@@ -775,10 +786,7 @@ async fn api_get_session(
 }
 
 /// DELETE /api/sessions/:id - Delete a session.
-async fn api_delete_session(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> StatusCode {
+async fn api_delete_session(State(state): State<AppState>, Path(id): Path<String>) -> StatusCode {
     match state.sessions.remove(&id) {
         Some(_) => StatusCode::NO_CONTENT,
         None => StatusCode::NOT_FOUND,
@@ -816,7 +824,7 @@ async fn api_get_messages(
 /// GET /api/models - Proxy request to models.dev API to avoid CORS issues.
 async fn api_get_models() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     tracing::info!("Proxying request to models.dev API");
-    
+
     let client = reqwest::Client::new();
     let response = client
         .get("https://models.dev/api.json")
@@ -824,9 +832,12 @@ async fn api_get_models() -> Result<Json<serde_json::Value>, (StatusCode, String
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch from models.dev");
-            (StatusCode::BAD_GATEWAY, format!("Failed to fetch models: {e}"))
+            (
+                StatusCode::BAD_GATEWAY,
+                format!("Failed to fetch models: {e}"),
+            )
         })?;
-    
+
     if !response.status().is_success() {
         let status = response.status();
         tracing::error!(status = %status, "models.dev returned error status");
@@ -835,15 +846,15 @@ async fn api_get_models() -> Result<Json<serde_json::Value>, (StatusCode, String
             format!("models.dev returned status: {status}"),
         ));
     }
-    
-    let data: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to parse models.dev response");
-            (StatusCode::BAD_GATEWAY, format!("Failed to parse response: {e}"))
-        })?;
-    
+
+    let data: serde_json::Value = response.json().await.map_err(|e| {
+        tracing::error!(error = %e, "Failed to parse models.dev response");
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("Failed to parse response: {e}"),
+        )
+    })?;
+
     tracing::info!("Successfully proxied models.dev API response");
     Ok(Json(data))
 }
@@ -926,12 +937,15 @@ fn load_llm_settings() -> Result<LlmSettings, String> {
 
     // Update provider with Azure deployment info if provided
     if let Provider::AzureOpenAI { .. } = &provider
-        && let Some(deployment) = &deployment_name {
-            provider = Provider::AzureOpenAI {
-                deployment_name: deployment.clone(),
-                api_version: api_version.clone().unwrap_or_else(|| "2024-08-01-preview".to_string()),
-            };
-        }
+        && let Some(deployment) = &deployment_name
+    {
+        provider = Provider::AzureOpenAI {
+            deployment_name: deployment.clone(),
+            api_version: api_version
+                .clone()
+                .unwrap_or_else(|| "2024-08-01-preview".to_string()),
+        };
+    }
 
     // Load optional parallel tool calls setting
     let parallel_tool_calls = std::env::var("LLM_PARALLEL_TOOLS")

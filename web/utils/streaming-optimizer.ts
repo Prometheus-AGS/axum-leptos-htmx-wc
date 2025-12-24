@@ -149,8 +149,10 @@ export class StreamingOptimizer {
       const matches = Array.from(markdown.matchAll(pattern));
       if (matches.length > 0) {
         const lastMatch = matches[matches.length - 1];
-        const matchIndex = lastMatch.index ?? 0;
-        lastStable = Math.max(lastStable, matchIndex + lastMatch[0].length);
+      if (lastMatch) {
+          const matchIndex = lastMatch.index ?? 0;
+          lastStable = Math.max(lastStable, matchIndex + lastMatch[0].length);
+      }
       }
     }
     
@@ -174,6 +176,28 @@ export class StreamingOptimizer {
     }
   }
   
+  /**
+   * Flush all remaining buffers immediately
+   */
+  flushAll(): void {
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    
+    for (const [streamId, bufferedText] of this.buffers.entries()) {
+      if (bufferedText.length > 0) {
+        const callback = this.flushCallbacks.get(streamId);
+        if (callback) {
+          callback(bufferedText);
+        }
+      }
+    }
+    
+    this.buffers.clear();
+    this.flushCallbacks.clear();
+  }
+
   /**
    * Cancel all pending flushes
    */
