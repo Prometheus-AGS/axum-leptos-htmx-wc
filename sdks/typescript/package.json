@@ -1,0 +1,35 @@
+{
+  "name": "@prometheus-ags/axum-leptos-htmx-wc-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for axum-leptos-htmx-wc - HTTP client for the agentic AI application",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Prometheus-AGS/axum-leptos-htmx-wc.git",
+    "directory": "sdks/typescript"
+  },
+  "keywords": ["sdk", "api", "client", "llm", "agent", "rag"],
+  "author": "Developer",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
+}

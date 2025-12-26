@@ -1,0 +1,38 @@
+[template]
+cargo_generate_version = ">=0.18.0"
+
+[placeholders]
+project_name = { prompt = "Project name (kebab-case)?", default = "my-app" }
+project_description = { prompt = "Project description?", default = "An agentic AI application with tool-first LLM interaction" }
+author_name = { prompt = "Author name?", default = "Developer" }
+author_email = { prompt = "Author email?", default = "dev@example.com" }
+github_org = { prompt = "GitHub organization/username?", default = "my-org" }
+enable_tauri = { prompt = "Include Tauri desktop app support?", type = "bool", default = true }
+enable_docker = { prompt = "Include Docker configuration?", type = "bool", default = true }
+include_sdks = { prompt = "Include SDK scaffolding (Rust/TS/Python)?", type = "bool", default = true }
+
+# Conditional file exclusions
+[conditional.'!enable_tauri']
+ignore = ["src-tauri/**"]
+
+[conditional.'!enable_docker']
+ignore = ["Dockerfile", "docker-compose.*.yaml"]
+
+[conditional.'!include_sdks']
+ignore = ["sdks/**"]
+
+# Files to ignore from templating (binary, generated, etc.)
+[template]
+exclude = [
+    ".git/**",
+    "target/**",
+    "node_modules/**",
+    "*.lock",
+    "Cargo.lock",
+    "bun.lock",
+    "package-lock.json",
+    ".fastembed_cache/**",
+    "playwright-report/**",
+    "test-results/**",
+    "*.log",
+]

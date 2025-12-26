@@ -1,0 +1,135 @@
+name: Template Cleanup
+
+on:
+  # Auto-run on first push after creating from template
+  push:
+    branches: [main]
+  # Manual trigger with custom inputs
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Project name (kebab-case)'
+        required: false
+        default: ''
+      author_name:
+        description: 'Author name'
+        required: false
+        default: 'Developer'
+      github_org:
+        description: 'GitHub organization (leave empty to use repo owner)'
+        required: false
+        default: ''
+
+jobs:
+  cleanup:
+    # Only run if this is NOT the original template repository
+    if: github.repository != 'Prometheus-AGS/axum-leptos-htmx-wc'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Determine project name
+        id: project
+        run: |
+          # Use input if provided, otherwise derive from repo name
+          if [ -n "${{ inputs.project_name }}" ]; then
+            PROJECT_NAME="${{ inputs.project_name }}"
+          else
+            PROJECT_NAME="${{ github.event.repository.name }}"
+          fi
+          
+          # Use input org or derive from repo owner
+          if [ -n "${{ inputs.github_org }}" ]; then
+            GITHUB_ORG="${{ inputs.github_org }}"
+          else
+            GITHUB_ORG="${{ github.repository_owner }}"
+          fi
+          
+          # Convert to crate name (replace - with _)
+          CRATE_NAME=$(echo "$PROJECT_NAME" | tr '-' '_')
+          
+          echo "name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          echo "crate_name=$CRATE_NAME" >> $GITHUB_OUTPUT
+          echo "github_org=$GITHUB_ORG" >> $GITHUB_OUTPUT
+          echo "author=${{ inputs.author_name || 'Developer' }}" >> $GITHUB_OUTPUT
+          
+          echo "Project: $PROJECT_NAME"
+          echo "Crate: $CRATE_NAME"
+          echo "Org: $GITHUB_ORG"
+      
+      - name: Run replacements
+        run: |
+          PROJECT="${{ steps.project.outputs.name }}"
+          CRATE="${{ steps.project.outputs.crate_name }}"
+          ORG="${{ steps.project.outputs.github_org }}"
+          AUTHOR="${{ steps.project.outputs.author }}"
+          
+          echo "🔄 Replacing project names..."
+          
+          # Files to process
+          FILES=(
+            "Cargo.toml"
+            "package.json"
+            "README.md"
+            "src-tauri/Cargo.toml"
+            "src-tauri/tauri.conf.json"
+            "docker-compose.dev.yaml"
+            "docker-compose.prod.yaml"
+            "docker-compose.test.yaml"
+            "sdks/rust/Cargo.toml"
+            "sdks/typescript/package.json"
+            "sdks/python/pyproject.toml"
+          )
+          
+          for file in "${FILES[@]}"; do
+            if [ -f "$file" ]; then
+              echo "  Processing: $file"
+              # Replace all template patterns
+              sed -i "s/axum-leptos-htmx-wc/${PROJECT}/g" "$file"
+              sed -i "s/axum_leptos_htmx_wc/${CRATE}/g" "$file"
+              sed -i "s/Prometheus-AGS/${ORG}/g" "$file"
+              sed -i "s/{{project-name}}/${PROJECT}/g" "$file"
+              sed -i "s/{{crate_name}}/${CRATE}/g" "$file"
+              sed -i "s/{{github_org}}/${ORG}/g" "$file"
+              sed -i "s/{{author_name}}/${AUTHOR}/g" "$file"
+            fi
+          done
+          
+          # Rename SDK directories if they contain template patterns
+          if [ -d "sdks/rust/src" ]; then
+            find sdks -name "*.rs" -exec sed -i "s/axum_leptos_htmx_wc/${CRATE}/g" {} \;
+          fi
+          
+          echo "✅ Replacements complete"
+      
+      - name: Remove template files
+        run: |
+          echo "🧹 Removing template-specific files..."
+          rm -f cargo-generate.toml
+          rm -f bootstrap.sh 2>/dev/null || true
+          rm -rf tools/project-init 2>/dev/null || true
+          rm -f .github/workflows/template-cleanup.yml
+          echo "✅ Template files removed"
+      
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            COMMIT_MSG="chore: initialize project from template
+
+Project: ${{ steps.project.outputs.name }}
+Organization: ${{ steps.project.outputs.github_org }}"
+            git commit -m "$COMMIT_MSG"
+            git push
+            echo "✅ Changes committed and pushed"
+          fi

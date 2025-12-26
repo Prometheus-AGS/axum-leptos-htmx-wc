@@ -18,6 +18,33 @@ Everything is wired against real protocols, real streaming, and real tools from 
 
 ---
 
+## 🚀 Using This Template
+
+This project is a GitHub template. Create your own project from it:
+
+### Option 1: GitHub UI
+Click **"Use this template"** → The cleanup workflow runs automatically on first push.
+
+### Option 2: cargo-generate
+```bash
+cargo generate --git https://github.com/Prometheus-AGS/axum-leptos-htmx-wc
+```
+
+### Option 3: Bootstrap Script
+```bash
+git clone https://github.com/Prometheus-AGS/axum-leptos-htmx-wc my-project
+cd my-project && ./bootstrap.sh
+```
+
+### Option 4: Rust TUI CLI
+```bash
+cd tools/project-init && cargo run
+```
+
+See [TEMPLATE_USAGE.md](./TEMPLATE_USAGE.md) for detailed configuration options.
+
+---
+
 ## High-Level Goals
 
 This project exists to prove (and then serve as a template for):
