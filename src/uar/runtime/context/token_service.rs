@@ -1,8 +1,7 @@
-use crate::llm::{Message, MessageRole};
-use anyhow::Result;
-use tiktoken_rs::{cl100k_base, get_bpe_from_model};
-use tracing::warn;
+use crate::llm::Message;
+use tiktoken_rs::cl100k_base;
 
+#[derive(Debug)]
 pub struct TokenService;
 
 impl TokenService {

@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ModelList {
     pub object: String, // "list"
     pub data: Vec<ModelCard>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ModelCard {
     pub id: String,
     pub object: String, // "model"

@@ -18,6 +18,16 @@ pub struct IngestService {
     // Ideally store tracking info in DB.
 }
 
+impl std::fmt::Debug for IngestService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IngestService")
+            .field("persistence", &"<dyn PersistenceLayer>")
+            .field("vector_matcher", &self.vector_matcher)
+            .field("chunker", &self.chunker)
+            .finish()
+    }
+}
+
 impl IngestService {
     pub fn new(
         persistence: Arc<dyn PersistenceLayer>,

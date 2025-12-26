@@ -1,16 +1,19 @@
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, Path, State},
+    extract::{DefaultBodyLimit, Path, Request, State},
     http::StatusCode,
+    middleware::Next,
+    response::IntoResponse,
     routing::{get, get_service, post},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+
 use tower_http::services::ServeFile;
-use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+
 use tracing::info;
 
 use crate::AppState;
@@ -143,9 +146,9 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
     );
 
     // Initialize Global Rate Limiter
-    let rate_limiter = Arc::new(uar::security::rate_limit::SimpleRateLimiter::new(
+    let rate_limiter = Arc::new(uar::security::rate_limit::AppRateLimiter::new(
         config.resilience.requests_per_second,
-        config.resilience.burst_size,
+        config.resilience.burst_size as u32,
     ));
 
     let state = AppState {
@@ -184,9 +187,71 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
             state.clone(),
             uar::security::middleware::auth_middleware,
         ))
-        .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::new(Duration::from_secs(30)))
+        // Apply Timeout Layer if not disabled
+        // We use a large timeout if disabled instead of conditional layering to keep types consistent
+        .layer(TraceLayer::new_for_http());
+
+    // We can't easily conditionally apply a layer in the chain if types differ.
+    // Standard pattern:
+    // let app = app.layer(...)
+    // if condition { app = app.layer(...) } -> type changes!
+    // Axum Router type changes with layers.
+    // Actually, TimeoutLayer is a Service layer.
+
+    // Instead of fighting types, we can use `ServiceBuilder` but even then.
+    // A common workaround:
+    // Configure all layers in a `ServiceBuilder`? No, same type issue.
+    //
+    // Option A: Use `BoxRoute` / `BoxService` (performance hit).
+    // Option B: Always apply a layer, but make it a No-Op? `TimeoutLayer` doesn't have a no-op mode easily.
+    // Option C: Middleware refactoring.
+
+    // Actually, for timeouts, we likely ALWAYs want a timeout unless debugging.
+    // But user requirement says "can be turned off".
+
+    // Let's use `MapRequest` or similar? No.
+    // Let's go with the `stack` approach if possible or accepted boilerplate.
+
+    // Or we just accept the Box overhead? It's fine for this app.
+    // `app.boxed()` ?
+
+    // Let's try to just rebuild the router or use `tower::ServiceBuilder`.
+    // Actually, `Router` has `layer`.
+
+    // If I do:
+    // let app = Router::new()...;
+    // let app = if config.enabled { app.layer(Limit) } else { app };
+    // This fails because `app` type changes.
+
+    // Solution: `tower::util::OptionLayer`? No, maybe simpler:
+    // Just wrap logic in a custom middleware that applies the timeout?
+    // `Timeout` is a service, not just middleware fn.
+
+    // Let's stick to adding them unconditionally for now BUT utilize a very large timeout if disabled?
+    // "Timeout disabled" -> Duration::MAX?
+    // That effectively disables it without changing types.
+
+    let timeout_duration = if config.resilience.timeout_disabled {
+        Duration::from_secs(365 * 24 * 60 * 60) // 1 year
+    } else {
+        Duration::from_secs(30)
+    };
+
+    let app = app
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024)) // 10MB limit
+        .layer(axum::middleware::from_fn(
+            move |req: Request, next: Next| {
+                let duration = timeout_duration;
+                async move {
+                    match tokio::time::timeout(duration, next.run(req)).await {
+                        Ok(res) => res,
+                        Err(_) => {
+                            (StatusCode::REQUEST_TIMEOUT, "Request timed out").into_response()
+                        }
+                    }
+                }
+            },
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             uar::security::rate_limit::rate_limit_middleware,
@@ -202,7 +267,7 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
         "Server started"
     );
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service()).await?;
     Ok(())
 }
 

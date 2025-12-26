@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use text_splitter::{Characters, ChunkConfig, TextSplitter};
-use tracing::{info, warn};
+use tracing::warn;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ChunkingStrategy {
@@ -23,6 +23,7 @@ pub enum ChunkingStrategy {
     Agentic,
 }
 
+#[derive(Debug)]
 pub struct Chunker {
     strategy: ChunkingStrategy,
     // Optional because not all strategies need it

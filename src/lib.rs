@@ -37,7 +37,7 @@ pub mod session;
 pub mod uar;
 
 use crate::config::AppConfig;
-use crate::uar::security::rate_limit::SimpleRateLimiter;
+use crate::uar::security::rate_limit::AppRateLimiter;
 
 use llm::orchestrator::Orchestrator;
 use mcp::registry::McpRegistry;
@@ -49,7 +49,7 @@ use uar::runtime::manager::RunManager;
 use uar::runtime::matching::VectorMatcher;
 
 /// Application state shared across all handlers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppState {
     /// MCP server registry for tool discovery and execution.
     #[allow(dead_code)]
@@ -68,7 +68,7 @@ pub struct AppState {
     /// Persistence Layer
     pub persistence: Option<Arc<dyn PersistenceLayer>>,
     /// Global Rate Limiter
-    pub rate_limiter: Arc<SimpleRateLimiter>,
+    pub rate_limiter: Arc<AppRateLimiter>,
     /// Global Configuration
     pub config: Arc<AppConfig>,
 }

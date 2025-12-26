@@ -1,7 +1,7 @@
 use super::types::*;
 use crate::AppState;
 use crate::uar::security::claims::UserContext;
-use crate::uar::{defaults, domain::events::NormalizedEvent, runtime::manager::RunManager};
+use crate::uar::{defaults, domain::events::NormalizedEvent};
 use axum::{
     extract::{Extension, Json, State},
     http::StatusCode,
@@ -10,12 +10,7 @@ use axum::{
         sse::{Event, Sse},
     },
 };
-use futures::Stream;
-use serde_json::json;
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 pub async fn list_models(State(_state): State<AppState>) -> impl IntoResponse {

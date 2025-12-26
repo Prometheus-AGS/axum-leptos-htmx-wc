@@ -2,7 +2,7 @@ use crate::session::Session;
 use crate::uar::domain::knowledge::{KnowledgeBase, KnowledgeChunk, KnowledgeMatch};
 use crate::uar::domain::skills::{Skill, SkillMatch};
 use crate::uar::persistence::PersistenceLayer;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use surrealdb::Surreal;

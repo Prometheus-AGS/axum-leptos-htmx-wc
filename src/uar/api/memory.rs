@@ -1,14 +1,13 @@
 use crate::AppState;
-use crate::uar::domain::memory::{Memory, MemoryMatch};
+use crate::uar::domain::memory::Memory;
 use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]

@@ -6,7 +6,6 @@ use axum::{
     response::Response,
 };
 use jsonwebtoken::{DecodingKey, Validation, decode};
-use std::env;
 
 use super::claims::{UserClaims, UserContext};
 

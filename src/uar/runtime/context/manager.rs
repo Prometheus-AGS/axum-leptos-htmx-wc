@@ -1,7 +1,7 @@
 use super::token_service::TokenService;
 use crate::llm::{Message, MessageRole};
 use crate::uar::domain::context::{ContextAction, ContextConfig, ContextStrategy};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 #[derive(Debug)]
 pub struct ContextManager {
@@ -130,7 +130,7 @@ impl ContextManager {
         // Keep all system messages
         let mut msg_iter = messages.iter().enumerate();
 
-        while let Some((idx, msg)) = msg_iter.next() {
+        while let Some((_idx, msg)) = msg_iter.next() {
             if msg.role == MessageRole::System {
                 let t = TokenService::estimate_string(&msg.content) + 3;
                 if t < budget {
@@ -206,7 +206,6 @@ impl ContextManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::{Message, MessageRole};
 
     fn make_msg(content: &str, role: MessageRole) -> Message {
         Message {
@@ -275,7 +274,7 @@ mod tests {
         let mut messages = Vec::new();
         messages.push(make_msg("System", MessageRole::System));
         messages.push(make_msg("First User", MessageRole::User)); // Keep this
-        for i in 0..20 {
+        for _i in 0..20 {
             messages.push(make_msg("Filler", MessageRole::Assistant));
         }
         messages.push(make_msg("Last User", MessageRole::User)); // Keep this

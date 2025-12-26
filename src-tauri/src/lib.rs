@@ -18,7 +18,12 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Load configuration (environment variables should be handled by the library internally or passed here)
                 // For now, we rely on the library's internal loading mechanism which checks env vars
-                let config = config::AppConfig::load().expect("Failed to load configuration");
+                let mut config = config::AppConfig::load().expect("Failed to load configuration");
+
+                // FORCE DISABLE RESILIENCE FEATURES FOR DESKTOP/MOBILE APP
+                // User requirement: "turned off when run in tauri"
+                config.resilience.rate_limit_enabled = false;
+                config.resilience.timeout_disabled = true;
 
                 let llm_settings = match config::load_llm_settings() {
                     Ok(settings) => settings,

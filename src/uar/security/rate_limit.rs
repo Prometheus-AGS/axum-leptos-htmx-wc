@@ -5,93 +5,59 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use governor::{
+    Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, NotKeyed},
+};
+use std::num::NonZeroU32;
+use std::sync::Arc;
+use tracing::warn;
 
-/// Simple Token Bucket Rate Limiter
-/// Not keyed by IP in this global version (IP extraction requires ConnectInfo),
-/// so we just limit global requests/sec for simplicity or use a single global bucket.
-///
-/// Requirement: 5 req/s.
-pub struct SimpleRateLimiter {
-    // Last check time and tokens count
-    // (last_update, tokens)
-    state: Mutex<(Instant, f32)>,
-    rate_per_sec: f32,
-    burst_size: f32,
+/// Wrapper around Governor Rate Limiter to be stored in AppState
+/// We use a generic non-keyed limiter for global rate limiting as per current design.
+/// (Keyed by IP would require extracting IP which is added complexity).
+#[derive(Debug, Clone)]
+pub struct AppRateLimiter {
+    limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
 }
 
-impl SimpleRateLimiter {
-    pub fn new(rate_per_sec: f32, burst_size: f32) -> Self {
+impl AppRateLimiter {
+    pub fn new(requests_per_second: f32, burst_size: u32) -> Self {
+        // Convert f32 rate to Quota. Per second.
+        // Governor requires non-zero.
+        let burst = NonZeroU32::new(burst_size).unwrap_or(NonZeroU32::new(1).unwrap());
+
+        // Convert requests_per_second to duration between requests approx?
+        // Governor's Quota::per_second takes a u32.
+        // If we want fractional, we might need per_period.
+        // Let's assume u32 for now or ceil.
+        let rps = NonZeroU32::new(requests_per_second.ceil() as u32)
+            .unwrap_or(NonZeroU32::new(1).unwrap());
+
+        let quota = Quota::per_second(rps).allow_burst(burst);
+
         Self {
-            state: Mutex::new((Instant::now(), burst_size)),
-            rate_per_sec,
-            burst_size,
+            limiter: Arc::new(RateLimiter::direct(quota)),
         }
     }
 
     pub fn check(&self) -> bool {
-        let mut guard = self.state.lock().unwrap();
-        let (last_update, tokens) = *guard;
-        let now = Instant::now();
-        let elapsed = now.duration_since(last_update).as_secs_f32();
-
-        let mut new_tokens = tokens + (elapsed * self.rate_per_sec);
-        if new_tokens > self.burst_size {
-            new_tokens = self.burst_size;
-        }
-
-        if new_tokens >= 1.0 {
-            *guard = (now, new_tokens - 1.0);
-            true
-        } else {
-            // Update time even if failed? No, standard algorithm updates time
-            // but we can just update tokens up to now.
-            // Actually, we must update state to reflect time passage even if we deny.
-            *guard = (now, new_tokens);
-            false
-        }
+        self.limiter.check().is_ok()
     }
 }
 
-/// Middleware to enforce rate limits
 /// Middleware to enforce rate limits
 pub async fn rate_limit_middleware(
     State(state): State<AppState>,
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    if state.config.resilience.rate_limit_enabled && !state.rate_limiter.check() {
-        return Err(StatusCode::TOO_MANY_REQUESTS);
+    if state.config.resilience.rate_limit_enabled {
+        if !state.rate_limiter.check() {
+            warn!("Rate limit exceeded");
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
     }
     Ok(next.run(req).await)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_simple_rate_limiter() {
-        let limiter = SimpleRateLimiter::new(2.0, 5.0); // 2 req/s, 5 burst
-
-        // Consume all burst
-        assert!(limiter.check()); // 4.0
-        assert!(limiter.check()); // 3.0
-        assert!(limiter.check()); // 2.0
-        assert!(limiter.check()); // 1.0
-        assert!(limiter.check()); // 0.0
-
-        // Next should fail (immediate)
-        assert!(!limiter.check());
-
-        // Wait for 0.6s -> +1.2 tokens -> 1.2 total -> check consumes 1 -> 0.2 left -> success
-        std::thread::sleep(Duration::from_millis(600));
-        assert!(limiter.check());
-
-        // Immediate fail
-        assert!(!limiter.check());
-    }
 }

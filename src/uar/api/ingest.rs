@@ -1,5 +1,4 @@
 use crate::AppState;
-use crate::uar::rag::ingest::IngestService;
 use axum::{
     Json,
     extract::{Multipart, State},
@@ -7,7 +6,6 @@ use axum::{
 };
 use serde_json::json;
 use std::env;
-use std::sync::Arc;
 use tokio::fs;
 use uuid::Uuid;
 
@@ -22,9 +20,12 @@ pub async fn ingest_handler(
     let kb_id = "default";
 
     while let Ok(Some(field)) = multipart.next_field().await {
-        let name = field.name().unwrap_or("").to_string();
+        let _name = field.name().unwrap_or("unknown").to_string();
         let file_name = field.file_name().unwrap_or("unknown.txt").to_string();
-        let content_type = field.content_type().unwrap_or("text/plain").to_string();
+        let _content_type = field
+            .content_type()
+            .unwrap_or("application/octet-stream")
+            .to_string();
 
         if let Ok(data) = field.bytes().await {
             // Save to temp file

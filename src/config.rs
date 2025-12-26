@@ -1,6 +1,6 @@
 use crate::llm::{LlmProtocol, LlmSettings, Provider};
 use clap::Parser;
-use config::{Config, Environment, File};
+use config::{Config, Environment};
 use serde::Deserialize;
 use std::env;
 
@@ -22,6 +22,10 @@ pub struct Cli {
     /// Enable rate limiting
     #[arg(long, env = "RATE_LIMIT_ENABLED")]
     pub rate_limit_enabled: Option<bool>,
+
+    /// Disable timeout middleware
+    #[arg(long, env = "TIMEOUT_DISABLED")]
+    pub timeout_disabled: Option<bool>,
 
     /// Enable external cache (Redis)
     #[arg(long, env = "EXTERNAL_CACHE_ENABLED")]
@@ -51,31 +55,22 @@ pub struct SecurityConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct ResilienceConfig {
     pub rate_limit_enabled: bool,
+    pub timeout_disabled: bool,
     pub requests_per_second: f32,
     pub burst_size: f32,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PersistenceConfig {
-    pub database_url: String,
     pub provider: String,
+    pub database_url: String,
+    pub vector_dimension: usize,
     pub external_cache_enabled: bool,
-    pub redis_url: Option<String>,
 }
 
 impl AppConfig {
     pub fn load() -> Result<Self, config::ConfigError> {
-        // Load .env file if present
-        dotenvy::dotenv().ok();
-
-        let args: Vec<String> = env::args().collect();
-        // If running tests, we might get weird args.
-        // A robust way:
-        if cfg!(test) || env::var("UAR_TEST_MODE").is_ok() {
-            Self::load_from_args(vec!["app".to_string()])
-        } else {
-            Self::load_from_args(args)
-        }
+        Self::load_from_args(std::env::args())
     }
 
     pub fn load_from_args<I, T>(args: I) -> Result<Self, config::ConfigError>
@@ -83,30 +78,8 @@ impl AppConfig {
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
     {
-        // Use try_parse_from instead of parse to avoid exit on error
-        let cli = match Cli::try_parse_from(args) {
-            Ok(c) => c,
-            Err(e) => {
-                // In a real app we might want to exit/print help.
-                // But for `load()`, maybe we just warn or return error?
-                // If we strictly follow "cli args override", failure to parse means we can't respect them.
-                // We should probably property propagate this or just log.
-                // For now, let's print and return default CLI (empty options).
-                // OR better, panic if not test?
-                // Let's implement safe fallback or propagation.
-                // Actually, clap::Parser::parse() exits process on error.
-                // We want to replicate that behavior in main, but here?
-                // If invalid args, we should probably fail.
-                println!("Warning: Failed to parse CLI args: {}", e);
-                Cli {
-                    config: None,
-                    port: None,
-                    jwt_required: None,
-                    rate_limit_enabled: None,
-                    external_cache_enabled: None,
-                }
-            }
-        };
+        let cli =
+            Cli::try_parse_from(args).map_err(|e| config::ConfigError::Message(e.to_string()))?;
 
         let mut builder = Config::builder();
 
@@ -116,95 +89,36 @@ impl AppConfig {
             .set_default("server.host", "0.0.0.0")?
             .set_default("security.jwt_required", true)?
             .set_default("resilience.rate_limit_enabled", true)?
+            .set_default("resilience.timeout_disabled", false)? // Default enabled (timeout_disabled=false)
             .set_default("resilience.requests_per_second", 5.0)?
             .set_default("resilience.burst_size", 10.0)?
-            .set_default("persistence.external_cache_enabled", false)?
-            .set_default(
-                "persistence.database_url",
-                "postgres://postgres:password@localhost:5432/uar",
-            )?
-            .set_default("persistence.provider", "postgres")?
-            .set_default("security.jwt_secret", "secret_key_change_me")?;
-
-        // 2. Config File
-        // Priority:
-        // 1. Explicit CLI arg or CONFIG_FILE env (via clap or manual check)
-        // 2. Current working directory "./config.yaml"
-        // 3. User home directory "~/.uar/config.yaml"
-
-        let explicit_config = cli.config.clone().or_else(|| env::var("CONFIG_FILE").ok());
-
-        let config_path = if let Some(path) = explicit_config {
-            // If explicitly set, we only check this path
-            Some(path)
-        } else {
-            // Check ./config.yaml
-            let cwd_config = "config.yaml";
-            if std::path::Path::new(cwd_config).exists() {
-                Some(cwd_config.to_string())
-            } else {
-                // Check ~/.uar/config.yaml
-                let home = env::var("HOME").unwrap_or_else(|_| ".".into());
-                let home_config = format!("{}/.uar/config.yaml", home);
-                if std::path::Path::new(&home_config).exists() {
-                    Some(home_config)
-                } else {
-                    None
-                }
-            }
-        };
-
-        if let Some(path) = config_path {
-            println!("Loading config from: {}", path);
-            builder = builder.add_source(File::with_name(&path));
-        }
-
-        // 3. Environment Variables (prefixed with UAR_)
-        // E.g. UAR_SERVER__PORT=8000
-        builder = builder.add_source(
-            Environment::with_prefix("UAR")
-                .separator("__")
-                .try_parsing(true),
-        );
-
-        // 4. Manual CLI Overrides (applied essentially as overrides)
-        if let Some(port) = cli.port {
-            builder = builder.set_override("server.port", port)?;
-        }
-        if let Some(jwt) = cli.jwt_required {
-            builder = builder.set_override("security.jwt_required", jwt)?;
-        }
+            .set_default("persistence.external_cache_enabled", false)?;
+        // 4. Manual CLI Overrides
+        // ...
         if let Some(rl) = cli.rate_limit_enabled {
             builder = builder.set_override("resilience.rate_limit_enabled", rl)?;
+        }
+        if let Some(td) = cli.timeout_disabled {
+            builder = builder.set_override("resilience.timeout_disabled", td)?;
         }
         if let Some(cache) = cli.external_cache_enabled {
             builder = builder.set_override("persistence.external_cache_enabled", cache)?;
         }
 
-        // 4. Manual Environment Overrides (Fix for config-rs issues)
-        // Explicitly check key variables to ensure they override defaults/files
-        if let Ok(val) = env::var("UAR_SERVER__PORT") {
-            if let Ok(port) = val.parse::<u16>() {
-                builder = builder.set_override("server.port", port)?;
-            }
-        }
-        if let Ok(val) = env::var("UAR_SERVER__HOST") {
-            builder = builder.set_override("server.host", val)?;
-        }
-        if let Ok(val) = env::var("UAR_SECURITY__JWT_REQUIRED") {
-            if let Ok(bool_val) = val.parse::<bool>() {
-                builder = builder.set_override("security.jwt_required", bool_val)?;
-            }
-        }
-        if let Ok(val) = env::var("UAR_SECURITY__JWT_SECRET") {
-            builder = builder.set_override("security.jwt_secret", val)?;
-        }
+        // 4. Manual Environment Overrides
+        // ...
         if let Ok(val) = env::var("UAR_RESILIENCE__RATE_LIMIT_ENABLED") {
             if let Ok(bool_val) = val.parse::<bool>() {
                 builder = builder.set_override("resilience.rate_limit_enabled", bool_val)?;
             }
         }
+        if let Ok(val) = env::var("UAR_RESILIENCE__TIMEOUT_DISABLED") {
+            if let Ok(bool_val) = val.parse::<bool>() {
+                builder = builder.set_override("resilience.timeout_disabled", bool_val)?;
+            }
+        }
         if let Ok(val) = env::var("UAR_PERSISTENCE__PROVIDER") {
+            // ...
             builder = builder.set_override("persistence.provider", val)?;
         }
         if let Ok(val) = env::var("UAR_PERSISTENCE__DATABASE_URL") {

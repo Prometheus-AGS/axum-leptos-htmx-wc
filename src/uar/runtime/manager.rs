@@ -202,7 +202,7 @@ impl RunManager {
         // Context Management
         let (optimized_messages, context_action) =
             self.context_manager.apply(messages, 128000).await;
-        let mut messages = optimized_messages;
+        let messages = optimized_messages;
         if let Some(act) = context_action {
             let _ = tx.send(NormalizedEvent::ContextAction(act));
         }

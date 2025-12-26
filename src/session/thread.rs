@@ -38,7 +38,7 @@ struct SessionInner {
     system_prompt: RwLock<Option<String>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SessionState {
     pub id: String,
     pub messages: Vec<Message>,
