@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SURREAL_URL=${SURREAL_URL}
+      - REDIS_URL=${REDIS_URL}
+      - RUST_LOG=info
+    depends_on:
+      - postgres
+      - surreal
+      - redis
+    networks:
+      - uar-prod-net
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    networks:
+      - uar-prod-net
+
+  surreal:
+    image: surrealdb/surrealdb:latest
+    restart: always
+    command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} file://data/surreal.db
+    volumes:
+      - surreal_data_prod:/data
+    networks:
+      - uar-prod-net
+
+  redis:
+    image: redis/redis-stack:latest
+    restart: always
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - uar-prod-net
+
+networks:
+  uar-prod-net:
+    driver: bridge
+
+volumes:
+  postgres_data_prod:
+  surreal_data_prod:
+  redis_data_prod:

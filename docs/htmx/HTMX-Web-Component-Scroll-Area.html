@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HTMX + Web Component — Scroll Area</title>
+
+    <!-- HTMX (self-contained artifact) -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+    <style>
+      /* Material-ish tokens (dynamic theming via custom props) */
+      :root {
+        --primary-hue: 210; /* tweak to theme */
+        --primary: hsl(var(--primary-hue), 70%, 56%);
+        --on-primary: hsl(var(--primary-hue), 100%, 98%);
+
+        --surface: hsl(var(--primary-hue), 12%, 10%);
+        --surface-container-low: hsl(var(--primary-hue), 12%, 14%);
+        --surface-container: hsl(var(--primary-hue), 12%, 18%);
+        --surface-container-high: hsl(var(--primary-hue), 12%, 22%);
+
+        --on-surface: hsl(var(--primary-hue), 20%, 92%);
+        --on-surface-variant: hsl(var(--primary-hue), 12%, 72%);
+
+        --focus: hsl(var(--primary-hue), 80%, 60%);
+        --danger: hsl(0, 85%, 65%);
+
+        --radius-xl: 18px;
+        --radius-lg: 14px;
+        --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+
+        --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        background: radial-gradient(circle at 10% 0%, #0b1220 0%, #070b12 45%, #05070c 100%);
+        color: var(--on-surface);
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+      }
+
+      .zone {
+        background: linear-gradient(180deg, var(--surface-container) 0%, var(--surface-container-low) 100%);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .zone__header {
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: linear-gradient(180deg, var(--surface-container-high) 0%, var(--surface-container) 100%);
+      }
+
+      .title {
+        display: grid;
+        gap: 2px;
+      }
+      .title h1 {
+        margin: 0;
+        font-size: 16px;
+        letter-spacing: 0.2px;
+      }
+      .title p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--on-surface-variant);
+        line-height: 1.35;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255,255,255,0.06);
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        color: var(--on-surface-variant);
+      }
+
+      .btn {
+        appearance: none;
+        border: 0;
+        background: rgba(255,255,255,0.08);
+        color: var(--on-surface);
+        padding: 10px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: transform 150ms ease, background 150ms ease;
+      }
+      .btn:hover { background: rgba(255,255,255,0.12); }
+      .btn:active { transform: translateY(1px); }
+      .btn--primary {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+      .btn--primary:hover { filter: brightness(1.05); }
+
+      .zone__body {
+        padding: 16px 18px 18px 18px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 14px;
+      }
+      @media (max-width: 860px) {
+        .row { grid-template-columns: 1fr; }
+      }
+
+      .card {
+        background: rgba(255,255,255,0.05);
+        border-radius: var(--radius-lg);
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .label {
+        font-size: 12px;
+        color: var(--on-surface-variant);
+      }
+
+      .input {
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(0,0,0,0.25);
+        color: var(--on-surface);
+        outline: none;
+      }
+      .input:focus {
+        box-shadow: 0 0 0 3px rgba(0,0,0,0.2), 0 0 0 2px var(--focus);
+      }
+
+      /* HTMX indicator pattern (local) */
+      .spinner {
+        display: none;
+        font-size: 12px;
+        color: var(--on-surface-variant);
+      }
+      .htmx-request .spinner { display: inline-flex; }
+
+      /* Demo items styling */
+      .item {
+        padding: 10px 10px;
+        border-radius: 12px;
+        background: rgba(0,0,0,0.20);
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .item strong { font-size: 13px; }
+      .item small { color: var(--on-surface-variant); font-size: 12px; }
+      .pill {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.08);
+        color: var(--on-surface-variant);
+        white-space: nowrap;
+      }
+
+      /* Sentinel button-ish row */
+      .loadmore {
+        padding: 10px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.06);
+        color: var(--on-surface-variant);
+        text-align: center;
+        font-size: 12px;
+      }
+    </style>
+
+    <script>
+      /**
+       * <mz-scroll-area> web component
+       * - Shadow DOM encapsulation (isolated styles) aligns with the recommended isolation model. [1]
+       * - Exposes:
+       *   - slot="content" for scrollable content
+       *   - slot="topbar" for optional sticky header content
+       *   - attributes: height (e.g. "340px")
+       */
+      class MzScrollArea extends HTMLElement {
+        static get observedAttributes() { return ["height"]; }
+
+        constructor() {
+          super();
+          this.attachShadow({ mode: "open" });
+          this.shadowRoot.innerHTML = `
+            <style>
+              :host {
+                display: block;
+                --radius: 16px;
+                --track: rgba(255,255,255,0.08);
+                --thumb: rgba(255,255,255,0.22);
+                --thumb-hover: rgba(255,255,255,0.32);
+                --surface: rgba(255,255,255,0.06);
+                --surface-2: rgba(0,0,0,0.25);
+                --on-surface: rgba(255,255,255,0.92);
+                --on-surface-variant: rgba(255,255,255,0.70);
+                --focus: rgba(120,190,255,0.95);
+                --height: 340px;
+              }
+
+              .wrap {
+                background: var(--surface);
+                border-radius: var(--radius);
+                overflow: hidden;
+                position: relative;
+              }
+
+              .topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 10px 12px;
+                background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+                color: var(--on-surface-variant);
+                font-size: 12px;
+              }
+
+              .viewport {
+                height: var(--height);
+                overflow: auto;
+                padding: 10px;
+                background: var(--surface-2);
+                color: var(--on-surface);
+                scroll-behavior: smooth;
+              }
+
+              .viewport:focus {
+                outline: none;
+                box-shadow: inset 0 0 0 2px var(--focus);
+              }
+
+              /* Nice scrollbars (where supported) */
+              .viewport::-webkit-scrollbar { width: 10px; height: 10px; }
+              .viewport::-webkit-scrollbar-track { background: transparent; }
+              .viewport::-webkit-scrollbar-thumb {
+                background: var(--thumb);
+                border-radius: 999px;
+                border: 2px solid transparent;
+                background-clip: padding-box;
+              }
+              .viewport::-webkit-scrollbar-thumb:hover { background: var(--thumb-hover); }
+
+              /* Firefox */
+              .viewport { scrollbar-color: var(--thumb) transparent; scrollbar-width: thin; }
+
+              .hint {
+                padding: 10px 12px;
+                font-size: 12px;
+                color: var(--on-surface-variant);
+              }
+            </style>
+
+            <div class="wrap">
+              <div class="topbar">
+                <slot name="topbar"></slot>
+              </div>
+
+              <div class="viewport" part="viewport" tabindex="0">
+                <slot name="content"></slot>
+              </div>
+
+              <div class="hint">
+                Tip: use the mouse wheel, trackpad, or focus and use PgUp/PgDn/Arrow keys.
+              </div>
+            </div>
+          `;
+        }
+
+        connectedCallback() {
+          this.#syncHeight();
+        }
+
+        attributeChangedCallback() {
+          this.#syncHeight();
+        }
+
+        #syncHeight() {
+          const h = this.getAttribute("height");
+          const viewport = this.shadowRoot.querySelector(".viewport");
+          viewport.style.setProperty("--height", h ? h : "340px");
+        }
+
+        // convenience API
+        scrollToTop() {
+          this.shadowRoot.querySelector(".viewport").scrollTo({ top: 0, behavior: "smooth" });
+        }
+        scrollToBottom() {
+          const v = this.shadowRoot.querySelector(".viewport");
+          v.scrollTo({ top: v.scrollHeight, behavior: "smooth" });
+        }
+      }
+
+      customElements.define("mz-scroll-area", MzScrollArea);
+
+      // Demo helpers: no backend required, but this shows HTMX hooks.
+      document.addEventListener("DOMContentLoaded", () => {
+        const root = document.getElementById("demo-root");
+        root.addEventListener("htmx:afterSwap", (e) => {
+          // If results are appended into our scroll area, keep the user at bottom (optional UX).
+          // You can also use hx-swap scroll/show modifiers when you do server responses. [30]
+          const sa = document.querySelector("mz-scroll-area#results-scroll");
+          if (sa && e.target && e.target.id === "results") {
+            sa.scrollToBottom();
+          }
+        });
+      });
+    </script>
+  </head>
+
+  <body>
+    <div class="page">
+      <section class="zone">
+        <header class="zone__header">
+          <div class="title">
+            <h1>Scroll Area (Web Component) + HTMX swaps</h1>
+            <p>
+              Self-contained demo: Web Component provides scroll viewport; HTMX swaps content fragments into it.
+              Recommended isolation pattern is iframe + Shadow DOM for artifacts like this. [1]
+            </p>
+          </div>
+
+          <div class="controls">
+            <span class="chip">
+              <span class="spinner">Loading…</span>
+              <span>HTMX ready</span>
+            </span>
+
+            <button class="btn" type="button"
+              onclick="document.querySelector('#results-scroll')?.scrollToTop()">
+              Scroll top
+            </button>
+
+            <button class="btn btn--primary" type="button"
+              onclick="document.querySelector('#results-scroll')?.scrollToBottom()">
+              Scroll bottom
+            </button>
+          </div>
+        </header>
+
+        <div class="zone__body" id="demo-root">
+          <div class="row">
+            <div class="card">
+              <div class="label">Filter (HTMX-style UI, but demo uses local content)</div>
+              <input class="input" id="q" name="q" placeholder="Type to filter (client-side demo)…" />
+
+              <div class="label">Result list is inside a Web Component scroll area</div>
+
+              <mz-scroll-area id="results-scroll" height="320px">
+                <div slot="topbar">
+                  <span>Results</span>
+                  <span id="count" class="pill">count: 12</span>
+                </div>
+
+                <!-- This is where HTMX would target swaps -->
+                <div id="results" slot="content">
+                  <div class="item"><strong>Alpha</strong> <span class="pill">tag: core</span></div>
+                  <div class="item"><strong>Bravo</strong> <span class="pill">tag: core</span></div>
+                  <div class="item"><strong>Charlie</strong> <span class="pill">tag: core</span></div>
+                  <div class="item"><strong>Delta</strong> <span class="pill">tag: ops</span></div>
+                  <div class="item"><strong>Echo</strong> <span class="pill">tag: ops</span></div>
+                  <div class="item"><strong>Foxtrot</strong> <span class="pill">tag: ops</span></div>
+                  <div class="item"><strong>Golf</strong> <span class="pill">tag: data</span></div>
+                  <div class="item"><strong>Hotel</strong> <span class="pill">tag: data</span></div>
+                  <div class="item"><strong>India</strong> <span class="pill">tag: data</span></div>
+                  <div class="item"><strong>Juliet</strong> <span class="pill">tag: ui</span></div>
+                  <div class="item"><strong>Kilo</strong> <span class="pill">tag: ui</span></div>
+                  <div class="item"><strong>Lima</strong> <span class="pill">tag: ui</span></div>
+
+                  <!-- Infinite-scroll sentinel (server pattern) -->
+                  <div
+                    class="loadmore"
+                    hx-get="/demo/scroll-items?page=2"
+                    hx-trigger="revealed"
+                    hx-target="#results"
+                    hx-swap="beforeend"
+                  >
+                    Load more when revealed (hx-trigger="revealed")
+                  </div>
+                </div>
+              </mz-scroll-area>
+
+              <div class="label">
+                Notes: sentinel uses <code>hx-trigger="revealed"</code> + <code>hx-swap="beforeend"</code> append for infinite scroll. [26][27]
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="label">What to do server-side (Axum)</div>
+              <div style="color: var(--on-surface-variant); font-size: 12px; line-height: 1.5;">
+                <p style="margin: 0 0 10px 0;">
+                  Implement <code>GET /demo/scroll-items?page=N</code> to return a fragment containing more
+                  <code>.item</code> rows (and optionally another sentinel if there’s another page). [26][27]
+                </p>
+                <p style="margin: 0;">
+                  If you want to control scroll after swaps, you can also use HTMX swap scrolling/showing modifiers. [30]
+                </p>
+              </div>
+
+              <div class="label">Progressive enhancement reminder</div>
+              <div style="color: var(--on-surface-variant); font-size: 12px; line-height: 1.5;">
+                Keep the initial items rendered so the page works without JS, then enhance with HTMX requests. [26]
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      // Simple client-side filter just to prove scroll is useful without a backend.
+      // (HTMX version would send q as query param and swap #results.)
+      const q = document.getElementById("q");
+      const results = () => document.querySelector("#results");
+      const count = () => document.querySelector("#count");
+
+      q.addEventListener("input", () => {
+        const term = q.value.trim().toLowerCase();
+        const items = [...results().querySelectorAll(".item")];
+        let visible = 0;
+
+        for (const el of items) {
+          const ok = el.textContent.toLowerCase().includes(term);
+          el.style.display = ok ? "" : "none";
+          if (ok) visible++;
+        }
+        count().textContent = `count: ${visible}`;
+      });
+    </script>
+  </body>
+</html>

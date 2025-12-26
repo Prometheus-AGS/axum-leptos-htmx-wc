@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sidebar Blocks — 02 (Sticky Header List)</title>
+
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 50%);
+      --surface-lowest: hsl(var(--primary-hue) 8% 98%);
+      --surface-low: hsl(var(--primary-hue) 10% 96%);
+      --surface: hsl(var(--primary-hue) 12% 94%);
+      --surface-high: hsl(var(--primary-hue) 14% 92%);
+      --text: hsl(var(--primary-hue) 15% 12%);
+      --muted: hsl(var(--primary-hue) 8% 42%);
+      --ring: hsl(var(--primary-hue) 80% 55%);
+      --shadow: 0 16px 50px rgba(0,0,0,.10);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --sidebar-w: 280px;
+      --header-h: 64px;
+      --trans: 220ms ease;
+    }
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      color:var(--text);
+      background: radial-gradient(circle at top left, var(--surface-lowest) 0, var(--surface-low) 42%, rgba(0,0,0,0) 100%), linear-gradient(180deg, var(--surface-lowest), var(--surface));
+    }
+
+    .app{ min-height:100vh; display:grid; grid-template-columns: var(--sidebar-w) 1fr; gap:16px; padding:16px; }
+    .zone{ background: color-mix(in hsl, var(--surface-low) 88%, white); border-radius: var(--radius); box-shadow: var(--shadow); overflow:hidden; }
+
+    .sidebar{ display:flex; flex-direction:column; }
+    .sidebarHeader{ height: var(--header-h); display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background: color-mix(in hsl, var(--surface) 82%, white); }
+    .brand{ display:flex; align-items:center; gap:10px; }
+    .badge{ width:36px;height:36px;border-radius:14px; background: color-mix(in hsl, var(--primary) 14%, var(--surface)); color: var(--primary); font-weight:800; display:grid; place-items:center; }
+    .title{ font-weight: 800; }
+
+    .nav{ padding: 12px; display:grid; gap:6px; }
+    .nav a{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; text-decoration:none; color:var(--text); }
+    .nav a:hover{ background: color-mix(in hsl, var(--surface) 78%, white); }
+    .nav a[data-active="true"]{ background: color-mix(in hsl, var(--primary) 14%, var(--surface)); outline: 2px solid color-mix(in hsl, var(--ring) 35%, transparent); }
+
+    .main{ display:flex; flex-direction:column; gap:12px; }
+
+    .topbar{
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      height: var(--header-h);
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: color-mix(in hsl, var(--surface-low) 88%, white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .icon-btn{ width:40px;height:40px;border-radius:14px;border:0; background: color-mix(in hsl, var(--surface-high) 70%, white); cursor:pointer; }
+    .icon-btn:focus{ outline: 2px solid color-mix(in hsl, var(--ring) 45%, transparent); outline-offset: 2px; }
+
+    .content{ background: color-mix(in hsl, var(--surface-low) 88%, white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+
+    .row{
+      height: 48px;
+      border-radius: 14px;
+      background: color-mix(in hsl, var(--surface-high) 70%, white);
+      margin-bottom: 10px;
+    }
+
+    /* Mobile: sidebar hidden, bottom nav shown at 768px */
+    @media (max-width:768px){
+      .app{ grid-template-columns:1fr; padding-bottom: 92px; }
+      .sidebar{ display:none; }
+      .bottom-nav{ display:flex; }
+    }
+
+    .bottom-nav{
+      display:none;
+      position:fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 10px;
+      gap: 8px;
+      border-radius: 22px;
+      background: color-mix(in hsl, var(--surface-low) 88%, white);
+      box-shadow: var(--shadow);
+    }
+    .bottom-nav a{ flex:1; text-align:center; padding: 10px 8px; border-radius: 16px; text-decoration:none; color: var(--text); font-size: 13px; }
+    .bottom-nav a[data-active="true"]{ background: color-mix(in hsl, var(--primary) 14%, var(--surface)); }
+  </style>
+</head>
+
+<body>
+  <!-- For strong isolation in docs, render inside iframe + Shadow DOM. [1] -->
+
+  <div class="app" x-data="demo()" x-init="init()">
+    <mz-sidebar-simple class="zone sidebar" x-bind:active-route="activeRoute" x-on:navigate.window="activeRoute = $event.detail.route"></mz-sidebar-simple>
+
+    <main class="main">
+      <div class="topbar">
+        <button class="icon-btn" type="button" x-on:click="activeRoute = '/inbox'">☰</button>
+        <div style="min-width:0">
+          <div style="font-weight:800" x-text="pageTitle"></div>
+          <div style="color:var(--muted);font-size:13px">Sticky top header variant</div>
+        </div>
+      </div>
+
+      <section id="region-main" class="content">
+        <template x-for="i in 24" :key="i">
+          <div class="row"></div>
+        </template>
+      </section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Primary mobile">
+    <a href="/dashboard" hx-get="/dashboard" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" data-route="/dashboard">Dashboard</a>
+    <a href="/inbox" hx-get="/inbox" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" data-route="/inbox">Inbox</a>
+    <a href="/settings" hx-get="/settings" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" data-route="/settings">Settings</a>
+  </nav>
+
+  <script>
+    class MzSidebarSimple extends HTMLElement {
+      static get observedAttributes(){ return ['active-route']; }
+      constructor(){ super(); this.attachShadow({mode:'open'}); this._route='/dashboard'; }
+      connectedCallback(){ this.render(); this.shadowRoot.addEventListener('click', (e)=>{
+        const a = e.target.closest('a[data-route]'); if(!a) return;
+        this.dispatchEvent(new CustomEvent('navigate', { bubbles:true, detail:{ route: a.getAttribute('data-route') } }));
+      }); }
+      attributeChangedCallback(name,_,v){ if(name==='active-route') this._route = v||'/dashboard'; this.render(); }
+      render(){
+        const r = this._route;
+        const css = `
+          :host{ display:block; }
+          .head{ height:64px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background: color-mix(in hsl, var(--surface) 82%, white); }
+          .brand{ display:flex; align-items:center; gap:10px; }
+          .badge{ width:36px;height:36px;border-radius:14px; background: color-mix(in hsl, var(--primary) 14%, var(--surface)); color: var(--primary); font-weight:800; display:grid; place-items:center; }
+          .title{ font-weight:800; }
+          nav{ padding:12px; display:grid; gap:6px; }
+          a{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; color: var(--text); text-decoration:none; }
+          a:hover{ background: color-mix(in hsl, var(--surface) 78%, white); }
+          a[data-active="true"]{ background: color-mix(in hsl, var(--primary) 14%, var(--surface)); outline: 2px solid color-mix(in hsl, var(--ring) 35%, transparent); }
+          .icon{ width:22px;height:22px;border-radius:10px; background: color-mix(in hsl, var(--surface-high) 65%, white); display:grid; place-items:center; font-size:12px; color: var(--muted); }
+        `;
+        const item = (route,label,icon)=>`
+          <a href="${route}" data-route="${route}" data-active="${r===route?'true':'false'}"
+             hx-get="${route}" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true">
+            <span class="icon">${icon}</span><span>${label}</span>
+          </a>`;
+        this.shadowRoot.innerHTML = `
+          <style>${css}</style>
+          <div class="head"><div class="brand"><div class="badge">S</div><div class="title">Sidebar</div></div></div>
+          <nav aria-label="Primary">
+            ${item('/dashboard','Dashboard','D')}
+            ${item('/inbox','Inbox','I')}
+            ${item('/settings','Settings','S')}
+          </nav>
+        `;
+      }
+    }
+    customElements.define('mz-sidebar-simple', MzSidebarSimple);
+
+    function demo(){
+      return {
+        activeRoute: location.pathname === '/' ? '/dashboard' : location.pathname,
+        pageTitle: 'Data Fetching',
+        init(){
+          document.body.addEventListener('htmx:pushedIntoHistory', ()=>{ this.activeRoute = location.pathname; this.pageTitle = this.activeRoute; });
+          document.body.addEventListener('htmx:beforeRequest', (evt)=>{
+            if(location.protocol !== 'file:') return;
+            evt.preventDefault();
+            const path = evt.detail.pathInfo?.requestPath || '/dashboard';
+            this.activeRoute = path;
+            this.pageTitle = path;
+            document.querySelector('#region-main').innerHTML = `<div style="font-weight:800;margin-bottom:8px">${path}</div>` +
+              Array.from({length:24}).map(()=>`<div class="row"></div>`).join('');
+            history.pushState({},'',path);
+          });
+        }
+      }
+    }
+  </script>
+</body>
+</html>

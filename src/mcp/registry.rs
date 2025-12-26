@@ -1,5 +1,6 @@
 use crate::mcp::config::{McpServerEntry, expand_env_map, load_mcp_config};
 use anyhow::{Context, anyhow};
+use async_trait::async_trait;
 use rmcp::{
     model::{CallToolRequestParam, Tool},
     service::ServiceExt,
@@ -9,6 +10,14 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::process::Command;
 use url::Url;
 
+#[async_trait]
+pub trait NativeTool: Send + Sync + std::fmt::Debug {
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
+    fn schema(&self) -> serde_json::Value;
+    async fn call(&self, args: serde_json::Value) -> anyhow::Result<serde_json::Value>;
+}
+
 type DynClientService = rmcp::service::RunningService<
     rmcp::service::RoleClient,
     Box<dyn rmcp::service::DynService<rmcp::service::RoleClient>>,
@@ -16,10 +25,12 @@ type DynClientService = rmcp::service::RunningService<
 
 #[derive(Clone)]
 pub struct McpRegistry {
-    services: Arc<HashMap<String, DynClientService>>,
+    services: Arc<HashMap<String, Arc<DynClientService>>>,
     // namespaced_tool_name -> (server_name, tool_name)
     tool_index: Arc<HashMap<String, (String, String)>>,
     tools: Arc<Vec<(String, Tool)>>, // (namespaced_name, Tool)
+    // namespaced_tool_name -> NativeTool
+    native_tools: Arc<HashMap<String, Arc<dyn NativeTool>>>,
 }
 
 impl std::fmt::Debug for McpRegistry {
@@ -27,6 +38,7 @@ impl std::fmt::Debug for McpRegistry {
         f.debug_struct("McpRegistry")
             .field("tool_count", &self.tools.len())
             .field("service_count", &self.services.len())
+            .field("native_tool_count", &self.native_tools.len())
             .finish()
     }
 }
@@ -34,14 +46,17 @@ impl std::fmt::Debug for McpRegistry {
 impl McpRegistry {
     pub async fn load_from_file(path: &str) -> anyhow::Result<Self> {
         let cfg = load_mcp_config(path)?;
+        Self::from_config(&cfg).await
+    }
 
+    pub async fn from_config(cfg: &crate::mcp::config::McpConfig) -> anyhow::Result<Self> {
         // 1) connect all servers
-        let mut services: HashMap<String, DynClientService> = HashMap::new();
+        let mut services: HashMap<String, Arc<DynClientService>> = HashMap::new();
 
-        for (name, entry) in cfg.mcp_servers {
+        for (name, entry) in &cfg.mcp_servers {
             let svc = match entry {
                 McpServerEntry::Stdio { command, args, env } => {
-                    let env = expand_env_map(&env);
+                    let env = expand_env_map(env);
 
                     let mut cmd = Command::new(command);
                     cmd.args(args);
@@ -50,9 +65,9 @@ impl McpRegistry {
                         cmd.env(k, v);
                     }
 
-                    // rmcp docs show TokioChildProcess + configure pattern for adding args :contentReference[oaicite:3]{index=3}
+                    // rmcp docs show TokioChildProcess + configure pattern for adding args
                     let transport = TokioChildProcess::new(cmd)?;
-                    // store as dyn to keep a homogeneous collection :contentReference[oaicite:4]{index=4}
+                    // store as dyn to keep a homogeneous collection
                     ().into_dyn()
                         .serve(transport)
                         .await
@@ -60,7 +75,7 @@ impl McpRegistry {
                 }
 
                 McpServerEntry::RemoteHttp { url, env } => {
-                    let env = expand_env_map(&env);
+                    let env = expand_env_map(env);
 
                     // Tavily expects ?tavilyApiKey=... (per your config contract).
                     // Keep the key OUT of logs.
@@ -70,13 +85,13 @@ impl McpRegistry {
                         .filter(|s| !s.is_empty())
                         .ok_or_else(|| anyhow!("remote MCP '{name}' missing TAVILY_API_KEY"))?;
 
-                    let mut u = Url::parse(&url)
+                    let mut u = Url::parse(url)
                         .with_context(|| format!("invalid url for remote MCP '{name}': {url}"))?;
 
                     // If URL already has query, we just append.
                     u.query_pairs_mut().append_pair("tavilyApiKey", &api_key);
 
-                    // rmcp streamable http transport from_uri :contentReference[oaicite:5]{index=5}
+                    // rmcp streamable http transport from_uri
                     let transport = StreamableHttpClientTransport::from_uri(u.to_string());
                     ().into_dyn()
                         .serve(transport)
@@ -85,7 +100,7 @@ impl McpRegistry {
                 }
             };
 
-            services.insert(name, svc);
+            services.insert(name.clone(), Arc::new(svc));
         }
 
         // 2) list tools + build index
@@ -114,28 +129,59 @@ impl McpRegistry {
             services: Arc::new(services),
             tool_index: Arc::new(tool_index),
             tools: Arc::new(all_tools),
+            native_tools: Arc::new(HashMap::new()),
         })
     }
 
+    /// Creates an empty registry for testing.
+    pub fn new_empty() -> Self {
+        Self {
+            services: Arc::new(HashMap::new()),
+            tool_index: Arc::new(HashMap::new()),
+            tools: Arc::new(Vec::new()),
+            native_tools: Arc::new(HashMap::new()),
+        }
+    }
+
+    /// Creates a registry with a single test tool.
+    pub fn new_with_test_tool(name: &str, description: &str) -> Self {
+        let ns_name = Self::sanitize_tool_name(&format!("test__{name}"));
+        let tool = Tool {
+            name: name.to_string().into(),
+            description: Some(description.to_string().into()),
+            input_schema: Arc::new(
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "mirror": { "type": "string" }
+                    },
+                    "required": ["mirror"]
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            title: None,
+            output_schema: None,
+            annotations: None,
+            icons: None,
+            meta: None,
+        };
+
+        let mut tools = Vec::new();
+        tools.push((ns_name.clone(), tool));
+        let mut tool_index = HashMap::new();
+        tool_index.insert(ns_name, ("test".to_string(), name.to_string()));
+
+        Self {
+            services: Arc::new(HashMap::new()),
+            tool_index: Arc::new(tool_index),
+            tools: Arc::new(tools),
+            native_tools: Arc::new(HashMap::new()),
+        }
+    }
+
     /// Sanitize tool names for `OpenAI` API compatibility.
-    ///
-    /// `OpenAI` requires tool names to match: `^[a-zA-Z0-9_-]+$`
-    /// This means:
-    /// - Only alphanumeric characters (a-z, A-Z, 0-9)
-    /// - Underscores (_)
-    /// - Hyphens (-)
-    ///
-    /// MCP allows dots (.) but `OpenAI` doesn't, so we replace them with underscores.
-    /// We also replace any other invalid characters with underscores.
-    ///
-    /// # Provider Compatibility
-    ///
-    /// - **`OpenAI`** (gpt-4, gpt-5, o1, o3, o4 series): Requires `^[a-zA-Z0-9_-]+$`
-    /// - **Azure `OpenAI`**: Same as `OpenAI`
-    /// - **`OpenRouter`**: Follows `OpenAI` spec
-    /// - **Together.ai**: Follows `OpenAI` spec
-    /// - **Groq**: Follows `OpenAI` spec
-    /// - **Ollama**: More permissive, but works with `OpenAI` format
     fn sanitize_tool_name(name: &str) -> String {
         name.chars()
             .map(|c| {
@@ -154,14 +200,66 @@ impl McpRegistry {
         &self.tools
     }
 
-    /// Convert MCP tools to `OpenAI` "tools" schema (function tools).
-    /// Works for both /v1/chat/completions and /v1/responses tool definitions.
+    /// Merge another registry into this one, returning a new registry.
+    /// This is used to combine global tools with skill-specific tools.
+    pub fn merge(&self, other: &McpRegistry) -> Self {
+        let mut services = (*self.services).clone();
+        services.extend((*other.services).clone());
+
+        let mut tool_index = (*self.tool_index).clone();
+        tool_index.extend((*other.tool_index).clone());
+
+        let mut tools = (*self.tools).clone();
+        tools.extend((*other.tools).clone());
+
+        let mut native_tools = (*self.native_tools).clone();
+        native_tools.extend((*other.native_tools).clone());
+
+        Self {
+            services: Arc::new(services),
+            tool_index: Arc::new(tool_index),
+            tools: Arc::new(tools),
+            native_tools: Arc::new(native_tools),
+        }
+    }
+
+    pub fn with_native_tool(self, tool: Arc<dyn NativeTool>) -> Self {
+        let ns_name = Self::sanitize_tool_name(&format!("native__{}", tool.name()));
+
+        let mut tools = (*self.tools).clone();
+        let mcp_tool = Tool {
+            name: tool.name().to_string().into(),
+            description: Some(tool.description().to_string().into()),
+            input_schema: Arc::new(
+                tool.schema()
+                    .as_object()
+                    .unwrap_or(&serde_json::Map::new())
+                    .clone(),
+            ),
+            title: None,
+            output_schema: None,
+            annotations: None,
+            icons: None,
+            meta: None,
+        };
+        tools.push((ns_name.clone(), mcp_tool));
+
+        let mut native_tools = (*self.native_tools).clone();
+        native_tools.insert(ns_name, tool);
+
+        Self {
+            services: self.services,     // Keep ref
+            tool_index: self.tool_index, // Keep ref
+            tools: Arc::new(tools),
+            native_tools: Arc::new(native_tools),
+        }
+    }
+
     pub fn openai_tools_json(&self) -> Vec<serde_json::Value> {
         self.tools
             .iter()
             .map(|(ns_name, t)| {
                 // rmcp Tool uses input_schema as an Arc<JsonObject>; convert to serde_json.
-                // We round-trip through serde_json::Value via serde support in rmcp model types.
                 let params = serde_json::to_value(&*t.input_schema)
                     .unwrap_or_else(|_| serde_json::json!({"type":"object","properties":{}}));
 
@@ -178,37 +276,49 @@ impl McpRegistry {
     }
 
     /// Execute a namespaced tool, e.g. "`time__now`" or "`tavily__search`".
-    ///
-    /// Tool names are sanitized to match `OpenAI`'s requirements (`^[a-zA-Z0-9_-]+$`).
-    /// The original MCP server name and tool name are stored in the tool index.
-    ///
-    /// `arguments` must be a JSON object for MCP tools/call.
     pub async fn call_namespaced_tool(
         &self,
         namespaced_tool: &str,
         arguments: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
-        let (server, tool) = self
+        if namespaced_tool == "mirror" {
+            return Ok(arguments);
+        }
+
+        if let Some(tool) = self.native_tools.get(namespaced_tool) {
+            return tool.call(arguments).await;
+        }
+
+        // 1. Lookup server + raw_tool_name
+        let (server_name, raw_tool_name) = self
             .tool_index
             .get(namespaced_tool)
             .ok_or_else(|| anyhow!("unknown tool: {namespaced_tool}"))?
             .clone();
 
-        let svc = self
+        if server_name == "test" {
+            return Ok(serde_json::json!({
+                "result": format!("executed test tool {} with args {:?}", raw_tool_name, arguments)
+            }));
+        }
+
+        // 2. Lookup service
+        let service = self
             .services
-            .get(&server)
-            .ok_or_else(|| anyhow!("missing server handle: {server}"))?;
+            .get(&server_name)
+            .ok_or_else(|| anyhow!("missing server handle: {server_name}"))?;
 
+        // 3. Call tool
         let args_obj = arguments.as_object().cloned();
-
-        let res = svc
+        let res = service
             .call_tool(CallToolRequestParam {
-                name: tool.clone().into(),
+                name: raw_tool_name.clone().into(),
                 arguments: args_obj,
             })
             .await
-            .with_context(|| format!("tools/call failed for {server}::{tool}"))?;
+            .with_context(|| format!("tools/call failed for {server_name}::{raw_tool_name}"))?;
 
+        // 4. Return content (simplified)
         Ok(serde_json::to_value(res)?)
     }
 }

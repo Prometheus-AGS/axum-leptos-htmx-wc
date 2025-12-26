@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sidebar 09 — Mini Rail + Panel (WC + Alpine + HTMX)</title>
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    :root{--primary-hue:205;--primary:hsl(var(--primary-hue) 85% 52%);--bg:hsl(var(--primary-hue) 18% 98%);--surface:hsl(var(--primary-hue) 16% 96%);--surface2:hsl(var(--primary-hue) 14% 93%);--text:hsl(var(--primary-hue) 14% 14%);--muted:hsl(var(--primary-hue) 10% 40%);--ring:hsl(var(--primary-hue) 90% 62%);--shadow:0 16px 40px rgba(0,0,0,.10);--radius:18px;--gap:16px;--font:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;}
+    *{box-sizing:border-box} body{margin:0;font-family:var(--font);color:var(--text);background:radial-gradient(circle at top left,var(--bg) 0,var(--surface) 42%,transparent 100%);min-height:100vh}
+    .app{min-height:100vh;display:grid;grid-template-columns:92px 260px 1fr;gap:var(--gap);padding:var(--gap)}
+    .zone{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .top{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .title{font-weight:760} .subtitle{color:var(--muted);font-size:13px}
+    .content{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-height:0}
+    .main{display:grid;grid-template-rows:auto 1fr;gap:var(--gap);min-height:0}
+    #region-main.htmx-request{opacity:.65}
+    @media(max-width:900px){.app{grid-template-columns:92px 1fr}}
+    @media(max-width:768px){.app{grid-template-columns:1fr;padding-bottom:92px} mz-rail{display:none} mz-panel{display:none} .bottom-nav{display:flex}}
+    .bottom-nav{display:none;position:fixed;left:12px;right:12px;bottom:12px;padding:10px;gap:8px;background:var(--surface);box-shadow:var(--shadow);border-radius:22px;align-items:center;justify-content:space-between}
+    .bottom-nav a{flex:1;text-align:center;padding:10px 8px;border-radius:16px;text-decoration:none;color:var(--text);font-size:13px}
+    .bottom-nav a[data-active="true"]{background:color-mix(in hsl,var(--primary) 14%,var(--surface2))}
+  </style>
+</head>
+<body>
+  <div class="app" x-data="app()" x-init="init()">
+    <mz-rail class="zone" x-bind:active="activeGroup"></mz-rail>
+    <mz-panel class="zone" x-bind:active-route="activeRoute" x-bind:active-group="activeGroup"></mz-panel>
+
+    <div class="main">
+      <header class="top">
+        <div>
+          <div class="title">Sidebar 09 — Mini Rail + Panel</div>
+          <div class="subtitle">Two-part sidebar composition (rail selects group)</div>
+        </div>
+        <div class="subtitle">Group: <strong x-text="activeGroup"></strong></div>
+      </header>
+
+      <main id="region-main" class="content">
+        <h2 style="margin:0 0 6px 0;">Start</h2>
+        <p style="margin:0;color:var(--muted)">Click the rail to switch groups; panel updates accordingly.</p>
+      </main>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Primary mobile" x-data="app()" x-init="init(false)">
+    <a href="/home" hx-get="/home" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/home'?'true':'false'">Home</a>
+    <a href="/work" hx-get="/work" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/work'?'true':'false'">Work</a>
+    <a href="/settings" hx-get="/settings" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/settings'?'true':'false'">Settings</a>
+  </nav>
+
+  <script>
+    function app(){
+      return {
+        activeRoute: location.pathname==='/'?'/home':location.pathname,
+        activeGroup: 'general',
+        init(){
+          document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:this.activeRoute}}));
+          document.body.dispatchEvent(new CustomEvent('mz-active-group',{detail:{group:this.activeGroup}}));
+        }
+      }
+    }
+
+    class MzRail extends HTMLElement{
+      static observedAttributes=['active'];
+      constructor(){ super(); this.attachShadow({mode:'open'}); this._a='general'; }
+      connectedCallback(){
+        document.body.addEventListener('mz-active-group',(e)=>{this._a=e.detail.group; this.render();});
+        this.render();
+        this.shadowRoot.addEventListener('click',(e)=>{
+          const b=e.target.closest('button[data-group]');
+          if(!b) return;
+          document.body.dispatchEvent(new CustomEvent('mz-active-group',{detail:{group:b.dataset.group}}));
+        });
+      }
+      attributeChangedCallback(n,ov,nv){ if(n==='active'){this._a=nv||'general'; this.render();} }
+      render(){
+        const a=this._a;
+        const btn=(g,l)=>`<button type="button" data-group="${g}" class="b" data-active="${a===g?'true':'false'}">${l}</button>`;
+        this.shadowRoot.innerHTML=`
+          <style>
+            :host{display:block;height:100%}
+            .w{padding:12px;display:flex;flex-direction:column;gap:8px;height:100%}
+            .logo{width:44px;height:44px;border-radius:18px;display:grid;place-items:center;background:color-mix(in hsl,var(--primary) 14%,var(--surface2));color:var(--primary);font-weight:900;margin:4px auto 8px auto}
+            .b{border:0;background:transparent;cursor:pointer;border-radius:18px;padding:14px 0;font:inherit;font-weight:850;color:var(--muted)}
+            .b[data-active="true"]{background:var(--surface2);color:var(--text);outline:2px solid color-mix(in hsl,var(--ring) 45%,transparent)}
+          </style>
+          <div class="w" aria-label="Rail">
+            <div class="logo">R</div>
+            ${btn('general','G')}
+            ${btn('work','W')}
+            ${btn('admin','A')}
+          </div>`;
+      }
+    }
+    customElements.define('mz-rail', MzRail);
+
+    class MzPanel extends HTMLElement{
+      static observedAttributes=['active-route','active-group'];
+      constructor(){ super(); this.attachShadow({mode:'open'}); this._r='/home'; this._g='general'; }
+      connectedCallback(){
+        document.body.addEventListener('mz-active-route',(e)=>{this._r=e.detail.route; this.render();});
+        document.body.addEventListener('mz-active-group',(e)=>{this._g=e.detail.group; this.render();});
+        this.render();
+      }
+      attributeChangedCallback(n,ov,nv){ if(n==='active-route') this._r=nv||'/home'; if(n==='active-group') this._g=nv||'general'; this.render(); }
+      render(){
+        const g=this._g, r=this._r;
+        const groups={
+          general:[['/home','Home','H'],['/activity','Activity','A']],
+          work:[['/work','Work','W'],['/reports','Reports','R']],
+          admin:[['/users','Users','U'],['/settings','Settings','S']]
+        };
+        const items=(groups[g]||groups.general);
+        const link=([route,label,icon])=>`<a href="${route}" data-active="${r===route?'true':'false'}" hx-get="${route}" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true"><span class="ic">${icon}</span><span>${label}</span></a>`;
+        this.shadowRoot.innerHTML=`
+          <style>
+            :host{display:block;height:100%}
+            .w{padding:14px;display:flex;flex-direction:column;gap:10px;height:100%}
+            .h{padding:10px 12px;border-radius:16px;background:var(--surface2);font-weight:760}
+            .n{display:grid;gap:6px}
+            a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;color:var(--text);text-decoration:none}
+            a:hover{background:var(--surface2)}
+            a[data-active="true"]{background:color-mix(in hsl,var(--primary) 14%,var(--surface2));outline:2px solid color-mix(in hsl,var(--ring) 45%,transparent)}
+            .ic{width:30px;height:30px;border-radius:14px;display:grid;place-items:center;background:color-mix(in hsl,var(--surface2) 70%,white);font-weight:900}
+            .f{margin-top:auto;padding:10px 12px;border-radius:16px;background:color-mix(in hsl,var(--surface2) 70%,white);color:var(--muted);font-size:12px}
+          </style>
+          <div class="w">
+            <div class="h">Group: ${g}</div>
+            <nav class="n" aria-label="Panel nav">${items.map(link).join('')}</nav>
+            <div class="f">Rail + panel composition</div>
+          </div>`;
+      }
+    }
+    customElements.define('mz-panel', MzPanel);
+
+    const FRAG={
+      '/home': `<h2 style="margin:0 0 6px 0;">Home</h2><p style="margin:0;color:var(--muted)">Mocked home fragment.</p>`,
+      '/activity': `<h2 style="margin:0 0 6px 0;">Activity</h2><p style="margin:0;color:var(--muted)">Mocked activity fragment.</p>`,
+      '/work': `<h2 style="margin:0 0 6px 0;">Work</h2><p style="margin:0;color:var(--muted)">Mocked work fragment.</p>`,
+      '/reports': `<h2 style="margin:0 0 6px 0;">Reports</h2><p style="margin:0;color:var(--muted)">Mocked reports fragment.</p>`,
+      '/users': `<h2 style="margin:0 0 6px 0;">Users</h2><p style="margin:0;color:var(--muted)">Mocked users fragment.</p>`,
+      '/settings': `<h2 style="margin:0 0 6px 0;">Settings</h2><p style="margin:0;color:var(--muted)">Mocked settings fragment.</p>`
+    };
+    document.body.addEventListener('htmx:beforeRequest',(evt)=>{const p=evt.detail.pathInfo?.path; if(FRAG[p]){evt.preventDefault(); history.pushState({},'',p); document.querySelector('#region-main').innerHTML=FRAG[p]; document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:p}}));}});
+    window.addEventListener('popstate',()=>document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:location.pathname}})));
+  </script>
+</body>
+</html>

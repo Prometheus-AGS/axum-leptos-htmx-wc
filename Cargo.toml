@@ -12,8 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Web framework
-axum = "0.8"
-tower-http = { version = "0.6.8", features = ["fs", "cors"] }
+axum = { version = "0.8", features = ["multipart"] }
+tower-http = { version = "0.6.8", features = ["fs", "cors", "trace", "timeout"] }
 
 
 
@@ -43,9 +43,9 @@ rmcp = { version = "0.12.0", features = [
 
 # Utilities
 url = "2.5.7"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 dotenvy = "0.15.7"
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.0", features = ["derive", "env"] }
 
 # Performance (M-MIMALLOC-APPS)
 mimalloc = "0.1"
@@ -54,6 +54,26 @@ mimalloc = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 anyhow = "1.0.100"
+axum-extra = { version = "0.12.3", features = ["typed-routing", "typed-header"] }
+tower = "0.5.2"
+tokio-stream = { version = "0.1.17", features = ["net", "sync"] }
+serde_yaml = "0.9.34"
+fastembed = "5.5.0"
+tiktoken-rs = "0.9.1"
+sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "json", "migrate"] }
+pgvector = { version = "0.4.1", features = ["sqlx"] }
+text-splitter = "0.28.0"
+chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2.5.0"
+jsonwebtoken = "9.2"
+tracing-opentelemetry = "0.22"
+opentelemetry = "0.21"
+opentelemetry-otlp = "0.14"
+opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"] }
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+config = "0.15.19"
+surrealdb = { version = "2.4.0", features = ["kv-surrealkv", "protocol-ws"] }
 
 # Lints (M-STATIC-VERIFICATION)
 [lints.rust]

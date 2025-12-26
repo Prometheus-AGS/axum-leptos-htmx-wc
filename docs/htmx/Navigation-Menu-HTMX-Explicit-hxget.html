@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Navigation Menu — HTMX (Explicit hx-get)</title>
+
+  <!-- HTMX (v2.x expected by our patterns) -->
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script> <!-- Use HTMX 2.0.8 attributes in examples. [27] -->
+
+  <style>
+    /* Material-ish, borderless zones via CSS custom properties (tokens-first) */
+    :root {
+      --primary-hue: 210; /* configurable personalization hook */ /* [2][8] */
+      --primary: hsl(var(--primary-hue) 60% 50%);
+      --on-primary: hsl(var(--primary-hue) 90% 96%);
+      --surface: hsl(var(--primary-hue) 20% 98%);
+      --surface-2: hsl(var(--primary-hue) 18% 96%);
+      --surface-3: hsl(var(--primary-hue) 16% 93%);
+      --text: hsl(var(--primary-hue) 15% 14%);
+      --muted: hsl(var(--primary-hue) 10% 40%);
+      --ring: hsl(var(--primary-hue) 80% 55%);
+      --shadow: 0 14px 40px rgba(0,0,0,.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; /* [7] */
+      color: var(--text);
+      background: radial-gradient(circle at top left, var(--surface) 0, var(--surface-2) 40%, #0000 100%); /* [7] */
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .zone {
+      background: var(--surface-2);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .sidebar {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--surface-3);
+    }
+
+    .brand-badge {
+      width: 34px; height: 34px;
+      display: grid; place-items: center;
+      border-radius: 12px;
+      background: color-mix(in hsl, var(--primary) 16%, var(--surface-3));
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      color: var(--text);
+      text-decoration: none;
+      background: transparent;
+    }
+
+    .nav a:hover {
+      background: var(--surface-3);
+    }
+
+    .nav a[data-active="true"] {
+      background: color-mix(in hsl, var(--primary) 14%, var(--surface-3));
+      outline: 2px solid color-mix(in hsl, var(--ring) 40%, transparent);
+    }
+
+    .main {
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--surface-2);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .title { font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+
+    .card {
+      margin-top: 12px;
+      padding: 16px;
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      box-shadow: var(--shadow);
+    }
+
+    /* Loading indicator (HTMX adds .htmx-request on target) */
+    #region-main.htmx-request {
+      opacity: .6;
+      filter: blur(.1px);
+    }
+
+    /* Responsive: desktop sidebar vs mobile bottom nav */
+    @media (max-width: 768px) {
+      .app { grid-template-columns: 1fr; padding-bottom: 90px; } /* [2][8] */
+      .sidebar { display: none; } /* [2][8] */
+      .bottom-nav { display: flex; } /* [2][8] */
+    }
+
+    .bottom-nav {
+      display: none;
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 10px;
+      gap: 8px;
+      background: var(--surface-2);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bottom-nav a {
+      flex: 1;
+      text-align: center;
+      padding: 10px 8px;
+      border-radius: 16px;
+      text-decoration: none;
+      color: var(--text);
+      font-size: 13px;
+      background: transparent;
+      white-space: nowrap;
+    }
+    .bottom-nav a[data-active="true"] {
+      background: color-mix(in hsl, var(--primary) 14%, var(--surface-3));
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- Sidebar region (desktop) -->
+    <aside id="region-sidebar" class="zone sidebar">
+      <div class="brand">
+        <div class="brand-badge">N</div>
+        <div>
+          <div class="title">Navigation</div>
+          <div class="subtitle">Explicit hx-get → region-main</div>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Primary">
+        <!-- Explicit region swap + history push for website-driving navigation. [21][9] -->
+        <a href="/dashboard"
+           hx-get="/dashboard"
+           hx-target="#region-main"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           data-route="/dashboard">
+          Dashboard
+        </a>
+
+        <a href="/contracts"
+           hx-get="/contracts"
+           hx-target="#region-main"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           data-route="/contracts">
+          Contracts
+        </a>
+
+        <a href="/settings"
+           hx-get="/settings"
+           hx-target="#region-main"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           data-route="/settings">
+          Settings
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main column -->
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <div class="title">App Shell</div>
+          <div class="subtitle">Main content swaps into <code>#region-main</code></div>
+        </div>
+        <div class="subtitle">HTMX 2.0.8</div> <!-- examples lock to 2.0.8 patterns. [27] -->
+      </div>
+
+      <!-- Main content region swapped by HTMX -->
+      <section id="region-main" class="card">
+        <h2 style="margin:0 0 6px 0;">Welcome</h2>
+        <p style="margin:0;color:var(--muted);">
+          Click a nav item to swap this region and push browser history.
+        </p>
+        <p style="margin-top:12px;">
+          In a PAS-style shell, this is the “page artifacts are swapped here via app.navigate / HTMX” region. [21][9]
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <!-- Bottom navigation (mobile ≤768px) -->
+  <nav class="bottom-nav" aria-label="Primary mobile">
+    <!-- Mobile pattern is explicitly called out: sidebar hidden, bottom nav shown at 768px. [2][8] -->
+    <a href="/dashboard"
+       hx-get="/dashboard"
+       hx-target="#region-main"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       data-route="/dashboard">Dashboard</a>
+
+    <a href="/contracts"
+       hx-get="/contracts"
+       hx-target="#region-main"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       data-route="/contracts">Contracts</a>
+
+    <a href="/settings"
+       hx-get="/settings"
+       hx-target="#region-main"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       data-route="/settings">Settings</a>
+  </nav>
+
+  <script>
+    // Active-link highlighting: reference mentions runtime can use currentRoute to highlight active link. [9]
+    function setActive(route) {
+      document.querySelectorAll('[data-route]').forEach(a => {
+        a.dataset.active = (a.getAttribute('data-route') === route) ? 'true' : 'false';
+      });
+    }
+
+    // For demo purposes: mark active based on current path.
+    setActive(location.pathname);
+
+    // Update active after HTMX navigation.
+    document.body.addEventListener('htmx:pushedIntoHistory', () => setActive(location.pathname));
+    document.body.addEventListener('htmx:afterOnLoad', () => setActive(location.pathname));
+  </script>
+</body>
+</html>

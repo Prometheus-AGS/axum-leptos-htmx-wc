@@ -134,7 +134,7 @@ impl Orchestrator {
     pub async fn chat_with_history(
         &self,
         messages: Vec<Message>,
-    ) -> anyhow::Result<impl Stream<Item = NormalizedEvent> + Send> {
+    ) -> anyhow::Result<impl Stream<Item = NormalizedEvent> + Send + 'static> {
         let request_id = Uuid::new_v4().to_string();
         let tools = self.mcp.openai_tools_json();
 

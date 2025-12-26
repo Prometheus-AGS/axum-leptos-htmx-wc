@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sidebar Blocks — 14 (Right Sidebar)</title>
+
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 50%);
+      --surface-lowest: hsl(var(--primary-hue) 8% 98%);
+      --surface-low: hsl(var(--primary-hue) 10% 96%);
+      --surface: hsl(var(--primary-hue) 12% 94%);
+      --surface-high: hsl(var(--primary-hue) 14% 92%);
+      --text: hsl(var(--primary-hue) 15% 12%);
+      --muted: hsl(var(--primary-hue) 8% 42%);
+      --ring: hsl(var(--primary-hue) 80% 55%);
+      --shadow: 0 16px 50px rgba(0,0,0,.10);
+      --radius: 16px;
+      --sidebar-w: 280px;
+      --header-h: 64px;
+    }
+
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{ margin:0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; color:var(--text);
+      background: radial-gradient(circle at top left, var(--surface-lowest) 0, var(--surface-low) 42%, rgba(0,0,0,0) 100%), linear-gradient(180deg, var(--surface-lowest), var(--surface));
+    }
+
+    .app{ min-height:100vh; display:grid; grid-template-columns: 1fr var(--sidebar-w); gap:16px; padding:16px; }
+    .zone{ background: color-mix(in hsl, var(--surface-low) 88%, white); border-radius: var(--radius); box-shadow: var(--shadow); overflow:hidden; }
+
+    .header{ height: var(--header-h); display:flex; align-items:center; gap: 12px; padding: 12px 14px; background: color-mix(in hsl, var(--surface-low) 88%, white); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .icon-btn{ margin-left:auto; width:40px;height:40px;border-radius:14px;border:0; background: color-mix(in hsl, var(--surface-high) 70%, white); cursor:pointer; transform: rotate(180deg); }
+    .icon-btn:focus{ outline: 2px solid color-mix(in hsl, var(--ring) 45%, transparent); outline-offset: 2px; }
+
+    .content{ background: color-mix(in hsl, var(--surface-low) 88%, white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+    .grid{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+    .skeleton{ background: color-mix(in hsl, var(--surface-high) 70%, white); border-radius: var(--radius); aspect-ratio: 16/9; }
+    .big{ background: color-mix(in hsl, var(--surface-high) 70%, white); border-radius: var(--radius); min-height: 60vh; }
+
+    /* Mobile: keep it simple */
+    @media (max-width:768px){
+      .app{ grid-template-columns: 1fr; }
+      .rightbar{ display:none; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- For strong isolation in docs, render inside iframe + Shadow DOM. [1] -->
+
+  <div class="app" x-data="demo()" x-init="init()">
+    <main>
+      <div class="header">
+        <div style="min-width:0">
+          <div style="font-weight:800" x-text="pageTitle"></div>
+          <div style="color:var(--muted);font-size:13px" x-text="breadcrumb"></div>
+        </div>
+        <!-- trigger sits on the right and is rotated in the original block -->
+        <button class="icon-btn" type="button" x-on:click="rightOpen = !rightOpen" aria-label="Toggle right sidebar">☰</button>
+      </div>
+
+      <section id="region-main" class="content" style="margin-top:12px">
+        <div class="grid">
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+        </div>
+        <div class="big"></div>
+      </section>
+    </main>
+
+    <mz-right-sidebar class="zone rightbar"
+      x-show="rightOpen"
+      x-transition
+      x-bind:active-route="activeRoute"
+      x-on:navigate.window="activeRoute = $event.detail.route"
+    ></mz-right-sidebar>
+  </div>
+
+  <script>
+    class MzRightSidebar extends HTMLElement{
+      static get observedAttributes(){ return ['active-route']; }
+      constructor(){ super(); this.attachShadow({mode:'open'}); this._route='/dashboard'; }
+      connectedCallback(){ this.render(); this.shadowRoot.addEventListener('click', (e)=>{
+        const a = e.target.closest('a[data-route]'); if(!a) return;
+        this.dispatchEvent(new CustomEvent('navigate', { bubbles:true, detail:{ route: a.getAttribute('data-route') } }));
+      }); }
+      attributeChangedCallback(n,_,v){ if(n==='active-route') this._route = v || '/dashboard'; this.render(); }
+      render(){
+        const r = this._route;
+        const css = `
+          :host{ display:block; height:100%; }
+          .head{ height:64px; display:flex; align-items:center; gap:10px; padding:12px; background: color-mix(in hsl, var(--surface) 82%, white); }
+          .badge{ width:36px;height:36px;border-radius:14px; background: color-mix(in hsl, var(--primary) 14%, var(--surface)); color: var(--primary); font-weight:800; display:grid; place-items:center; }
+          .title{ font-weight:800; }
+          nav{ padding:12px; display:grid; gap:6px; }
+          a{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; color: var(--text); text-decoration:none; }
+          a:hover{ background: color-mix(in hsl, var(--surface) 78%, white); }
+          a[data-active="true"]{ background: color-mix(in hsl, var(--primary) 14%, var(--surface)); outline: 2px solid color-mix(in hsl, var(--ring) 35%, transparent); }
+          .icon{ width:22px;height:22px;border-radius:10px; background: color-mix(in hsl, var(--surface-high) 65%, white); display:grid; place-items:center; font-size:12px; color: var(--muted); }
+        `;
+        const item=(route,label,icon)=>`
+          <a href="${route}" data-route="${route}" data-active="${r===route?'true':'false'}"
+             hx-get="${route}" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true">
+            <span class="icon">${icon}</span><span>${label}</span>
+          </a>`;
+        this.shadowRoot.innerHTML = `
+          <style>${css}</style>
+          <div class="head"><div class="badge">R</div><div class="title">Right</div></div>
+          <nav aria-label="Right sidebar">
+            ${item('/dashboard','Dashboard','D')}
+            ${item('/inbox','Inbox','I')}
+            ${item('/settings','Settings','S')}
+          </nav>
+        `;
+      }
+    }
+    customElements.define('mz-right-sidebar', MzRightSidebar);
+
+    function demo(){
+      return {
+        rightOpen: true,
+        activeRoute: location.pathname === '/' ? '/dashboard' : location.pathname,
+        pageTitle: 'Data Fetching',
+        breadcrumb: 'Building Your Application / Data Fetching',
+        init(){
+          document.body.addEventListener('htmx:beforeRequest', (evt)=>{
+            if(location.protocol !== 'file:') return;
+            evt.preventDefault();
+            const path = evt.detail.pathInfo?.requestPath || '/dashboard';
+            this.activeRoute = path;
+            this.pageTitle = path;
+            document.querySelector('#region-main').innerHTML = `<div style="font-weight:800;margin-bottom:8px">${path}</div>` +
+              `<div style="color:var(--muted);font-size:13px">Mock content</div>`;
+            history.pushState({},'',path);
+          });
+        }
+      }
+    }
+  </script>
+</body>
+</html>

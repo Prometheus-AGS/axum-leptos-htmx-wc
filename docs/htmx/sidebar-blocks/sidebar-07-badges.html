@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sidebar 07 — Badges (WC + Alpine + HTMX)</title>
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    :root{--primary-hue:215;--primary:hsl(var(--primary-hue) 85% 52%);--bg:hsl(var(--primary-hue) 18% 98%);--surface:hsl(var(--primary-hue) 16% 96%);--surface2:hsl(var(--primary-hue) 14% 93%);--text:hsl(var(--primary-hue) 14% 14%);--muted:hsl(var(--primary-hue) 10% 40%);--ring:hsl(var(--primary-hue) 90% 62%);--shadow:0 16px 40px rgba(0,0,0,.10);--radius:18px;--gap:16px;--font:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;}
+    *{box-sizing:border-box} body{margin:0;font-family:var(--font);color:var(--text);background:radial-gradient(circle at top left,var(--bg) 0,var(--surface) 42%,transparent 100%);min-height:100vh}
+    .app{min-height:100vh;display:grid;grid-template-columns:320px 1fr;gap:var(--gap);padding:var(--gap)}
+    .zone{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .top{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .title{font-weight:760} .subtitle{color:var(--muted);font-size:13px}
+    .content{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-height:0}
+    .main{display:grid;grid-template-rows:auto 1fr;gap:var(--gap);min-height:0}
+    .btn{border:0;background:var(--surface2);padding:10px 12px;border-radius:14px;font:inherit;cursor:pointer}
+    .btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+    #region-main.htmx-request{opacity:.65}
+    @media(max-width:768px){.app{grid-template-columns:1fr;padding-bottom:92px} mz-badge-sidebar{display:none} .bottom-nav{display:flex}}
+    .bottom-nav{display:none;position:fixed;left:12px;right:12px;bottom:12px;padding:10px;gap:8px;background:var(--surface);box-shadow:var(--shadow);border-radius:22px;align-items:center;justify-content:space-between}
+    .bottom-nav a{flex:1;text-align:center;padding:10px 8px;border-radius:16px;text-decoration:none;color:var(--text);font-size:13px}
+    .bottom-nav a[data-active="true"]{background:color-mix(in hsl,var(--primary) 14%,var(--surface2))}
+  </style>
+</head>
+<body>
+  <div class="app" x-data="app()" x-init="init()">
+    <mz-badge-sidebar class="zone" x-bind:active-route="activeRoute" x-bind:count="count"></mz-badge-sidebar>
+
+    <div class="main">
+      <header class="top">
+        <div>
+          <div class="title">Sidebar 07 — Badges</div>
+          <div class="subtitle">Alpine-managed counter displayed in Web Component</div>
+        </div>
+        <button class="btn" type="button" x-on:click="count++">Add notification</button>
+      </header>
+
+      <main id="region-main" class="content">
+        <h2 style="margin:0 0 6px 0;">Notifications</h2>
+        <p style="margin:0;color:var(--muted)">Count: <strong x-text="count"></strong></p>
+      </main>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Primary mobile" x-data="app()" x-init="init(false)">
+    <a href="/inbox" hx-get="/inbox" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/inbox'?'true':'false'">Inbox</a>
+    <a href="/alerts" hx-get="/alerts" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/alerts'?'true':'false'">Alerts</a>
+    <a href="/settings" hx-get="/settings" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/settings'?'true':'false'">Settings</a>
+  </nav>
+
+  <script>
+    function app(){ return { activeRoute: location.pathname==='/'?'/alerts':location.pathname, count: 3, init(){ document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:this.activeRoute}})); } } }
+
+    class MzBadgeSidebar extends HTMLElement{
+      static observedAttributes=['active-route','count'];
+      constructor(){ super(); this.attachShadow({mode:'open'}); this._a='/alerts'; this._c=0; }
+      connectedCallback(){ document.body.addEventListener('mz-active-route',(e)=>{this._a=e.detail.route; this.render();}); this.render(); }
+      attributeChangedCallback(n,ov,nv){ if(n==='active-route') this._a=nv||'/alerts'; if(n==='count') this._c=parseInt(nv||'0',10); this.render(); }
+      render(){
+        const a=this._a, c=this._c;
+        const item=(r,l,i,badge)=>`<a href="${r}" data-active="${a===r?'true':'false'}" hx-get="${r}" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true"><span class="ic">${i}</span><span class="lb">${l}</span>${badge?`<span class="bd">${badge}</span>`:''}</a>`;
+        this.shadowRoot.innerHTML=`
+          <style>
+            :host{display:block;height:100%}
+            .w{padding:14px;display:flex;flex-direction:column;gap:10px;height:100%}
+            .b{padding:10px 12px;border-radius:16px;background:var(--surface2);display:flex;gap:10px;align-items:center;justify-content:space-between}
+            .k{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:color-mix(in hsl,var(--primary) 16%,var(--surface2));color:var(--primary);font-weight:800}
+            .t{font-weight:760} .s{font-size:12px;color:var(--muted)}
+            .chip{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:color-mix(in hsl,var(--primary) 12%,var(--surface2));font-size:12px;font-weight:700;color:color-mix(in hsl,var(--primary) 60%,var(--text))}
+            .n{display:grid;gap:6px}
+            a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;color:var(--text);text-decoration:none}
+            a:hover{background:var(--surface2)}
+            a[data-active="true"]{background:color-mix(in hsl,var(--primary) 14%,var(--surface2));outline:2px solid color-mix(in hsl,var(--ring) 45%,transparent)}
+            .ic{width:30px;height:30px;border-radius:14px;display:grid;place-items:center;background:color-mix(in hsl,var(--surface2) 70%,white);font-weight:900}
+            .bd{margin-left:auto;background:color-mix(in hsl,var(--primary) 20%,var(--surface2));color:color-mix(in hsl,var(--primary) 70%,var(--text));font-weight:800;font-size:12px;padding:5px 8px;border-radius:999px}
+            .f{margin-top:auto;padding:10px 12px;border-radius:16px;background:color-mix(in hsl,var(--surface2) 70%,white);color:var(--muted);font-size:12px}
+          </style>
+          <div class="w">
+            <div class="b"><div style="display:flex;gap:10px;align-items:center"><div class="k">B</div><div><div class="t">Badges</div><div class="s">Sidebar 07</div></div></div><span class="chip">${c} new</span></div>
+            <nav class="n" aria-label="Primary">
+              ${item('/inbox','Inbox','I', '')}
+              ${item('/alerts','Alerts','!', c>0?String(c):'')}
+              ${item('/settings','Settings','S','')}
+            </nav>
+            <div class="f">Badge count from Alpine</div>
+          </div>`;
+      }
+    }
+    customElements.define('mz-badge-sidebar', MzBadgeSidebar);
+
+    const FRAG={
+      '/inbox': `<h2 style="margin:0 0 6px 0;">Inbox</h2><p style="margin:0;color:var(--muted)">Mocked inbox fragment.</p>`,
+      '/alerts': `<h2 style="margin:0 0 6px 0;">Alerts</h2><p style="margin:0;color:var(--muted)">Mocked alerts fragment.</p>`,
+      '/settings': `<h2 style="margin:0 0 6px 0;">Settings</h2><p style="margin:0;color:var(--muted)">Mocked settings fragment.</p>`
+    };
+    document.body.addEventListener('htmx:beforeRequest',(evt)=>{const p=evt.detail.pathInfo?.path; if(FRAG[p]){evt.preventDefault(); history.pushState({},'',p); document.querySelector('#region-main').innerHTML=FRAG[p]; document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:p}}));}});
+    window.addEventListener('popstate',()=>document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:location.pathname}})));
+  </script>
+</body>
+</html>
