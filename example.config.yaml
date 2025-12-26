@@ -1,0 +1,75 @@
+# Universal Agent Runtime (UAR) Configuration
+# This file serves as a reference for all available configuration options.
+# Configuration is loaded in the following order (highest priority first):
+# 1. CLI Arguments (e.g. --port 8080)
+# 2. Environment Variables (e.g. UAR_SERVER__PORT=8080)
+# 3. Config File (this file)
+# 4. Defaults
+
+server:
+  # The port to listen on.
+  # Default: 3000
+  # Env: UAR_SERVER__PORT
+  port: 3000
+
+  # The host address to bind to.
+  # Default: 0.0.0.0
+  # Env: UAR_SERVER__HOST
+  host: "0.0.0.0"
+
+security:
+  # Whether to require JWT authentication for requests.
+  # Default: true
+  # Env: UAR_SECURITY__JWT_REQUIRED
+  jwt_required: true
+
+  # The secret key used to sign and verify JWT tokens.
+  # WARNING: Change this in production!
+  # Default: "secret_key_change_me"
+  # Env: UAR_SECURITY__JWT_SECRET
+  jwt_secret: "secret_key_change_me"
+
+resilience:
+  # Enable rate limiting to prevent abuse.
+  # Default: true
+  # Env: UAR_RESILIENCE__RATE_LIMIT_ENABLED
+  rate_limit_enabled: true
+
+  # Usage quota: allowed requests per second.
+  # Default: 5.0
+  # Env: UAR_RESILIENCE__REQUESTS_PER_SECOND
+  requests_per_second: 5.0
+
+  # Burst size: max requested allowed in a short burst.
+  # Default: 10.0
+  # Env: UAR_RESILIENCE__BURST_SIZE
+  burst_size: 10.0
+
+persistence:
+  # The database provider to use. specific values: "postgres" or "surreal"
+  # Default: "postgres"
+  # Env: UAR_PERSISTENCE__PROVIDER
+  provider: "postgres"
+
+  # Connection string for the primary database.
+  # Default: "postgres://postgres:password@localhost:5432/uar"
+  # Env: UAR_PERSISTENCE__DATABASE_URL
+  database_url: "postgres://postgres:password@localhost:5432/uar"
+
+  # Whether to use an external cache (Redis) for session and token storage.
+  # Default: false
+  # Env: UAR_PERSISTENCE__EXTERNAL_CACHE_ENABLED
+  external_cache_enabled: false
+
+  # Connection string for Redis (only used if external_cache_enabled is true).
+  # Env: UAR_PERSISTENCE__REDIS_URL
+  # redis_url: "redis://localhost:6379"
+
+# LLM Configuration
+# Note: These are currently handled via separate Environment Variables, not this config file.
+# They are documented here for completeness.
+#
+# LLM_BASE_URL: (Required) Base URL of your LLM provider (e.g., https://api.openai.com/v1)
+# LLM_MODEL: (Required) Model ID (e.g., gpt-4o)
+# LLM_API_KEY: (Optional) API Key
+# LLM_PROTOCOL: (Optional) "auto", "chat", or "responses"

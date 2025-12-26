@@ -210,6 +210,26 @@ Runs a full Postgres instance in the browser for:
 *   performing full-text search
 *   ensuring offline capability
 
+- **Modular Architecture**: Clean separation of concerns (API, Domain, Persistence, Runtime).
+- **Configuration**: Hierarchical config via CLI, Env, and File. See [Configuration Guide](docs/configuration.md).
+
+## Getting Started
+
+### Prerequisites
+- Rust (latest stable)
+- Postgres or SurrealDB
+- Bun (for frontend assets)
+
+### Configuration
+Copy `example.config.yaml` to `config.yaml` or use environment variables.
+See [docs/configuration.md](docs/configuration.md) for details.
+
+### Running
+```bash
+# Web/API Server
+cargo run
+```
+
 ### Alpine.js
 Used sparingly for local UI transitions and toggle states.
 

@@ -10,6 +10,13 @@ path = "src/lib.rs"
 name = "axum-leptos-htmx-wc"
 path = "src/main.rs"
 
+[dev-dependencies]
+anyhow = "1.0"
+axum-test = "18.4.1"
+serial_test = "3.0"
+tokio = { version = "1.0", features = ["full", "test-util"] }
+tower = { version = "0.5.2", features = ["util"] }
+
 [dependencies]
 # Web framework
 axum = { version = "0.8", features = ["multipart"] }
@@ -23,7 +30,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0.147"
 
 # Async utilities
 futures = "0.3"
@@ -65,13 +72,13 @@ pgvector = { version = "0.4.1", features = ["sqlx"] }
 text-splitter = "0.28.0"
 chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2.5.0"
-jsonwebtoken = "9.2"
-tracing-opentelemetry = "0.22"
-opentelemetry = "0.21"
-opentelemetry-otlp = "0.14"
-opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"] }
-metrics = "0.21"
-metrics-exporter-prometheus = "0.12"
+jsonwebtoken = "9.3.0"
+tracing-opentelemetry = "0.32.0"
+opentelemetry = "0.31.0"
+opentelemetry-otlp = "0.31.0"
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+metrics = "0.24.3"
+metrics-exporter-prometheus = "0.18.1"
 config = "0.15.19"
 surrealdb = { version = "2.4.0", features = ["kv-surrealkv", "protocol-ws"] }
 
