@@ -73,3 +73,136 @@ persistence:
 # LLM_MODEL: (Required) Model ID (e.g., gpt-4o)
 # LLM_API_KEY: (Optional) API Key
 # LLM_PROTOCOL: (Optional) "auto", "chat", or "responses"
+
+# =============================================================================
+# MULTIMODAL SUPPORT
+# =============================================================================
+
+file_processing:
+  # Provider for document text extraction.
+  # Options: "unstructured", "mistral", "kreuzberg" (local), "auto"
+  # "auto" tries providers in order: unstructured > mistral > kreuzberg
+  # Default: "auto"
+  # Env: UAR_FILE_PROCESSING__PROVIDER
+  provider: "auto"
+
+  # Directory for storing uploaded files before processing.
+  # Default: System temp directory + "uar-uploads"
+  # Env: UAR_FILE_PROCESSING__UPLOAD_DIR
+  upload_dir: "/tmp/uar-uploads"
+
+  # Maximum number of files allowed per prompt.
+  # Default: 10
+  # Env: UAR_FILE_PROCESSING__MAX_FILES_PER_PROMPT
+  max_files_per_prompt: 10
+
+  # Maximum file size per file in bytes.
+  # Default: 52428800 (50MB)
+  # Env: UAR_FILE_PROCESSING__MAX_FILE_SIZE
+  max_file_size: 52428800
+
+  # Maximum total upload size for all files in a single prompt.
+  # Default: 104857600 (100MB)
+  # Env: UAR_FILE_PROCESSING__MAX_TOTAL_SIZE
+  max_total_size: 104857600
+
+  # Allowed MIME types (empty = allow all supported types).
+  # Example: ["application/pdf", "image/png", "image/jpeg"]
+  # Env: UAR_FILE_PROCESSING__ALLOWED_MIME_TYPES (comma-separated)
+  allowed_mime_types: []
+
+# Unstructured.io configuration (hosted or self-hosted)
+# Used when file_processing.provider = "unstructured" or "auto"
+unstructured:
+  # API URL for Unstructured.io service.
+  # Hosted: "https://api.unstructured.io/general/v0/general"
+  # Self-hosted: Your deployment URL
+  # Default: Hosted URL
+  # Env: UAR_UNSTRUCTURED__API_URL
+  api_url: "https://api.unstructured.io/general/v0/general"
+
+  # API key for the hosted Unstructured.io service.
+  # Not required for self-hosted deployments.
+  # Env: UAR_UNSTRUCTURED__API_KEY
+  # api_key: "your-api-key-here"
+
+# Mistral OCR configuration
+# Used when file_processing.provider = "mistral" or "auto"
+mistral_ocr:
+  # Mistral API key for OCR service.
+  # Can reuse LLM_API_KEY if using Mistral for LLM.
+  # Env: UAR_MISTRAL_OCR__API_KEY or MISTRAL_API_KEY
+  # api_key: "your-mistral-api-key"
+
+  # OCR model to use.
+  # Default: "mistral-ocr-latest"
+  # Env: UAR_MISTRAL_OCR__OCR_MODEL
+  ocr_model: "mistral-ocr-latest"
+
+# Kreuzberg local file processing configuration
+# High-performance Rust-powered document intelligence (56+ file formats)
+# Used when file_processing.provider = "kreuzberg" or "auto"
+kreuzberg:
+  # Enable OCR for scanned documents and images.
+  # Requires Tesseract installed on the system (brew install tesseract / apt-get install tesseract-ocr)
+  # Default: true
+  # Env: UAR_KREUZBERG__OCR_ENABLED
+  ocr_enabled: true
+
+  # Force OCR even if text layer exists in PDFs.
+  # Useful for PDFs with garbled or low-quality text layers.
+  # Default: false
+  # Env: UAR_KREUZBERG__FORCE_OCR
+  force_ocr: false
+
+  # OCR backend to use.
+  # Options: "tesseract" (default, most portable), "easyocr", "paddleocr"
+  # Note: easyocr and paddleocr require Python dependencies
+  # Default: "tesseract"
+  # Env: UAR_KREUZBERG__OCR_BACKEND
+  ocr_backend: "tesseract"
+
+  # OCR language(s) for text recognition.
+  # Tesseract format: "eng" (English), "deu" (German), "eng+deu" (multiple)
+  # Language packs must be installed (brew install tesseract-lang / apt-get install tesseract-ocr-deu)
+  # Default: "eng"
+  # Env: UAR_KREUZBERG__OCR_LANGUAGE
+  ocr_language: "eng"
+
+  # PDF rendering DPI for OCR (higher = better quality but more memory).
+  # Recommended: 150 for speed, 300 for quality, 450 for fine print
+  # Default: 300
+  # Env: UAR_KREUZBERG__PDF_DPI
+  pdf_dpi: 300
+
+  # Extract tables from documents (PDFs, Word, Excel, etc.).
+  # Tables are appended to content in Markdown format.
+  # Default: true
+  # Env: UAR_KREUZBERG__EXTRACT_TABLES
+  extract_tables: true
+
+  # Extract metadata from documents (title, author, pages, keywords).
+  # Metadata is included in the processing result.
+  # Default: true
+  # Env: UAR_KREUZBERG__EXTRACT_METADATA
+  extract_metadata: true
+
+  # Output format for extracted content.
+  # Options: "markdown" (default, preserves structure), "text" (plain text)
+  # Default: "markdown"
+  # Env: UAR_KREUZBERG__OUTPUT_FORMAT
+  output_format: "markdown"
+
+# Vision/Image processing configuration
+vision:
+  # Explicit vision model for image understanding.
+  # If not set, uses the default LLM model (if vision-capable).
+  # Examples: "gpt-4o", "claude-3-5-sonnet", "pixtral-12b"
+  # Env: UAR_VISION__MODEL
+  # model: "gpt-4o"
+
+  # Auto-detect vision capability from default LLM model.
+  # If true and model supports vision, images are passed directly to LLM.
+  # Default: true
+  # Env: UAR_VISION__AUTO_DETECT
+  auto_detect: true

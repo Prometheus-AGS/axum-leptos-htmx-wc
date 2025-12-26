@@ -24,7 +24,8 @@ impl TokenService {
 
         for message in messages {
             num_tokens += 3; // overhead
-            num_tokens += bpe.encode_with_special_tokens(&message.content).len();
+            let content_str = message.content.as_text().unwrap_or("");
+            num_tokens += bpe.encode_with_special_tokens(content_str).len();
 
             // If we had name field, +1 token.
             // If tool calls, we need to count them too.

@@ -354,7 +354,7 @@ async fn api_get_messages(
                 .iter()
                 .map(|m| MessageDto {
                     role: format!("{:?}", m.role).to_lowercase(),
-                    content: m.content.clone(),
+                    content: m.content.to_string(),
                 })
                 .collect();
             Ok(Json(messages))

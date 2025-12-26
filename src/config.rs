@@ -38,6 +38,16 @@ pub struct AppConfig {
     pub security: SecurityConfig,
     pub resilience: ResilienceConfig,
     pub persistence: PersistenceConfig,
+    #[serde(default)]
+    pub file_processing: FileProcessingConfig,
+    #[serde(default)]
+    pub unstructured: Option<UnstructuredConfig>,
+    #[serde(default)]
+    pub mistral_ocr: Option<MistralConfig>,
+    #[serde(default)]
+    pub kreuzberg: Option<KreuzbergConfig>,
+    #[serde(default)]
+    pub vision: VisionConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -68,6 +78,184 @@ pub struct PersistenceConfig {
     pub external_cache_enabled: bool,
 }
 
+/// Configuration for file processing and uploads.
+#[derive(Debug, Deserialize, Clone)]
+pub struct FileProcessingConfig {
+    /// Provider to use: "unstructured", "mistral", "kreuzberg" (local), "auto"
+    pub provider: String,
+    /// Directory where uploaded files are saved before processing
+    pub upload_dir: String,
+    /// Maximum number of files per prompt
+    pub max_files_per_prompt: usize,
+    /// Maximum file size per file in bytes
+    pub max_file_size: usize,
+    /// Maximum total upload size for all files in a single prompt
+    pub max_total_size: usize,
+    /// Allowed MIME types (empty = allow all supported types)
+    #[serde(default)]
+    pub allowed_mime_types: Vec<String>,
+}
+
+impl Default for FileProcessingConfig {
+    fn default() -> Self {
+        Self {
+            provider: "auto".to_string(),
+            upload_dir: std::env::temp_dir()
+                .join("uar-uploads")
+                .to_string_lossy()
+                .to_string(),
+            max_files_per_prompt: 10,
+            max_file_size: 50 * 1024 * 1024,   // 50MB
+            max_total_size: 100 * 1024 * 1024, // 100MB
+            allowed_mime_types: Vec::new(),
+        }
+    }
+}
+
+/// Unstructured.io configuration (hosted or self-hosted).
+#[derive(Debug, Deserialize, Clone)]
+pub struct UnstructuredConfig {
+    /// API URL (default: hosted service)
+    #[serde(default = "UnstructuredConfig::default_api_url")]
+    pub api_url: String,
+    /// API key for the hosted service
+    pub api_key: Option<String>,
+}
+
+impl UnstructuredConfig {
+    fn default_api_url() -> String {
+        "https://api.unstructured.io/general/v0/general".to_string()
+    }
+}
+
+impl Default for UnstructuredConfig {
+    fn default() -> Self {
+        Self {
+            api_url: Self::default_api_url(),
+            api_key: None,
+        }
+    }
+}
+
+/// Mistral OCR configuration.
+#[derive(Debug, Deserialize, Clone)]
+pub struct MistralConfig {
+    /// Mistral API key
+    pub api_key: Option<String>,
+    /// OCR model to use
+    #[serde(default = "MistralConfig::default_ocr_model")]
+    pub ocr_model: String,
+}
+
+impl MistralConfig {
+    fn default_ocr_model() -> String {
+        "mistral-ocr-latest".to_string()
+    }
+}
+
+impl Default for MistralConfig {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            ocr_model: Self::default_ocr_model(),
+        }
+    }
+}
+
+/// Kreuzberg local file processing configuration.
+/// Kreuzberg is a high-performance document intelligence framework with a Rust core.
+#[derive(Debug, Deserialize, Clone)]
+pub struct KreuzbergConfig {
+    /// Enable OCR for scanned documents and images
+    #[serde(default = "KreuzbergConfig::default_ocr_enabled")]
+    pub ocr_enabled: bool,
+    /// Force OCR even if text layer exists in PDFs
+    #[serde(default)]
+    pub force_ocr: bool,
+    /// OCR backend: "tesseract" (default), "easyocr", "paddleocr"
+    #[serde(default = "KreuzbergConfig::default_ocr_backend")]
+    pub ocr_backend: String,
+    /// OCR language(s), e.g., "eng", "eng+deu" for multiple
+    #[serde(default = "KreuzbergConfig::default_ocr_language")]
+    pub ocr_language: String,
+    /// PDF rendering DPI for OCR (higher = better quality but more memory)
+    #[serde(default = "KreuzbergConfig::default_pdf_dpi")]
+    pub pdf_dpi: u32,
+    /// Extract tables from documents
+    #[serde(default = "KreuzbergConfig::default_extract_tables")]
+    pub extract_tables: bool,
+    /// Extract metadata from documents
+    #[serde(default = "KreuzbergConfig::default_extract_metadata")]
+    pub extract_metadata: bool,
+    /// Output format: "markdown" or "text"
+    #[serde(default = "KreuzbergConfig::default_output_format")]
+    pub output_format: String,
+}
+
+impl KreuzbergConfig {
+    fn default_ocr_enabled() -> bool {
+        true
+    }
+    fn default_ocr_backend() -> String {
+        "tesseract".to_string()
+    }
+    fn default_ocr_language() -> String {
+        "eng".to_string()
+    }
+    fn default_pdf_dpi() -> u32 {
+        300
+    }
+    fn default_extract_tables() -> bool {
+        true
+    }
+    fn default_extract_metadata() -> bool {
+        true
+    }
+    fn default_output_format() -> String {
+        "markdown".to_string()
+    }
+}
+
+impl Default for KreuzbergConfig {
+    fn default() -> Self {
+        Self {
+            ocr_enabled: Self::default_ocr_enabled(),
+            force_ocr: false,
+            ocr_backend: Self::default_ocr_backend(),
+            ocr_language: Self::default_ocr_language(),
+            pdf_dpi: Self::default_pdf_dpi(),
+            extract_tables: Self::default_extract_tables(),
+            extract_metadata: Self::default_extract_metadata(),
+            output_format: Self::default_output_format(),
+        }
+    }
+}
+
+/// Vision/Image processing configuration.
+#[derive(Debug, Deserialize, Clone)]
+pub struct VisionConfig {
+    /// Explicit vision model (overrides auto-detection)
+    pub model: Option<String>,
+    /// Auto-detect vision capability from default LLM model
+    #[serde(default = "VisionConfig::default_auto_detect")]
+    pub auto_detect: bool,
+}
+
+impl VisionConfig {
+    fn default_auto_detect() -> bool {
+        true
+    }
+}
+
+impl Default for VisionConfig {
+    fn default() -> Self {
+        Self {
+            model: None,
+            auto_detect: true,
+        }
+    }
+}
+
 impl AppConfig {
     pub fn load() -> Result<Self, config::ConfigError> {
         Self::load_from_args(std::env::args())
@@ -92,7 +280,21 @@ impl AppConfig {
             .set_default("resilience.timeout_disabled", false)? // Default enabled (timeout_disabled=false)
             .set_default("resilience.requests_per_second", 5.0)?
             .set_default("resilience.burst_size", 10.0)?
-            .set_default("persistence.external_cache_enabled", false)?;
+            .set_default("persistence.external_cache_enabled", false)?
+            // File processing defaults
+            .set_default("file_processing.provider", "auto")?
+            .set_default(
+                "file_processing.upload_dir",
+                std::env::temp_dir()
+                    .join("uar-uploads")
+                    .to_string_lossy()
+                    .to_string(),
+            )?
+            .set_default("file_processing.max_files_per_prompt", 10_i64)?
+            .set_default("file_processing.max_file_size", 52_428_800_i64)?
+            .set_default("file_processing.max_total_size", 104_857_600_i64)?
+            // Vision defaults
+            .set_default("vision.auto_detect", true)?;
         // 4. Manual CLI Overrides
         // ...
         if let Some(rl) = cli.rate_limit_enabled {

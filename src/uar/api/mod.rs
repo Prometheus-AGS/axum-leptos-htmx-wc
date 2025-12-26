@@ -4,6 +4,7 @@ pub mod memory;
 pub mod openai;
 pub mod routes;
 pub mod sse;
+pub mod upload;
 
 use axum::Router;
 

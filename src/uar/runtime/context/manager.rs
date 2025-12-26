@@ -74,7 +74,7 @@ impl ContextManager {
             .cloned();
 
         if let Some(sys) = &system_msg {
-            let t = TokenService::estimate_string(&sys.content) + 3;
+            let t = TokenService::estimate_string(sys.content.as_text().unwrap_or("")) + 3;
             budget = budget.saturating_sub(t);
             final_list.push(sys.clone());
         }
@@ -87,7 +87,7 @@ impl ContextManager {
                 continue;
             }
 
-            let t = TokenService::estimate_string(&msg.content) + 3;
+            let t = TokenService::estimate_string(msg.content.as_text().unwrap_or("")) + 3;
             if t <= budget {
                 tail.push(msg.clone());
                 budget -= t;
@@ -132,7 +132,7 @@ impl ContextManager {
 
         while let Some((_idx, msg)) = msg_iter.next() {
             if msg.role == MessageRole::System {
-                let t = TokenService::estimate_string(&msg.content) + 3;
+                let t = TokenService::estimate_string(msg.content.as_text().unwrap_or("")) + 3;
                 if t < budget {
                     head.push(msg.clone());
                     budget -= t;
@@ -141,7 +141,7 @@ impl ContextManager {
                 // First non-system (User)
                 // Keep it if budget allows and strategy implies keeping "First"
                 // Assumption: "KeepFirstLast" usually implies keeping the very first prompt.
-                let t = TokenService::estimate_string(&msg.content) + 3;
+                let t = TokenService::estimate_string(msg.content.as_text().unwrap_or("")) + 3;
                 if t < budget {
                     head.push(msg.clone());
                     budget -= t;
@@ -172,7 +172,7 @@ impl ContextManager {
                 continue;
             }
 
-            let t = TokenService::estimate_string(&msg.content) + 3;
+            let t = TokenService::estimate_string(msg.content.as_text().unwrap_or("")) + 3;
             if t <= budget {
                 tail.push(msg.clone());
                 budget -= t;
@@ -206,11 +206,12 @@ impl ContextManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::MessageContent;
 
     fn make_msg(content: &str, role: MessageRole) -> Message {
         Message {
             role,
-            content: content.to_string(),
+            content: MessageContent::text(content),
             tool_call_id: None,
             tool_calls: None,
         }
@@ -253,7 +254,7 @@ mod tests {
 
         // Ensure System Prompt is preserved
         assert_eq!(optimized[0].role, MessageRole::System);
-        assert_eq!(optimized[0].content, "System Prompt");
+        assert_eq!(optimized[0].content.as_text().unwrap(), "System Prompt");
 
         // Ensure we are under budget (100 tokens + buffer logic?)
         // apply() uses effective_max = config.max_tokens (100).
@@ -285,9 +286,12 @@ mod tests {
         let outcome = optimized;
 
         // Expect: System, First User, <Tail>
-        assert_eq!(outcome[0].content, "System");
-        assert_eq!(outcome[1].content, "First User");
-        assert_eq!(outcome.last().unwrap().content, "Last User");
+        assert_eq!(outcome[0].content.as_text().unwrap(), "System");
+        assert_eq!(outcome[1].content.as_text().unwrap(), "First User");
+        assert_eq!(
+            outcome.last().unwrap().content.as_text().unwrap(),
+            "Last User"
+        );
 
         // Ensure some middle messages are gone
         assert!(outcome.len() < 23);

@@ -193,7 +193,7 @@ impl RunManager {
 
         messages.push(Message {
             role: MessageRole::System,
-            content: system_prompt,
+            content: crate::llm::MessageContent::text(system_prompt),
             tool_call_id: None,
             tool_calls: None,
         });

@@ -104,10 +104,19 @@
                         hx-on::before-request="
                             const msg = this.querySelector('[name=message]').value;
                             const chatStream = document.querySelector('chat-stream');
+                            const fileUpload = document.querySelector('file-upload');
                             
-                            // Add user message to UI immediately
-                            if (chatStream && msg.trim()) {
-                                chatStream.addUserMessage(msg);
+                            // Get attached files
+                            const attachedFiles = fileUpload ? fileUpload.getAttachedFiles() : [];
+                            
+                            // Add user message to UI immediately (with files if any)
+                            if (chatStream && (msg.trim() || attachedFiles.length > 0)) {
+                                chatStream.addUserMessage(msg, attachedFiles);
+                            }
+                            
+                            // Clear file attachments after adding to message
+                            if (fileUpload) {
+                                fileUpload.clearFiles();
                             }
                             
                             // Set session_id from Alpine store if exists (or remove if empty)
@@ -147,6 +156,9 @@
                     >
                         <!-- Hidden input for session_id -->
                         <input type="hidden" name="session_id" x-bind:value="$store.chat?.sessionId || ''">
+                        
+                        <!-- File Upload Component -->
+                        <file-upload class="relative"></file-upload>
                         
                         <div class="flex-1">
                             <textarea

@@ -30,8 +30,8 @@ use crate::mcp::registry::McpRegistry;
 use crate::normalized::NormalizedEvent;
 
 use super::{
-    ChatCompletionsDriver, LlmDriver, LlmProtocol, LlmRequest, LlmSettings, Message, MessageRole,
-    ResponsesDriver, ToolCall, ToolCallFunction,
+    ChatCompletionsDriver, LlmDriver, LlmProtocol, LlmRequest, LlmSettings, Message,
+    MessageContent, MessageRole, ResponsesDriver, ToolCall, ToolCallFunction,
 };
 
 /// Maximum number of tool loop iterations to prevent infinite loops.
@@ -122,7 +122,7 @@ impl Orchestrator {
     ) -> anyhow::Result<impl Stream<Item = NormalizedEvent> + Send> {
         self.chat_with_history(vec![Message {
             role: MessageRole::User,
-            content: user_message.to_string(),
+            content: MessageContent::text(user_message),
             tool_call_id: None,
             tool_calls: None,
         }])
@@ -147,11 +147,12 @@ impl Orchestrator {
 
         // Log initial message history
         for (idx, msg) in messages.iter().enumerate() {
+            let content_preview = msg.content.as_text().map(|s| s.len()).unwrap_or(0);
             tracing::debug!(
                 request_id = %request_id,
                 message_index = idx,
                 role = ?msg.role,
-                content_length = msg.content.len(),
+                content_length = content_preview,
                 has_tool_calls = msg.tool_calls.is_some(),
                 "Initial message"
             );

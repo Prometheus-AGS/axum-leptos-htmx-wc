@@ -14,6 +14,7 @@ path = "src/main.rs"
 anyhow = "1.0"
 axum-test = "18.4.1"
 serial_test = "3.0"
+tempfile = "3.24.0"
 tokio = { version = "1.0", features = ["full", "test-util"] }
 tower = { version = "0.5.2", features = ["util"] }
 
@@ -38,7 +39,7 @@ async-stream = "0.3"
 async-trait = "0.1"
 
 # HTTP client
-reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls", "multipart"] }
 
 # MCP client
 rmcp = { version = "0.12.0", features = [
@@ -72,7 +73,7 @@ pgvector = { version = "0.4.1", features = ["sqlx"] }
 text-splitter = "0.28.0"
 chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2.5.0"
-jsonwebtoken = "9.3.0"
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 tracing-opentelemetry = "0.32.0"
 opentelemetry = "0.31.0"
 opentelemetry-otlp = "0.31.0"
@@ -83,6 +84,16 @@ config = "0.15.19"
 surrealdb = { version = "2.4.0", features = ["kv-surrealkv", "protocol-ws"] }
 governor = { version = "0.10.4", features = ["std", "jitter", "quanta"] }
 nonzero_ext = "0.3.0"
+
+# File processing (multimodal support)
+thiserror = "2.0"
+mime_guess = "2.0"
+base64 = "0.22"
+
+# Kreuzberg - document intelligence framework with Rust core (4.0 RC)
+kreuzberg = { git = "https://github.com/kreuzberg-dev/kreuzberg.git", tag = "v4.0.0-rc.17" }
+
+
 
 # Lints (M-STATIC-VERIFICATION)
 [lints.rust]

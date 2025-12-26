@@ -87,6 +87,71 @@ impl Provider {
             _ => format!("{base}/v1/chat/completions"),
         }
     }
+
+    /// Check if a model supports vision/image inputs.
+    ///
+    /// This is a heuristic check based on known model naming patterns.
+    /// For accurate detection, consider using the models.dev API.
+    ///
+    /// # Arguments
+    ///
+    /// * `model` - The model identifier to check
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use axum_leptos_htmx_wc::llm::Provider;
+    ///
+    /// assert!(Provider::supports_vision("gpt-4o"));
+    /// assert!(Provider::supports_vision("claude-3-5-sonnet"));
+    /// assert!(!Provider::supports_vision("gpt-3.5-turbo"));
+    /// ```
+    #[must_use]
+    pub fn supports_vision(model: &str) -> bool {
+        let lower = model.to_lowercase();
+
+        // OpenAI vision models
+        if lower.contains("gpt-4o") || lower.contains("gpt-4-vision") {
+            return true;
+        }
+
+        // Anthropic Claude 3 models (all support vision)
+        if lower.contains("claude-3") {
+            return true;
+        }
+
+        // Google Gemini models (vision capable)
+        if lower.contains("gemini") {
+            return true;
+        }
+
+        // Mistral Pixtral (vision model)
+        if lower.contains("pixtral") {
+            return true;
+        }
+
+        // Qwen VL models
+        if lower.contains("qwen") && lower.contains("vl") {
+            return true;
+        }
+
+        // LLaVA models
+        if lower.contains("llava") {
+            return true;
+        }
+
+        // CogVLM models
+        if lower.contains("cogvlm") {
+            return true;
+        }
+
+        // InternVL models
+        if lower.contains("internvl") {
+            return true;
+        }
+
+        false
+    }
 }
 
 #[cfg(test)]

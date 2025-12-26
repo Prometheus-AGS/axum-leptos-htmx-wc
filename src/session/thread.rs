@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
-use crate::llm::{Message, MessageRole, ToolCall};
+use crate::llm::{Message, MessageContent, MessageRole, ToolCall};
 
 /// Default session timeout (30 minutes).
 #[allow(dead_code)]
@@ -143,7 +143,7 @@ impl Session {
     pub fn add_user_message(&self, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::User,
-            content: content.into(),
+            content: MessageContent::text(content),
             tool_call_id: None,
             tool_calls: None,
         };
@@ -155,7 +155,7 @@ impl Session {
     pub fn add_assistant_message(&self, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::Assistant,
-            content: content.into(),
+            content: MessageContent::text(content),
             tool_call_id: None,
             tool_calls: None,
         };
@@ -171,7 +171,7 @@ impl Session {
     ) {
         let msg = Message {
             role: MessageRole::Assistant,
-            content: content.unwrap_or_default(),
+            content: MessageContent::text(content.unwrap_or_default()),
             tool_call_id: None,
             tool_calls: Some(tool_calls),
         };
@@ -183,7 +183,7 @@ impl Session {
     pub fn add_tool_result(&self, tool_call_id: impl Into<String>, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::Tool,
-            content: content.into(),
+            content: MessageContent::text(content),
             tool_call_id: Some(tool_call_id.into()),
             tool_calls: None,
         };
@@ -212,7 +212,7 @@ impl Session {
         if let Some(prompt) = self.system_prompt() {
             result.push(Message {
                 role: MessageRole::System,
-                content: prompt,
+                content: MessageContent::text(prompt),
                 tool_call_id: None,
                 tool_calls: None,
             });

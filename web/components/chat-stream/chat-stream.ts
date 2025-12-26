@@ -12,6 +12,7 @@ import { createUniqueId } from "../../utils/html";
 import { generateUuid } from "../../utils/uuid";
 import { pgliteStore } from "../../stores/pglite-store";
 import type { ConversationTurn, Message } from "../../types/database";
+import type { AttachedFile } from "../file-upload/file-upload";
 
 import { TranscriptView } from "./transcript-view";
 import { StreamController } from "./stream-controller";
@@ -421,13 +422,52 @@ export class ChatStream extends HTMLElement {
   // Public API & Conversation Management
   // ---------------------------------------------------------------------------
 
-  async addUserMessage(content: string): Promise<void> {
-    if (!content.trim()) return;
+  async addUserMessage(content: string, files?: AttachedFile[]): Promise<void> {
+    if (!content.trim() && (!files || files.length === 0)) return;
 
     if (!this.conversationId) {
       const conv = await pgliteStore.createConversation();
       this.conversationId = conv.id;
       window.dispatchEvent(new CustomEvent('conversation-created', { detail: { conversationId: conv.id } }));
+    }
+
+    // Build the display content with file attachments
+    let displayHtml = '';
+    
+    // Render image previews if any
+    if (files && files.length > 0) {
+      const imageFiles = files.filter(f => f.file.type.startsWith('image/'));
+      const documentFiles = files.filter(f => !f.file.type.startsWith('image/'));
+      
+      if (imageFiles.length > 0) {
+        displayHtml += '<div class="attached-images flex flex-wrap gap-2 mb-3">';
+        for (const file of imageFiles) {
+          if (file.preview) {
+            displayHtml += `<img src="${file.preview}" class="w-24 h-24 rounded-lg object-cover" alt="${file.file.name}" />`;
+          }
+        }
+        displayHtml += '</div>';
+      }
+      
+      if (documentFiles.length > 0) {
+        displayHtml += '<div class="attached-documents flex flex-wrap gap-2 mb-3">';
+        for (const file of documentFiles) {
+          displayHtml += `
+            <div class="document-attachment flex items-center gap-2 px-3 py-2 bg-surfaceContainer rounded-lg text-sm">
+              <svg class="w-4 h-4 text-textMuted shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span class="truncate max-w-[150px]">${file.file.name}</span>
+            </div>
+          `;
+        }
+        displayHtml += '</div>';
+      }
+    }
+    
+    // Add the text content
+    if (content.trim()) {
+      displayHtml += renderMarkdown(content.trim());
     }
 
     const message: Message = {
@@ -437,15 +477,18 @@ export class ChatStream extends HTMLElement {
       content: content.trim(),
       created_at: new Date().toISOString(),
       sequence_order: this.sequenceOrder++,
-      metadata: {}
+      metadata: files && files.length > 0 ? { 
+        fileCount: files.length,
+        hasImages: files.some(f => f.file.type.startsWith('image/'))
+      } : {}
     };
 
-    // Render immediately
+    // Render immediately with attachments
     this.view?.upsertItem({
         id: message.id,
         kind: "message",
         role: "user",
-        html: renderMarkdown(message.content)
+        html: displayHtml
     });
     
     // Persist
