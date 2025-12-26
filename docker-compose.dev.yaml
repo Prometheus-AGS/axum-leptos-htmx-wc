@@ -1,0 +1,60 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/uar
+      - SURREAL_URL=ws://surreal:8000/rpc
+      - REDIS_URL=redis://redis:6379
+      - RUST_LOG=debug
+    depends_on:
+      - postgres
+      - surreal
+      - redis
+    networks:
+      - uar-network
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=uar
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - uar-network
+
+  surreal:
+    image: surrealdb/surrealdb:latest
+    ports:
+      - "8000:8000"
+    command: start --log trace --user root --pass root file://data/surreal.db
+    volumes:
+      - surreal_data_dev:/data
+    networks:
+      - uar-network
+
+  redis:
+    image: redis/redis-stack:latest
+    ports:
+      - "6379:6379"
+      - "8001:8001" # RedisInsight
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - uar-network
+
+networks:
+  uar-network:
+    driver: bridge
+
+volumes:
+  postgres_data_dev:
+  surreal_data_dev:
+  redis_data_dev:

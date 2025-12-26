@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Label (Web Component) + HTMX Variations</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: Canvas;
+        --fg: CanvasText;
+        --muted: color-mix(in oklab, var(--fg) 65%, transparent);
+        --border: color-mix(in oklab, var(--fg) 18%, transparent);
+        --card: color-mix(in oklab, var(--bg) 92%, var(--fg) 8%);
+        --focus: color-mix(in oklab, #3b82f6 70%, white 30%);
+        --radius: 14px;
+        --pad: 16px;
+        --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.4;
+      }
+      header {
+        padding: 18px 18px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      header p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        max-width: 70ch;
+      }
+      main {
+        padding: 18px;
+        display: grid;
+        gap: 14px;
+        max-width: 980px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: var(--pad);
+      }
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 14px;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .stack {
+        display: grid;
+        gap: 8px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+        min-width: 260px;
+      }
+      input[type="text"],
+      input[type="email"],
+      select,
+      textarea {
+        padding: 10px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--bg) 92%, var(--fg) 8%);
+        color: var(--fg);
+        outline: none;
+      }
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible {
+        border-color: var(--focus);
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 35%, transparent);
+      }
+      .btn {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--bg) 88%, var(--fg) 12%);
+        color: var(--fg);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      /* Mirrors our docs task-list rendering style */
+      .zone-task-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+      .zone-task-list__item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--bg) 94%, var(--fg) 6%);
+      }
+      .zone-task-list__item--checked {
+        opacity: 0.8;
+      }
+      .zone-task-list__item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+      }
+      .out {
+        border: 1px dashed var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        min-height: 22px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Label — Web Component + HTMX variations</h1>
+      <p>
+        The shadcn/ui <code>Label</code> concept is: “Renders an accessible label
+        associated with controls.” This page shows the same core behavior in a
+        self-contained HTML artifact.
+      </p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>0) Baseline: native &lt;label for=&gt; &lt;input id=&gt; association</h2>
+        <div class="stack">
+          <div class="field">
+            <label for="email_native">Email (native label)</label>
+            <input id="email_native" name="email" type="email" placeholder="name@domain.com" />
+            <div class="hint">Clicking the label focuses the input.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>1) Web Component: &lt;mz-label&gt; renders a native &lt;label&gt; (Shadow DOM)</h2>
+        <div class="stack">
+          <div class="field">
+            <mz-label for="email_wc" required hint="We’ll never share your email.">Email (mz-label)</mz-label>
+            <input id="email_wc" name="email" type="email" placeholder="name@domain.com" />
+          </div>
+
+          <div class="field">
+            <mz-label for="plan_wc" hint="Select the plan that matches your needs.">Plan</mz-label>
+            <select id="plan_wc" name="plan">
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2) Pattern: label wraps control (checkbox task list)</h2>
+        <p class="hint">
+          This mirrors the “task list” HTML rendering pattern used in our design
+          system examples.
+        </p>
+        <ul class="zone-task-list">
+          <li class="zone-task-list__item">
+            <label style="display:flex; align-items:center; gap:10px; width:100%; cursor:pointer;">
+              <input type="checkbox" name="task_a" />
+              <span>Enable weekly summaries</span>
+            </label>
+          </li>
+          <li class="zone-task-list__item zone-task-list__item--checked">
+            <label style="display:flex; align-items:center; gap:10px; width:100%; cursor:pointer;">
+              <input type="checkbox" name="task_b" checked />
+              <span>Send product updates</span>
+            </label>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>3) “HTMX form integration” (static-safe)</h2>
+        <p class="hint">
+          This is wired with <code>hx-post</code>/<code>hx-target</code>/<code>hx-swap</code>
+          but uses <code>hx-post="#"</code> so it remains safe as a static docs file.
+        </p>
+
+        <form
+          hx-post="#"
+          hx-trigger="submit"
+          hx-target="#label_form_out"
+          hx-swap="innerHTML"
+          onsubmit="event.preventDefault(); document.querySelector('#label_form_out').innerHTML = '✅ (simulated) Submitted: ' + new FormData(this).get('email') + ' / ' + new FormData(this).get('notes');"
+          class="stack"
+        >
+          <div class="field">
+            <mz-label for="email_form" required>Email</mz-label>
+            <input id="email_form" name="email" type="email" placeholder="name@domain.com" required />
+          </div>
+
+          <div class="field">
+            <mz-label for="notes_form" hint="Any extra context you want us to have?">Notes</mz-label>
+            <textarea id="notes_form" name="notes" rows="3" placeholder="Type here..."></textarea>
+          </div>
+
+          <div class="row">
+            <button class="btn" type="submit">Submit</button>
+            <span class="hint">(Simulated submit; see output below.)</span>
+          </div>
+        </form>
+
+        <div id="label_form_out" class="out" aria-live="polite"></div>
+      </section>
+
+      <section class="card">
+        <h2>Notes</h2>
+        <div class="stack">
+          <div class="hint">
+            • The shadcn/ui Label doc states the intent: “Renders an accessible label associated with controls.”
+          </div>
+          <div class="hint">
+            • For HTMX/HTML artifacts, use an iframe + Shadow DOM style execution environment to avoid style bleed.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      class MzLabel extends HTMLElement {
+        static get observedAttributes() {
+          return ["for", "required", "hint", "disabled"]; // minimal API for docs
+        }
+
+        constructor() {
+          super();
+          this.attachShadow({ mode: "open" });
+          this._render();
+        }
+
+        attributeChangedCallback() {
+          this._render();
+        }
+
+        _render() {
+          const htmlFor = this.getAttribute("for") || "";
+          const required = this.hasAttribute("required");
+          const hint = this.getAttribute("hint") || "";
+          const disabled = this.hasAttribute("disabled");
+
+          this.shadowRoot.innerHTML = `
+            <style>
+              :host { display: block; }
+              label {
+                display: inline-flex;
+                align-items: baseline;
+                gap: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                color: CanvasText;
+                cursor: ${disabled ? "not-allowed" : "pointer"};
+                user-select: none;
+              }
+              .req {
+                font-weight: 700;
+                color: color-mix(in oklab, CanvasText 55%, transparent);
+              }
+              .hint {
+                margin-top: 4px;
+                font-size: 12px;
+                color: color-mix(in oklab, CanvasText 65%, transparent);
+              }
+            </style>
+            <div>
+              <label for="${htmlFor}">
+                <slot></slot>
+                ${required ? `<span class="req" aria-hidden="true">*</span>` : ``}
+              </label>
+              ${hint ? `<div class="hint">${hint}</div>` : ``}
+            </div>
+          `;
+        }
+      }
+
+      customElements.define("mz-label", MzLabel);
+    </script>
+
+    <!-- Optional: include HTMX if this is run in a real environment. -->
+    <!-- <script src="https://unpkg.com/htmx.org@1.9.12"></script> -->
+  </body>
+</html>

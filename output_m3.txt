@@ -1,0 +1,118 @@
+    Checking axum-leptos-htmx-wc v0.1.0 (/Users/gqadonis/Projects/references/axum-leptos-htmx-wc)
+error[E0432]: unresolved import `crate::AppState`
+ --> src/uar/api/ingest.rs:1:5
+  |
+1 | use crate::AppState;
+  |     ^^^^^^^^^^^^^^^ no `AppState` in the root
+
+error[E0432]: unresolved import `axum::extract::Multipart`
+  --> src/uar/api/ingest.rs:5:15
+   |
+ 5 |     extract::{Multipart, State},
+   |               ^^^^^^^^^ no `Multipart` in `extract`
+   |
+note: found an item that was configured out
+  --> /Users/gqadonis/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.8.8/src/extract/mod.rs:65:26
+   |
+63 | #[cfg(feature = "multipart")]
+   |       --------------------- the item is gated behind the `multipart` feature
+64 | #[doc(inline)]
+65 | pub use self::multipart::Multipart;
+   |                          ^^^^^^^^^
+
+error[E0432]: unresolved import `crate::uar::domain::knowledge::KnowledgeChunkingConfig`
+ --> src/uar/rag/ingest.rs:1:53
+  |
+1 | use crate::uar::domain::knowledge::{KnowledgeChunk, KnowledgeChunkingConfig};
+  |                                                     ^^^^^^^^^^^^^^^^^^^^^^^ no `KnowledgeChunkingConfig` in `uar::domain::knowledge`
+
+warning: unused import: `crate::uar::rag::ingest::IngestService`
+ --> src/uar/api/ingest.rs:2:5
+  |
+2 | use crate::uar::rag::ingest::IngestService;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `axum_extra::routing::TypedPath`
+ --> src/uar/api/mod.rs:7:5
+  |
+7 | use axum_extra::routing::TypedPath;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `serde::Deserialize`
+ --> src/uar/api/mod.rs:8:5
+  |
+8 | use serde::Deserialize;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `info`
+ --> src/uar/rag/chunking.rs:6:15
+  |
+6 | use tracing::{info, warn};
+  |               ^^^^
+
+warning: unused import: `debug`
+ --> src/uar/runtime/context/manager.rs:4:15
+  |
+4 | use tracing::{debug, info, warn};
+  |               ^^^^^
+
+warning: unused import: `MessageRole`
+ --> src/uar/runtime/context/token_service.rs:1:27
+  |
+1 | use crate::llm::{Message, MessageRole};
+  |                           ^^^^^^^^^^^
+
+warning: unused import: `anyhow::Result`
+ --> src/uar/runtime/context/token_service.rs:2:5
+  |
+2 | use anyhow::Result;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `get_bpe_from_model`
+ --> src/uar/runtime/context/token_service.rs:3:32
+  |
+3 | use tiktoken_rs::{cl100k_base, get_bpe_from_model};
+  |                                ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `tracing::warn`
+ --> src/uar/runtime/context/token_service.rs:4:5
+  |
+4 | use tracing::warn;
+  |     ^^^^^^^^^^^^^
+
+error[E0282]: type annotations needed
+  --> src/uar/api/ingest.rs:25:20
+   |
+25 |         let name = field.name().unwrap_or("").to_string();
+   |                    ^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+  --> src/uar/api/ingest.rs:41:23
+   |
+41 |                 match ingest_service.ingest_file(&temp_path, kb_id).await {
+   |                       ^^^^^^^^^^^^^^ cannot infer type
+
+warning: variable does not need to be mutable
+   --> src/uar/runtime/manager.rs:190:13
+    |
+190 |         let mut messages = optimized_messages;
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `idx`
+   --> src/uar/runtime/context/manager.rs:133:25
+    |
+133 |         while let Some((idx, msg)) = msg_iter.next() {
+    |                         ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0282, E0432.
+For more information about an error, try `rustc --explain E0282`.
+warning: `axum-leptos-htmx-wc` (lib) generated 11 warnings
+error: could not compile `axum-leptos-htmx-wc` (lib) due to 5 previous errors; 11 warnings emitted

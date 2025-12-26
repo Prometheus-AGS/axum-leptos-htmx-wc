@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sidebar Blocks — 01 (HTMX + Web Components + Alpine)</title>
+
+  <!-- HTMX (required by the request) -->
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+
+  <!-- Alpine.js for client state (collapsed, active route, mobile sheet) -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    /* Borderless / Material-ish tokens (dynamic theming via --primary-hue) */
+    :root{
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 60% 50%);
+      --on-primary: hsl(var(--primary-hue) 90% 96%);
+
+      --surface-lowest: hsl(var(--primary-hue) 8% 98%);
+      --surface-low: hsl(var(--primary-hue) 10% 96%);
+      --surface: hsl(var(--primary-hue) 12% 94%);
+      --surface-high: hsl(var(--primary-hue) 14% 92%);
+
+      --text: hsl(var(--primary-hue) 15% 12%);
+      --muted: hsl(var(--primary-hue) 8% 42%);
+      --ring: hsl(var(--primary-hue) 80% 55%);
+
+      --shadow: 0 16px 50px rgba(0,0,0,.10);
+      --radius: 16px;
+      --radius-sm: 12px;
+
+      --sidebar-w: 280px;
+      --sidebar-w-collapsed: 76px;
+      --header-h: 64px;
+
+      --trans: 220ms ease;
+    }
+
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at top left, var(--surface-lowest) 0, var(--surface-low) 42%, rgba(0,0,0,0) 100%),
+        linear-gradient(180deg, var(--surface-lowest), var(--surface));
+    }
+
+    .app{
+      min-height:100vh;
+      display:grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      gap:16px;
+      padding:16px;
+    }
+
+    /* Collapsible sidebar width */
+    [data-collapsed="true"] .sidebar-wrap{ width: var(--sidebar-w-collapsed); }
+    [data-collapsed="true"] .sidebar-title,
+    [data-collapsed="true"] .sidebar-section-title,
+    [data-collapsed="true"] .nav-text{ display:none; }
+    [data-collapsed="true"] .nav-item{ justify-content:center; }
+
+    .zone{
+      background: color-mix(in hsl, var(--surface-low) 88%, white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .sidebar-wrap{
+      width: var(--sidebar-w);
+      transition: width var(--trans);
+      display:flex;
+      flex-direction:column;
+    }
+
+    .sidebar-header{
+      height: var(--header-h);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px;
+      background: color-mix(in hsl, var(--surface) 82%, white);
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width: 0;
+    }
+
+    .brand-badge{
+      width:36px;height:36px;
+      border-radius: 14px;
+      background: color-mix(in hsl, var(--primary) 14%, var(--surface));
+      color: var(--primary);
+      font-weight: 800;
+      display:grid;
+      place-items:center;
+      flex:0 0 auto;
+    }
+
+    .sidebar-title{
+      font-weight: 800;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .icon-btn{
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      border: 0;
+      background: color-mix(in hsl, var(--surface-high) 70%, white);
+      color: var(--text);
+      cursor:pointer;
+      display:grid;
+      place-items:center;
+      transition: transform var(--trans), background var(--trans);
+    }
+    .icon-btn:hover{ background: color-mix(in hsl, var(--surface-high) 55%, white); transform: translateY(-1px); }
+    .icon-btn:focus{ outline: 2px solid color-mix(in hsl, var(--ring) 45%, transparent); outline-offset: 2px; }
+
+    .sidebar-body{
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 14px;
+    }
+
+    .sidebar-section-title{
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 8px;
+      margin-top: 8px;
+    }
+
+    .nav{
+      display:grid;
+      gap: 6px;
+    }
+
+    .nav-item{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      text-decoration:none;
+      color: var(--text);
+      background: transparent;
+      transition: background var(--trans);
+    }
+    .nav-item:hover{ background: color-mix(in hsl, var(--surface) 78%, white); }
+
+    .nav-item[data-active="true"]{
+      background: color-mix(in hsl, var(--primary) 14%, var(--surface));
+      outline: 2px solid color-mix(in hsl, var(--ring) 35%, transparent);
+    }
+
+    .nav-icon{
+      width: 22px; height: 22px;
+      display:grid;
+      place-items:center;
+      border-radius: 10px;
+      background: color-mix(in hsl, var(--surface-high) 65%, white);
+      flex:0 0 auto;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .main{
+      display:flex;
+      flex-direction:column;
+      gap: 12px;
+    }
+
+    .topbar{
+      height: var(--header-h);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      background: color-mix(in hsl, var(--surface-low) 88%, white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .topbar-left{ display:flex; align-items:center; gap: 10px; min-width:0; }
+    .page-title{ font-weight: 800; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
+    .crumbs{ color: var(--muted); font-size: 13px; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
+
+    .content{
+      background: color-mix(in hsl, var(--surface-low) 88%, white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .skeleton{
+      background: color-mix(in hsl, var(--surface-high) 70%, white);
+      border-radius: var(--radius);
+      aspect-ratio: 16 / 9;
+    }
+
+    .big-skeleton{
+      background: color-mix(in hsl, var(--surface-high) 70%, white);
+      border-radius: var(--radius);
+      min-height: 60vh;
+    }
+
+    /* HTMX loading treatment */
+    #region-main.htmx-request{ opacity:.65; }
+
+    /* Mobile pattern: sidebar -> bottom nav at 768px */
+    @media (max-width: 768px){
+      .app{ grid-template-columns: 1fr; padding-bottom: 92px; }
+      .sidebar-wrap{ display:none; }
+      .bottom-nav{ display:flex; }
+    }
+
+    .bottom-nav{
+      display:none;
+      position:fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 10px;
+      gap: 8px;
+      border-radius: 22px;
+      background: color-mix(in hsl, var(--surface-low) 88%, white);
+      box-shadow: var(--shadow);
+    }
+
+    .bottom-nav a{
+      flex:1;
+      text-align:center;
+      padding: 10px 8px;
+      border-radius: 16px;
+      text-decoration:none;
+      color: var(--text);
+      font-size: 13px;
+      background: transparent;
+    }
+    .bottom-nav a[data-active="true"]{
+      background: color-mix(in hsl, var(--primary) 14%, var(--surface));
+    }
+
+    /* Demo helper */
+    code{ background: color-mix(in hsl, var(--surface-high) 70%, white); padding: 2px 6px; border-radius: 8px; }
+  </style>
+</head>
+
+<body>
+  <!--
+    This file is intentionally self-contained as an HTMX/HTML artifact.
+    For strong isolation in docs, render it inside an iframe + Shadow DOM environment. [1]
+  -->
+
+  <div
+    x-data="sidebarDemo()"
+    x-init="init()"
+    :data-collapsed="collapsed ? 'true' : 'false'"
+    class="app"
+  >
+    <!-- Sidebar: Web Component (shadow DOM) with Alpine-managed state -->
+    <mz-sidebar class="zone sidebar-wrap"
+      x-bind:collapsed="collapsed"
+      x-bind:active-route="activeRoute"
+      x-on:toggle-collapse.window="collapsed = !collapsed"
+      x-on:navigate.window="activeRoute = $event.detail.route"
+    ></mz-sidebar>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn" type="button" x-on:click="collapsed = !collapsed" aria-label="Toggle sidebar">
+            ☰
+          </button>
+          <div style="min-width:0">
+            <div class="page-title" x-text="pageTitle"></div>
+            <div class="crumbs" x-text="breadcrumb"></div>
+          </div>
+        </div>
+        <div style="color:var(--muted);font-size:13px;">HTMX 2.0.8 + Alpine</div>
+      </div>
+
+      <section id="region-main" class="content">
+        <div class="grid">
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+        </div>
+        <div class="big-skeleton"></div>
+        <p style="margin:12px 0 0;color:var(--muted);font-size:13px;">
+          Demo navigation swaps this region using <code>hx-get</code> + <code>hx-target</code> + <code>hx-push-url</code> patterns.
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <!-- Bottom navigation (mobile) -->
+  <nav class="bottom-nav" aria-label="Primary mobile" x-data="{ get r(){ return $root.__x.$data.activeRoute } }">
+    <a href="/dashboard" hx-get="/dashboard" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true"
+       data-route="/dashboard" :data-active="r === '/dashboard'" x-on:click.prevent="$dispatch('navigate', { route: '/dashboard' })">Dashboard</a>
+    <a href="/inbox" hx-get="/inbox" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true"
+       data-route="/inbox" :data-active="r === '/inbox'" x-on:click.prevent="$dispatch('navigate', { route: '/inbox' })">Inbox</a>
+    <a href="/settings" hx-get="/settings" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true"
+       data-route="/settings" :data-active="r === '/settings'" x-on:click.prevent="$dispatch('navigate', { route: '/settings' })">Settings</a>
+  </nav>
+
+  <script>
+    /*
+      Web components + component classes.
+      We keep styling inside shadow DOM to avoid leaking into the host page, matching the recommended isolation approach. [1]
+    */
+
+    class MzSidebar extends HTMLElement {
+      static get observedAttributes() { return ['collapsed', 'active-route']; }
+
+      constructor(){
+        super();
+        this.attachShadow({mode:'open'});
+        this._collapsed = false;
+        this._activeRoute = '/dashboard';
+      }
+
+      connectedCallback(){
+        this.render();
+        this.shadowRoot.addEventListener('click', (e) => {
+          const a = e.target.closest('a[data-route]');
+          if(!a) return;
+
+          // Let HTMX do navigation if present; we also dispatch an event for Alpine state.
+          const route = a.getAttribute('data-route');
+          this.dispatchEvent(new CustomEvent('navigate', { bubbles:true, detail:{ route } }));
+        });
+
+        this.shadowRoot.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-action="toggle"]');
+          if(!btn) return;
+          this.dispatchEvent(new CustomEvent('toggle-collapse', { bubbles:true }));
+        });
+      }
+
+      attributeChangedCallback(name, oldValue, newValue){
+        if(name === 'collapsed') this._collapsed = (newValue === 'true');
+        if(name === 'active-route') this._activeRoute = newValue || '/dashboard';
+        this.render();
+      }
+
+      get collapsed(){ return this._collapsed; }
+      set collapsed(v){
+        this._collapsed = !!v;
+        this.setAttribute('collapsed', this._collapsed ? 'true' : 'false');
+      }
+
+      get activeRoute(){ return this._activeRoute; }
+      set activeRoute(v){
+        this._activeRoute = v;
+        this.setAttribute('active-route', v);
+      }
+
+      render(){
+        const collapsed = this._collapsed;
+        const active = this._activeRoute;
+
+        const css = `
+          :host{ display:block; height:100%; }
+          .wrap{ height:100%; display:flex; flex-direction:column; }
+          .header{ height:64px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background: color-mix(in hsl, var(--surface) 82%, white); }
+          .brand{ display:flex; align-items:center; gap:10px; min-width:0; }
+          .badge{ width:36px; height:36px; border-radius:14px; background: color-mix(in hsl, var(--primary) 14%, var(--surface)); color: var(--primary); font-weight:800; display:grid; place-items:center; flex:0 0 auto; }
+          .title{ font-weight:800; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .btn{ width:40px; height:40px; border-radius:14px; border:0; background: color-mix(in hsl, var(--surface-high) 70%, white); cursor:pointer; }
+          .btn:focus{ outline:2px solid color-mix(in hsl, var(--ring) 45%, transparent); outline-offset:2px; }
+          .body{ padding:12px; display:flex; flex-direction:column; gap:14px; }
+          .sectionTitle{ font-size:12px; letter-spacing:.08em; text-transform:uppercase; color: var(--muted); padding:0 8px; margin-top:8px; ${collapsed ? 'display:none;' : ''} }
+          nav{ display:grid; gap:6px; }
+          a{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; color: var(--text); text-decoration:none; }
+          a:hover{ background: color-mix(in hsl, var(--surface) 78%, white); }
+          a[data-active="true"]{ background: color-mix(in hsl, var(--primary) 14%, var(--surface)); outline: 2px solid color-mix(in hsl, var(--ring) 35%, transparent); }
+          .icon{ width:22px; height:22px; display:grid; place-items:center; border-radius:10px; background: color-mix(in hsl, var(--surface-high) 65%, white); font-size:12px; color: var(--muted); flex:0 0 auto; }
+          .text{ ${collapsed ? 'display:none;' : ''} }
+          a{ justify-content: ${collapsed ? 'center' : 'flex-start'}; }
+        `;
+
+        const item = (route, label, icon) => {
+          const isActive = active === route;
+          // In a real app, these endpoints return server fragments; here we show the HTMX wiring. [3]
+          return `
+            <a href="${route}"
+              data-route="${route}"
+              data-active="${isActive ? 'true' : 'false'}"
+              hx-get="${route}"
+              hx-target="#region-main"
+              hx-swap="innerHTML"
+              hx-push-url="true">
+              <span class="icon">${icon}</span>
+              <span class="text">${label}</span>
+            </a>
+          `;
+        };
+
+        this.shadowRoot.innerHTML = `
+          <style>${css}</style>
+          <div class="wrap">
+            <div class="header">
+              <div class="brand">
+                <div class="badge">S</div>
+                <div class="title" style="${collapsed ? 'display:none;' : ''}">Sidebar</div>
+              </div>
+              <button class="btn" type="button" data-action="toggle" aria-label="Toggle collapse">
+                ${collapsed ? '»' : '«'}
+              </button>
+            </div>
+            <div class="body">
+              <div class="sectionTitle">Workspace</div>
+              <nav aria-label="Primary">
+                ${item('/dashboard','Dashboard','D')}
+                ${item('/inbox','Inbox','I')}
+                ${item('/settings','Settings','S')}
+              </nav>
+
+              <div class="sectionTitle">Projects</div>
+              <nav aria-label="Projects">
+                ${item('/project/alpha','Alpha','A')}
+                ${item('/project/beta','Beta','B')}
+              </nav>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    customElements.define('mz-sidebar', MzSidebar);
+
+    function sidebarDemo(){
+      return {
+        collapsed: false,
+        activeRoute: location.pathname === '/' ? '/dashboard' : location.pathname,
+        pageTitle: 'Data Fetching',
+        breadcrumb: 'Building Your Application / Data Fetching',
+
+        init(){
+          this.updateTitle();
+
+          // Keep Alpine route in sync with HTMX pushes.
+          document.body.addEventListener('htmx:pushedIntoHistory', () => {
+            this.activeRoute = location.pathname;
+            this.updateTitle();
+          });
+
+          // For static demo usage: if there is no backend, intercept HTMX requests and render mock fragments.
+          document.body.addEventListener('htmx:beforeRequest', (evt) => {
+            const path = evt.detail.pathInfo?.requestPath || '';
+            // If running as a standalone file:// artifact, cancel network and simulate response.
+            if(location.protocol === 'file:'){
+              evt.preventDefault();
+              this.activeRoute = path;
+              this.updateTitle();
+              const target = document.querySelector('#region-main');
+              if(target){
+                target.innerHTML = mockPageFragment(path);
+              }
+              history.pushState({}, '', path);
+            }
+          });
+
+          window.addEventListener('popstate', () => {
+            this.activeRoute = location.pathname;
+            this.updateTitle();
+            const target = document.querySelector('#region-main');
+            if(target){
+              target.innerHTML = mockPageFragment(location.pathname);
+            }
+          });
+
+          // Listen to navigate events from web component
+          this.$root.addEventListener('navigate', (e) => {
+            this.activeRoute = e.detail.route;
+            this.updateTitle();
+          });
+        },
+
+        updateTitle(){
+          const r = this.activeRoute;
+          const map = {
+            '/dashboard': ['Dashboard', 'Home / Dashboard'],
+            '/inbox': ['Inbox', 'All Inboxes / Inbox'],
+            '/settings': ['Settings', 'Account / Settings'],
+            '/project/alpha': ['Project Alpha', 'Projects / Alpha'],
+            '/project/beta': ['Project Beta', 'Projects / Beta'],
+          };
+          const [t, bc] = map[r] || ['Page', r];
+          this.pageTitle = t;
+          this.breadcrumb = bc;
+        }
+      };
+    }
+
+    function mockPageFragment(path){
+      const esc = (s) => (s||'').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      return `
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <h2 style="margin:0 0 6px 0;">${esc(path)}</h2>
+            <p style="margin:0;color:var(--muted)">Mock fragment rendered client-side for <code>file://</code> demo.</p>
+          </div>
+          <div style="color:var(--muted);font-size:13px;">(replace with server fragments)</div>
+        </div>
+        <div style="margin-top:12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+          <div class="skeleton" style="aspect-ratio:16/9"></div>
+          <div class="skeleton" style="aspect-ratio:16/9"></div>
+          <div class="skeleton" style="aspect-ratio:16/9"></div>
+        </div>
+        <div class="big-skeleton" style="margin-top:12px;min-height:40vh"></div>
+      `;
+    }
+  </script>
+</body>
+</html>

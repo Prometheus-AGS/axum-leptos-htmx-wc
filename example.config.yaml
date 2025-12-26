@@ -1,0 +1,248 @@
+# Universal Agent Runtime (UAR) Configuration
+# This file serves as a reference for all available configuration options.
+# Configuration is loaded in the following order (highest priority first):
+# 1. CLI Arguments (e.g. --port 8080)
+# 2. Environment Variables (e.g. UAR_SERVER__PORT=8080)
+# 3. Config File (this file)
+# 4. Defaults
+
+server:
+  # The port to listen on.
+  # Default: 3000
+  # Env: UAR_SERVER__PORT
+  port: 3000
+
+  # The host address to bind to.
+  # Default: 0.0.0.0
+  # Env: UAR_SERVER__HOST
+  host: "0.0.0.0"
+
+security:
+  # Whether to require JWT authentication for requests.
+  # Default: true
+  # Env: UAR_SECURITY__JWT_REQUIRED
+  jwt_required: true
+
+  # The secret key used to sign and verify JWT tokens.
+  # WARNING: Change this in production!
+  # Default: "secret_key_change_me"
+  # Env: UAR_SECURITY__JWT_SECRET
+  jwt_secret: "secret_key_change_me"
+
+resilience:
+  # Enable rate limiting to prevent abuse.
+  # Default: true
+  # Env: UAR_RESILIENCE__RATE_LIMIT_ENABLED
+  rate_limit_enabled: true
+
+  # Usage quota: allowed requests per second.
+  # Default: 5.0
+  # Env: UAR_RESILIENCE__REQUESTS_PER_SECOND
+  requests_per_second: 5.0
+
+  # Burst size: max requested allowed in a short burst.
+  # Default: 10.0
+  # Env: UAR_RESILIENCE__BURST_SIZE
+  burst_size: 10.0
+
+persistence:
+  # The database provider to use. specific values: "postgres" or "surreal"
+  # Default: "postgres"
+  # Env: UAR_PERSISTENCE__PROVIDER
+  provider: "postgres"
+
+  # Connection string for the primary database.
+  # Default: "postgres://postgres:password@localhost:5432/uar"
+  # Env: UAR_PERSISTENCE__DATABASE_URL
+  database_url: "postgres://postgres:password@localhost:5432/uar"
+
+  # Whether to use an external cache (Redis) for session and token storage.
+  # Default: false
+  # Env: UAR_PERSISTENCE__EXTERNAL_CACHE_ENABLED
+  external_cache_enabled: false
+
+  # Connection string for Redis (only used if external_cache_enabled is true).
+  # Env: UAR_PERSISTENCE__REDIS_URL
+  # redis_url: "redis://localhost:6379"
+
+# LLM Configuration
+# Note: These are currently handled via separate Environment Variables, not this config file.
+# They are documented here for completeness.
+#
+# LLM_BASE_URL: (Required) Base URL of your LLM provider (e.g., https://api.openai.com/v1)
+# LLM_MODEL: (Required) Model ID (e.g., gpt-4o)
+# LLM_API_KEY: (Optional) API Key
+# LLM_PROTOCOL: (Optional) "auto", "chat", or "responses"
+
+# =============================================================================
+# MULTIMODAL SUPPORT
+# =============================================================================
+
+file_processing:
+  # Provider for document text extraction.
+  # Options: "unstructured", "mistral", "kreuzberg" (local), "auto"
+  # "auto" tries providers in order: unstructured > mistral > kreuzberg
+  # Default: "auto"
+  # Env: UAR_FILE_PROCESSING__PROVIDER
+  provider: "auto"
+
+  # Directory for storing uploaded files before processing.
+  # Default: System temp directory + "uar-uploads"
+  # Env: UAR_FILE_PROCESSING__UPLOAD_DIR
+  upload_dir: "/tmp/uar-uploads"
+
+  # Maximum number of files allowed per prompt.
+  # Default: 10
+  # Env: UAR_FILE_PROCESSING__MAX_FILES_PER_PROMPT
+  max_files_per_prompt: 10
+
+  # Maximum file size per file in bytes.
+  # Default: 52428800 (50MB)
+  # Env: UAR_FILE_PROCESSING__MAX_FILE_SIZE
+  max_file_size: 52428800
+
+  # Maximum total upload size for all files in a single prompt.
+  # Default: 104857600 (100MB)
+  # Env: UAR_FILE_PROCESSING__MAX_TOTAL_SIZE
+  max_total_size: 104857600
+
+  # Allowed MIME types (empty = allow all supported types).
+  # Example: ["application/pdf", "image/png", "image/jpeg"]
+  # Env: UAR_FILE_PROCESSING__ALLOWED_MIME_TYPES (comma-separated)
+  allowed_mime_types: []
+
+# Unstructured.io configuration (hosted or self-hosted)
+# Used when file_processing.provider = "unstructured" or "auto"
+unstructured:
+  # API URL for Unstructured.io service.
+  # Hosted: "https://api.unstructured.io/general/v0/general"
+  # Self-hosted: Your deployment URL
+  # Default: Hosted URL
+  # Env: UAR_UNSTRUCTURED__API_URL
+  api_url: "https://api.unstructured.io/general/v0/general"
+
+  # API key for the hosted Unstructured.io service.
+  # Not required for self-hosted deployments.
+  # Env: UAR_UNSTRUCTURED__API_KEY
+  # api_key: "your-api-key-here"
+
+# Mistral OCR configuration
+# Used when file_processing.provider = "mistral" or "auto"
+mistral_ocr:
+  # Mistral API key for OCR service.
+  # Can reuse LLM_API_KEY if using Mistral for LLM.
+  # Env: UAR_MISTRAL_OCR__API_KEY or MISTRAL_API_KEY
+  # api_key: "your-mistral-api-key"
+
+  # OCR model to use.
+  # Default: "mistral-ocr-latest"
+  # Env: UAR_MISTRAL_OCR__OCR_MODEL
+  ocr_model: "mistral-ocr-latest"
+
+# Kreuzberg local file processing configuration
+# High-performance Rust-powered document intelligence (56+ file formats)
+# Used when file_processing.provider = "kreuzberg" or "auto"
+kreuzberg:
+  # Enable OCR for scanned documents and images.
+  # Requires Tesseract installed on the system (brew install tesseract / apt-get install tesseract-ocr)
+  # Default: true
+  # Env: UAR_KREUZBERG__OCR_ENABLED
+  ocr_enabled: true
+
+  # Force OCR even if text layer exists in PDFs.
+  # Useful for PDFs with garbled or low-quality text layers.
+  # Default: false
+  # Env: UAR_KREUZBERG__FORCE_OCR
+  force_ocr: false
+
+  # OCR backend to use.
+  # Options: "tesseract" (default, most portable), "easyocr", "paddleocr"
+  # Note: easyocr and paddleocr require Python dependencies
+  # Default: "tesseract"
+  # Env: UAR_KREUZBERG__OCR_BACKEND
+  ocr_backend: "tesseract"
+
+  # OCR language(s) for text recognition.
+  # Tesseract format: "eng" (English), "deu" (German), "eng+deu" (multiple)
+  # Language packs must be installed (brew install tesseract-lang / apt-get install tesseract-ocr-deu)
+  # Default: "eng"
+  # Env: UAR_KREUZBERG__OCR_LANGUAGE
+  ocr_language: "eng"
+
+  # PDF rendering DPI for OCR (higher = better quality but more memory).
+  # Recommended: 150 for speed, 300 for quality, 450 for fine print
+  # Default: 300
+  # Env: UAR_KREUZBERG__PDF_DPI
+  pdf_dpi: 300
+
+  # Extract tables from documents (PDFs, Word, Excel, etc.).
+  # Tables are appended to content in Markdown format.
+  # Default: true
+  # Env: UAR_KREUZBERG__EXTRACT_TABLES
+  extract_tables: true
+
+  # Extract metadata from documents (title, author, pages, keywords).
+  # Metadata is included in the processing result.
+  # Default: true
+  # Env: UAR_KREUZBERG__EXTRACT_METADATA
+  extract_metadata: true
+
+  # Output format for extracted content.
+  # Options: "markdown" (default, preserves structure), "text" (plain text)
+  # Default: "markdown"
+  # Env: UAR_KREUZBERG__OUTPUT_FORMAT
+  output_format: "markdown"
+
+# Vision/Image processing configuration
+vision:
+  # Explicit vision model for image understanding.
+  # If not set, uses the default LLM model (if vision-capable).
+  # Examples: "gpt-4o", "claude-3-5-sonnet", "pixtral-12b"
+  # Env: UAR_VISION__MODEL
+  # model: "gpt-4o"
+
+  # Auto-detect vision capability from default LLM model.
+  # If true and model supports vision, images are passed directly to LLM.
+  # Default: true
+  # Env: UAR_VISION__AUTO_DETECT
+  auto_detect: true
+
+# =============================================================================
+# KNOWLEDGE BASES (RAG Document Scoping)
+# =============================================================================
+
+knowledge_bases:
+  # Default knowledge base - documents go here if no KB specified
+  default:
+    name: "default"
+    description: "Default knowledge base for general documents"
+    embedding_provider: "fastembed"
+    embedding_model: "BAAI/bge-small-en-v1.5"
+    # vector_dimensions: 384  # Automatically determined from model
+    file_processor: "auto"
+    chunking:
+      strategy: "recursive"
+      chunk_size: 512
+
+  # Additional named knowledge bases (optional)
+  # named:
+  #   technical-docs:
+  #     name: "technical-docs"
+  #     description: "Technical documentation and API references"
+  #     embedding_provider: "openai"
+  #     embedding_model: "text-embedding-3-small"
+  #     vector_dimensions: 1536
+  #     file_processor: "unstructured"
+  #     chunking:
+  #       strategy: "semantic"
+  #       semantic_threshold: 0.75
+  #
+  #   code-examples:
+  #     name: "code-examples"
+  #     description: "Code samples and snippets"
+  #     embedding_provider: "fastembed"
+  #     embedding_model: "BAAI/bge-small-en-v1.5"
+  #     file_processor: "kreuzberg"
+  #     chunking:
+  #       strategy: "token"
+  #       chunk_size: 256

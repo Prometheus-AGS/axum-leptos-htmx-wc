@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sidebar 01 — App Shell (WC + Alpine + HTMX)</title>
+
+  <!-- HTMX + Alpine: required libraries for HTMX/Alpine patterns. [11] -->
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    :root {
+      /* Borderless + tokenized theme (Material-ish) per design-system guidance. [6][11] */
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue) 85% 52%);
+      --on-primary: hsl(var(--primary-hue) 100% 96%);
+      --bg: hsl(var(--primary-hue) 20% 98%);
+      --surface: hsl(var(--primary-hue) 18% 96%);
+      --surface2: hsl(var(--primary-hue) 16% 93%);
+      --text: hsl(var(--primary-hue) 16% 14%);
+      --muted: hsl(var(--primary-hue) 10% 40%);
+      --ring: hsl(var(--primary-hue) 90% 60%);
+      --shadow: 0 16px 40px rgba(0,0,0,.10);
+      --radius: 18px;
+      --radius2: 14px;
+      --gap: 16px;
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background: radial-gradient(circle at top left, var(--bg) 0, var(--surface) 42%, transparent 100%);
+      min-height: 100vh;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 292px 1fr;
+      gap: var(--gap);
+      padding: var(--gap);
+      align-items: stretch;
+    }
+
+    .zone {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: var(--gap);
+    }
+
+    .topbar {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title { font-weight: 750; letter-spacing: .2px; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+
+    .content {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      min-height: 0;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: color-mix(in hsl, var(--primary) 12%, var(--surface2));
+      color: color-mix(in hsl, var(--primary) 55%, var(--text));
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--surface2);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn:hover { filter: brightness(.99); }
+    .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+    .kbd {
+      font-size: 12px;
+      color: var(--muted);
+      background: color-mix(in hsl, var(--surface2) 65%, white);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    /* HTMX request feedback (loading/disabled feel). [27] */
+    #region-main.htmx-request {
+      opacity: .65;
+      transition: opacity .15s ease;
+    }
+
+    /* Responsive pattern: sidebar on desktop, bottom nav at <= 768px. [6] */
+    @media (max-width: 768px) {
+      .app { grid-template-columns: 1fr; padding-bottom: 92px; }
+      mz-sidebar { display: none; }
+      .bottom-nav { display: flex; }
+    }
+
+    .bottom-nav {
+      display: none;
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 10px;
+      gap: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      border-radius: 22px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bottom-nav a {
+      flex: 1;
+      text-align: center;
+      padding: 10px 8px;
+      border-radius: 16px;
+      text-decoration: none;
+      color: var(--text);
+      font-size: 13px;
+      background: transparent;
+      user-select: none;
+    }
+
+    .bottom-nav a[data-active="true"] {
+      background: color-mix(in hsl, var(--primary) 14%, var(--surface2));
+    }
+  </style>
+</head>
+
+<body>
+  <!-- The shell uses a left sidebar + main region, consistent with PAS 4.1 example. [23] -->
+  <div class="app" x-data="sidebarApp()" x-init="init()">
+
+    <!-- Web Component sidebar (Shadow DOM encapsulated; recommended for HTML/HTMX artifacts). [5] -->
+    <mz-sidebar class="zone"
+      x-bind:collapsed="collapsed ? 'true' : 'false'"
+      x-bind:active-route="activeRoute"
+      x-on:mz-navigate.window="navigate($event.detail.route)">
+    </mz-sidebar>
+
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <div class="title">Sidebar 01 — App Shell</div>
+          <div class="subtitle">Web Components + Alpine state + HTMX region swapping</div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span class="pill">HTMX 2.0.8 + Alpine 3</span> <!-- HTMX/Alpine required libs. [11] -->
+          <button class="btn" type="button" x-on:click="collapsed = !collapsed" aria-label="Toggle sidebar">
+            <span x-text="collapsed ? 'Expand' : 'Collapse'"></span>
+            <span class="kbd">⌘\</span>
+          </button>
+        </div>
+      </header>
+
+      <main id="region-main" class="content">
+        <h2 style="margin:0 0 6px 0;">Welcome</h2>
+        <p style="margin:0;color:var(--muted);max-width:70ch;">
+          This artifact demonstrates a full sidebar layout composed from Web Components with Alpine.js state and HTMX navigation swaps. [11][23]
+        </p>
+        <div style="margin-top:14px;display:grid;gap:10px;">
+          <div class="pill">Try: Dashboard / Projects / Settings</div>
+          <div class="subtitle">
+            Note: This standalone file intercepts HTMX requests and returns mock fragments so you can view behavior without a backend.
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Bottom nav (mobile <= 768px). [6] -->
+  <nav class="bottom-nav" aria-label="Primary mobile" x-data="sidebarApp()" x-init="init(false)">
+    <a href="/dashboard" hx-get="/dashboard" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" data-route="/dashboard"
+       x-bind:data-active="activeRoute === '/dashboard' ? 'true' : 'false'" x-on:click="activeRoute='/dashboard'">Dashboard</a>
+    <a href="/projects" hx-get="/projects" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" data-route="/projects"
+       x-bind:data-active="activeRoute === '/projects' ? 'true' : 'false'" x-on:click="activeRoute='/projects'">Projects</a>
+    <a href="/settings" hx-get="/settings" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" data-route="/settings"
+       x-bind:data-active="activeRoute === '/settings' ? 'true' : 'false'" x-on:click="activeRoute='/settings'">Settings</a>
+  </nav>
+
+  <script>
+    // Alpine state management (required for HTMX/Alpine patterns). [11]
+    function sidebarApp() {
+      return {
+        collapsed: false,
+        activeRoute: location.pathname === '/' ? '/dashboard' : location.pathname,
+
+        init(bindHotkeys = true) {
+          this.syncActive();
+
+          if (bindHotkeys) {
+            window.addEventListener('keydown', (e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+                e.preventDefault();
+                this.collapsed = !this.collapsed;
+              }
+            });
+          }
+        },
+
+        syncActive() {
+          const r = location.pathname;
+          if (r && r !== '/') this.activeRoute = r;
+          document.body.dispatchEvent(new CustomEvent('mz-active-route', { detail: { route: this.activeRoute }}));
+        },
+
+        navigate(route) {
+          // PAS navigation: app.navigate implies route swap by HTMX. [23]
+          this.activeRoute = route;
+          // Trigger HTMX request programmatically.
+          const evt = new CustomEvent('mz-request', { detail: { route }});
+          window.dispatchEvent(evt);
+        }
+      }
+    }
+
+    // --- Web Components ---
+    class MzSidebar extends HTMLElement {
+      static observedAttributes = ['collapsed', 'active-route'];
+
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this._collapsed = false;
+        this._activeRoute = '/dashboard';
+      }
+
+      connectedCallback() {
+        this.render();
+        this.shadowRoot.addEventListener('click', (e) => {
+          const a = e.target.closest('a[data-route]');
+          if (!a) return;
+          // Let HTMX handle if present; also broadcast for Alpine.
+          this.dispatchEvent(new CustomEvent('mz-navigate', {
+            bubbles: true,
+            composed: true,
+            detail: { route: a.getAttribute('data-route') }
+          }));
+        });
+
+        document.body.addEventListener('mz-active-route', (e) => {
+          this._activeRoute = e.detail.route;
+          this.render();
+        });
+      }
+
+      attributeChangedCallback(name, oldValue, newValue) {
+        if (name === 'collapsed') this._collapsed = (newValue === 'true');
+        if (name === 'active-route') this._activeRoute = newValue || '/dashboard';
+        this.render();
+      }
+
+      render() {
+        const collapsed = this._collapsed;
+        const active = this._activeRoute;
+
+        const styles = `
+          :host{
+            display:block;
+            height:100%;
+          }
+          .wrap{
+            padding:14px;
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+            height:100%;
+          }
+          .brand{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:10px 12px;
+            border-radius: 16px;
+            background: var(--surface2);
+          }
+          .badge{
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display:grid;
+            place-items:center;
+            background: color-mix(in hsl, var(--primary) 16%, var(--surface2));
+            color: var(--primary);
+            font-weight: 800;
+          }
+          .brandText{ display:flex; flex-direction:column; gap:2px; }
+          .title{ font-weight: 760; }
+          .sub{ font-size: 12px; color: var(--muted); }
+
+          .nav{ display:grid; gap:6px; margin-top: 6px; }
+          a{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:10px 12px;
+            border-radius: 16px;
+            color: var(--text);
+            text-decoration:none;
+            user-select:none;
+          }
+          a:hover{ background: var(--surface2); }
+          a[data-active="true"]{
+            background: color-mix(in hsl, var(--primary) 14%, var(--surface2));
+            outline: 2px solid color-mix(in hsl, var(--ring) 45%, transparent);
+          }
+
+          .icon{
+            width: 26px;
+            height: 26px;
+            border-radius: 12px;
+            display:grid;
+            place-items:center;
+            background: color-mix(in hsl, var(--surface2) 70%, white);
+            color: color-mix(in hsl, var(--text) 80%, var(--muted));
+            font-weight: 800;
+            flex: 0 0 auto;
+          }
+
+          .label{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .collapsed .label{ display:none; }
+          .collapsed .brandText{ display:none; }
+
+          .footer{
+            margin-top:auto;
+            padding:10px 12px;
+            border-radius: 16px;
+            background: color-mix(in hsl, var(--surface2) 70%, white);
+            color: var(--muted);
+            font-size:12px;
+          }
+        `;
+
+        const link = (route, label, icon) => {
+          const isActive = route === active;
+          return `
+            <a href="${route}"
+               data-route="${route}"
+               data-active="${isActive ? 'true' : 'false'}"
+               hx-get="${route}" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true">
+              <span class="icon">${icon}</span>
+              <span class="label">${label}</span>
+            </a>
+          `;
+        };
+
+        this.shadowRoot.innerHTML = `
+          <style>${styles}</style>
+          <div class="wrap ${collapsed ? 'collapsed' : ''}">
+            <div class="brand">
+              <div class="badge">S</div>
+              <div class="brandText">
+                <div class="title">Sidebar</div>
+                <div class="sub">WC + HTMX</div>
+              </div>
+            </div>
+
+            <nav class="nav" aria-label="Primary">
+              ${link('/dashboard', 'Dashboard', 'D')}
+              ${link('/projects', 'Projects', 'P')}
+              ${link('/team', 'Team', 'T')}
+              ${link('/settings', 'Settings', 'S')}
+            </nav>
+
+            <div class="footer">Self-contained artifact • Shadow DOM</div>
+          </div>
+        `;
+      }
+    }
+    customElements.define('mz-sidebar', MzSidebar);
+
+    // --- Standalone HTMX mocking ---
+    // In a real app, server-rendered fragments would be returned for each route, and HTMX would swap them. [27]
+    const FRAGMENTS = {
+      '/dashboard': `
+        <h2 style="margin:0 0 6px 0;">Dashboard</h2>
+        <p style="margin:0;color:var(--muted)">This is a mocked fragment swap for <code>/dashboard</code>.</p>
+        <div style="margin-top:14px;display:grid;gap:10px;">
+          <div class="pill">KPI: 7 active tasks</div>
+          <div class="pill">Latency: 120ms p95</div>
+        </div>
+      `,
+      '/projects': `
+        <h2 style="margin:0 0 6px 0;">Projects</h2>
+        <p style="margin:0;color:var(--muted)">Mocked list view (fragment).</p>
+        <div style="margin-top:12px;display:grid;gap:10px;">
+          <div class="pill">axum-leptos-htmx-wc</div>
+          <div class="pill">prometheus-ui</div>
+          <div class="pill">artifact-registry</div>
+        </div>
+      `,
+      '/team': `
+        <h2 style="margin:0 0 6px 0;">Team</h2>
+        <p style="margin:0;color:var(--muted)">Mocked team fragment.</p>
+        <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+          <span class="pill">You</span>
+          <span class="pill">Reviewer</span>
+          <span class="pill">Operator</span>
+        </div>
+      `,
+      '/settings': `
+        <h2 style="margin:0 0 6px 0;">Settings</h2>
+        <p style="margin:0;color:var(--muted)">Mocked settings fragment.</p>
+        <div style="margin-top:14px;display:grid;gap:10px;max-width:520px;">
+          <label class="pill" style="justify-content:space-between;">
+            <span>Primary hue</span>
+            <input type="range" min="0" max="360" value="210" oninput="document.documentElement.style.setProperty('--primary-hue', this.value)" />
+          </label>
+        </div>
+      `,
+    };
+
+    // Intercept HTMX in this standalone file so you can view without a server.
+    document.body.addEventListener('htmx:beforeRequest', (evt) => {
+      const path = evt.detail.pathInfo?.path;
+      if (!path) return;
+      if (FRAGMENTS[path]) {
+        evt.preventDefault();
+        history.pushState({}, '', path);
+        const target = document.querySelector(evt.detail.target.getAttribute('hx-target') || '#region-main') || document.querySelector('#region-main');
+        if (target) target.innerHTML = FRAGMENTS[path];
+        document.body.dispatchEvent(new CustomEvent('mz-active-route', { detail: { route: path }}));
+      }
+    });
+
+    // Allow WC -> Alpine -> HTMX requests.
+    window.addEventListener('mz-request', (e) => {
+      const route = e.detail.route;
+      if (!route) return;
+      htmx.ajax('GET', route, { target: '#region-main', swap: 'innerHTML' });
+    });
+
+    // Keep active-route in sync when using back/forward.
+    window.addEventListener('popstate', () => {
+      document.body.dispatchEvent(new CustomEvent('mz-active-route', { detail: { route: location.pathname }}));
+    });
+  </script>
+</body>
+</html>

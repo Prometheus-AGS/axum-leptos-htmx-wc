@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkbox (Web Component) + HTMX Variations</title>
+
+  <!-- HTMX: self-contained artifact for reference docs -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    :root {
+      --primary-hue: 210;
+      --primary: hsl(var(--primary-hue), 70%, 56%);
+      --on-primary: hsl(var(--primary-hue), 100%, 98%);
+
+      --surface: hsl(var(--primary-hue), 12%, 10%);
+      --surface-1: hsl(var(--primary-hue), 12%, 14%);
+      --surface-2: hsl(var(--primary-hue), 12%, 18%);
+      --on-surface: hsl(var(--primary-hue), 20%, 92%);
+      --on-surface-variant: hsl(var(--primary-hue), 12%, 72%);
+
+      --focus: hsl(var(--primary-hue), 80%, 60%);
+      --danger: hsl(0, 85%, 65%);
+
+      --radius-xl: 18px;
+      --radius-lg: 14px;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: radial-gradient(circle at 10% 0%, #0b1220 0%, #070b12 45%, #05070c 100%);
+      color: var(--on-surface);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .zone {
+      background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-1) 100%);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .zone__header {
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%);
+    }
+
+    .title { display: grid; gap: 2px; }
+    .title h1 { margin: 0; font-size: 16px; letter-spacing: 0.2px; }
+    .title p { margin: 0; font-size: 12px; color: var(--on-surface-variant); line-height: 1.35; }
+
+    .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      background: rgba(255,255,255,0.08);
+      color: var(--on-surface);
+      padding: 10px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: transform 150ms ease, background 150ms ease;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn:active { transform: translateY(1px); }
+    .btn--primary { background: var(--primary); color: var(--on-primary); }
+    .btn--primary:hover { filter: brightness(1.05); }
+
+    .zone__body {
+      padding: 16px 18px 18px 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .label { font-size: 12px; color: var(--on-surface-variant); }
+
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 6px 0;
+    }
+
+    /* A simple task-list style, matching the design system's task list output structure */
+    .zone-task-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+    .zone-task-list__item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.20);
+    }
+    .zone-task-list__item--checked {
+      background: rgba(0,0,0,0.26);
+    }
+
+    .pill {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      color: var(--on-surface-variant);
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .note {
+      font-size: 12px;
+      color: var(--on-surface-variant);
+      line-height: 1.5;
+    }
+
+    .kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      color: var(--on-surface);
+    }
+
+    /* HTMX indicator pattern (local) */
+    .spinner {
+      display: none;
+      font-size: 12px;
+      color: var(--on-surface-variant);
+    }
+    .htmx-request .spinner { display: inline-flex; }
+  </style>
+
+  <script>
+    /**
+     * <mz-checkbox> web component
+     * - Shadow DOM encapsulation (good for “HTMX/HTML artifacts → iframe + Shadow DOM environment”). [8]
+     * - Supports: checked / unchecked / indeterminate
+     * - Works in forms by maintaining a hidden <input> in the light DOM.
+     */
+    class MzCheckbox extends HTMLElement {
+      static get observedAttributes() {
+        return ["checked", "indeterminate", "disabled", "name", "value", "required", "label"];
+      }
+
+      constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
+        this.shadowRoot.innerHTML = `
+          <style>
+            :host {
+              display: inline-flex;
+              align-items: center;
+              gap: 10px;
+              --size: 18px;
+              --radius: 6px;
+              --surface: rgba(255,255,255,0.06);
+              --stroke: rgba(255,255,255,0.20);
+              --on-surface: rgba(255,255,255,0.92);
+              --on-surface-variant: rgba(255,255,255,0.72);
+              --primary: rgba(90, 175, 255, 0.95);
+              --focus: rgba(90, 175, 255, 0.95);
+            }
+
+            .wrap {
+              display: inline-flex;
+              align-items: center;
+              gap: 10px;
+              cursor: pointer;
+              user-select: none;
+            }
+
+            :host([disabled]) .wrap {
+              cursor: not-allowed;
+              opacity: 0.55;
+            }
+
+            .box {
+              width: var(--size);
+              height: var(--size);
+              border-radius: var(--radius);
+              background: rgba(0,0,0,0.30);
+              box-shadow: inset 0 0 0 1px var(--stroke);
+              display: inline-grid;
+              place-items: center;
+              position: relative;
+              flex: 0 0 auto;
+            }
+
+            .mark {
+              width: 12px;
+              height: 12px;
+              display: none;
+            }
+
+            /* show check or minus for states */
+            :host([checked]) .mark--check { display: block; }
+            :host([indeterminate]) .mark--minus { display: block; }
+
+            :host([checked]) .box,
+            :host([indeterminate]) .box {
+              background: color-mix(in srgb, var(--primary) 22%, rgba(0,0,0,0.30));
+              box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 60%, var(--stroke));
+            }
+
+            .label {
+              color: var(--on-surface);
+              font-size: 13px;
+              line-height: 1.2;
+            }
+
+            .wrap:focus-visible .box {
+              outline: none;
+              box-shadow:
+                inset 0 0 0 1px color-mix(in srgb, var(--primary) 60%, var(--stroke)),
+                0 0 0 3px rgba(0,0,0,0.25),
+                0 0 0 2px var(--focus);
+            }
+
+            svg { color: var(--on-surface); }
+          </style>
+
+          <div class="wrap" role="checkbox" tabindex="0" aria-checked="false">
+            <span class="box" aria-hidden="true">
+              <svg class="mark mark--check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              <svg class="mark mark--minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                <path d="M6 12h12" />
+              </svg>
+            </span>
+            <span class="label"><slot></slot></span>
+          </div>
+        `;
+
+        this._onClick = this._onClick.bind(this);
+        this._onKeyDown = this._onKeyDown.bind(this);
+      }
+
+      connectedCallback() {
+        this._ensureHiddenInput();
+        this._syncFromAttributes();
+
+        const wrap = this.shadowRoot.querySelector(".wrap");
+        wrap.addEventListener("click", this._onClick);
+        wrap.addEventListener("keydown", this._onKeyDown);
+
+        // If user uses a plain attribute label="...", fill the slot fallback.
+        if (!this.innerHTML.trim() && this.getAttribute("label")) {
+          this.textContent = this.getAttribute("label");
+        }
+      }
+
+      disconnectedCallback() {
+        const wrap = this.shadowRoot.querySelector(".wrap");
+        wrap.removeEventListener("click", this._onClick);
+        wrap.removeEventListener("keydown", this._onKeyDown);
+      }
+
+      attributeChangedCallback() {
+        this._ensureHiddenInput();
+        this._syncFromAttributes();
+      }
+
+      _onClick(e) {
+        e.preventDefault();
+        this.toggle();
+      }
+
+      _onKeyDown(e) {
+        // Checkbox keyboard behavior: Space toggles.
+        if (e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+          this.toggle();
+        }
+      }
+
+      toggle() {
+        if (this.hasAttribute("disabled")) return;
+
+        // If indeterminate, first toggle clears indeterminate and becomes checked.
+        if (this.hasAttribute("indeterminate")) {
+          this.removeAttribute("indeterminate");
+          this.setAttribute("checked", "");
+        } else if (this.hasAttribute("checked")) {
+          this.removeAttribute("checked");
+        } else {
+          this.setAttribute("checked", "");
+        }
+
+        this._syncFromAttributes();
+        this.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      setIndeterminate(isIndeterminate) {
+        if (this.hasAttribute("disabled")) return;
+        if (isIndeterminate) {
+          this.setAttribute("indeterminate", "");
+          // indeterminate is neither checked nor unchecked semantically; keep checked off.
+          this.removeAttribute("checked");
+        } else {
+          this.removeAttribute("indeterminate");
+        }
+        this._syncFromAttributes();
+        this.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      _ensureHiddenInput() {
+        // Keep a real input in the light DOM so native form submission works.
+        let input = this.querySelector("input[type=checkbox][data-mz-hidden]");
+        if (!input) {
+          input = document.createElement("input");
+          input.type = "checkbox";
+          input.setAttribute("data-mz-hidden", "");
+          input.style.position = "absolute";
+          input.style.opacity = "0";
+          input.style.pointerEvents = "none";
+          input.style.width = "1px";
+          input.style.height = "1px";
+          input.style.margin = "0";
+          input.style.padding = "0";
+          input.style.border = "0";
+          // Put it first so it participates in form controls ordering.
+          this.prepend(input);
+        }
+
+        // Mirror attributes
+        const name = this.getAttribute("name");
+        const value = this.getAttribute("value") ?? "on";
+        if (name) input.name = name;
+        input.value = value;
+        input.required = this.hasAttribute("required");
+        input.disabled = this.hasAttribute("disabled");
+
+        // Keep input in sync with checked state (indeterminate doesn't submit a value).
+        input.checked = this.hasAttribute("checked");
+
+        // Keep indeterminate on the real input too (useful if you later style native input).
+        input.indeterminate = this.hasAttribute("indeterminate");
+      }
+
+      _syncFromAttributes() {
+        const wrap = this.shadowRoot.querySelector(".wrap");
+        const isChecked = this.hasAttribute("checked");
+        const isIndeterminate = this.hasAttribute("indeterminate");
+
+        // WAI-ARIA checkbox states: true/false/mixed.
+        wrap.setAttribute("aria-checked", isIndeterminate ? "mixed" : (isChecked ? "true" : "false"));
+
+        // tabindex handling
+        wrap.tabIndex = this.hasAttribute("disabled") ? -1 : 0;
+
+        // hidden input mirror
+        this._ensureHiddenInput();
+      }
+    }
+
+    customElements.define("mz-checkbox", MzCheckbox);
+
+    // Indeterminate demo controller (parent/child)
+    function wireIndeterminateDemo() {
+      const parent = document.getElementById("select-all");
+      const children = [...document.querySelectorAll("mz-checkbox[data-child]")];
+
+      const recompute = () => {
+        const checkedCount = children.filter(c => c.hasAttribute("checked")).length;
+        if (checkedCount === 0) {
+          parent.removeAttribute("checked");
+          parent.setIndeterminate(false);
+        } else if (checkedCount === children.length) {
+          parent.setIndeterminate(false);
+          parent.setAttribute("checked", "");
+        } else {
+          parent.removeAttribute("checked");
+          parent.setIndeterminate(true);
+        }
+      };
+
+      parent.addEventListener("change", () => {
+        // If parent becomes checked => check all
+        // If parent becomes unchecked => uncheck all
+        // If parent was indeterminate and user toggles => our toggle() sets checked
+        const shouldCheck = parent.hasAttribute("checked");
+        parent.setIndeterminate(false);
+        children.forEach(c => {
+          if (shouldCheck) c.setAttribute("checked", "");
+          else c.removeAttribute("checked");
+          c.removeAttribute("indeterminate");
+        });
+        recompute();
+      });
+
+      children.forEach(c => c.addEventListener("change", recompute));
+      recompute();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      wireIndeterminateDemo();
+    });
+  </script>
+</head>
+<body>
+  <div class="page">
+    <section class="zone">
+      <header class="zone__header">
+        <div class="title">
+          <h1>Checkbox (Web Component) + HTMX</h1>
+          <p>
+            Includes: basic checkbox + label association, indeterminate state, and form integration (HTMX-friendly). [2][8]
+          </p>
+        </div>
+        <div class="controls">
+          <span class="spinner">Loading…</span>
+          <button class="btn" type="button" onclick="document.getElementById('demo-form').reset(); location.reload();">Reset</button>
+          <button class="btn btn--primary" type="button" onclick="document.getElementById('demo-form').requestSubmit();">Submit</button>
+        </div>
+      </header>
+
+      <div class="zone__body">
+        <div class="row">
+          <div class="card">
+            <div class="label">1) Basic checkbox + label association</div>
+            <ul class="zone-task-list">
+              <li class="zone-task-list__item">
+                <mz-checkbox name="basic_newsletter" value="yes" label="Subscribe to newsletter"></mz-checkbox>
+                <span class="pill">basic</span>
+              </li>
+              <li class="zone-task-list__item">
+                <mz-checkbox name="basic_terms" value="accepted" required label="Accept terms and conditions"></mz-checkbox>
+                <span class="pill">required</span>
+              </li>
+              <li class="zone-task-list__item">
+                <mz-checkbox disabled label="Disabled option"></mz-checkbox>
+                <span class="pill">disabled</span>
+              </li>
+            </ul>
+
+            <div class="divider"></div>
+
+            <div class="label">2) Indeterminate state (Select all / partial selection)</div>
+            <ul class="zone-task-list">
+              <li class="zone-task-list__item">
+                <mz-checkbox id="select-all" label="Select all"></mz-checkbox>
+                <span class="pill">mixed</span>
+              </li>
+              <li class="zone-task-list__item">
+                <mz-checkbox data-child name="feature_a" value="1" label="Feature A"></mz-checkbox>
+              </li>
+              <li class="zone-task-list__item">
+                <mz-checkbox data-child name="feature_b" value="1" label="Feature B"></mz-checkbox>
+              </li>
+              <li class="zone-task-list__item">
+                <mz-checkbox data-child name="feature_c" value="1" label="Feature C"></mz-checkbox>
+              </li>
+            </ul>
+
+            <p class="note">
+              The parent checkbox uses <code class="kbd">aria-checked="mixed"</code> when partially selected, matching the expected “indeterminate” behavior. [8]
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="label">3) Form integration (HTMX-ready)</div>
+            <p class="note">
+              This form uses normal HTML controls so it works without JS; HTMX can progressively enhance it by adding <code class="kbd">hx-post</code>/<code class="kbd">hx-target</code> and swapping server responses. [12]
+            </p>
+
+            <!--
+              Replace hx-post with your real endpoint when ready.
+              This demo uses hx-post="#" to avoid accidental network calls in a static file.
+            -->
+            <form id="demo-form"
+                  hx-post="#"
+                  hx-trigger="submit"
+                  hx-target="#form-result"
+                  hx-swap="beforeend"
+                  class="card"
+                  style="background: rgba(0,0,0,0.18);">
+
+              <div class="label">Preferences</div>
+              <div style="display:grid; gap:10px;">
+                <mz-checkbox name="prefs" value="email" label="Email updates"></mz-checkbox>
+                <mz-checkbox name="prefs" value="sms" label="SMS updates"></mz-checkbox>
+                <mz-checkbox name="prefs" value="push" label="Push notifications"></mz-checkbox>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="label">Consent</div>
+              <mz-checkbox name="consent" value="yes" required label="I agree to the privacy policy"></mz-checkbox>
+
+              <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                <button class="btn btn--primary" type="submit">Submit (HTMX)</button>
+                <button class="btn" type="button" onclick="alert('In your Axum app, have hx-post point to a route that returns an HTML fragment for #form-result.');">
+                  How to wire server
+                </button>
+              </div>
+
+              <p class="note">
+                The component keeps a hidden <code class="kbd">&lt;input type="checkbox"&gt;</code> synced so native form submission works (and HTMX just rides on top). [12]
+              </p>
+            </form>
+
+            <div id="form-result" class="note">
+              <!-- server responses would append here via hx-swap="beforeend" -->
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="label">Task-list rendering tie-in</div>
+            <p class="note">
+              This page intentionally mirrors the “task list” structure (with <code class="kbd">&lt;ul class="zone-task-list"&gt;</code> and checkboxes) used in the design system reference. [9]
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

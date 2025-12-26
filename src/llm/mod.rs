@@ -77,18 +77,171 @@ pub enum LlmProtocol {
 }
 
 /// A message in a conversation.
+///
+/// Messages can contain either simple text content or multimodal content
+/// with images and text parts.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Message {
     /// Role of the message author.
     pub role: MessageRole,
-    /// Content of the message.
-    pub content: String,
+    /// Content of the message (text or multimodal parts).
+    #[serde(flatten)]
+    pub content: MessageContent,
     /// Optional tool call ID (for tool responses).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     /// Optional tool calls made by the assistant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+}
+
+/// Message content - either simple text or multimodal parts.
+///
+/// This enum allows backward compatibility with text-only messages
+/// while supporting the new multimodal content format.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum MessageContent {
+    /// Simple text content (backward compatible).
+    Text { content: String },
+    /// Multimodal content with text and image parts.
+    Parts { content: Vec<ContentPart> },
+}
+
+impl MessageContent {
+    /// Create simple text content.
+    #[must_use]
+    pub fn text(s: impl Into<String>) -> Self {
+        Self::Text { content: s.into() }
+    }
+
+    /// Create multimodal content from parts.
+    #[must_use]
+    pub fn parts(parts: Vec<ContentPart>) -> Self {
+        Self::Parts { content: parts }
+    }
+
+    /// Get the text content (first text part or entire string).
+    #[must_use]
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Self::Text { content } => Some(content),
+            Self::Parts { content } => content.iter().find_map(|p| {
+                if let ContentPart::Text { text } = p {
+                    Some(text.as_str())
+                } else {
+                    None
+                }
+            }),
+        }
+    }
+
+    /// Get a mutable reference to the text content.
+    #[must_use]
+    pub fn as_text_mut(&mut self) -> Option<&mut String> {
+        match self {
+            Self::Text { content } => Some(content),
+            Self::Parts { .. } => None,
+        }
+    }
+
+    /// Check if this content contains any images.
+    #[must_use]
+    pub fn has_images(&self) -> bool {
+        matches!(self, Self::Parts { content } if content.iter().any(|p| matches!(p, ContentPart::ImageUrl { .. })))
+    }
+
+    /// Check if the content is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Text { content } => content.is_empty(),
+            Self::Parts { content } => content.is_empty(),
+        }
+    }
+}
+
+impl Default for MessageContent {
+    fn default() -> Self {
+        Self::text("")
+    }
+}
+
+impl From<String> for MessageContent {
+    fn from(s: String) -> Self {
+        Self::text(s)
+    }
+}
+
+impl From<&str> for MessageContent {
+    fn from(s: &str) -> Self {
+        Self::text(s)
+    }
+}
+
+impl std::fmt::Display for MessageContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.as_text() {
+            Some(text) => write!(f, "{text}"),
+            None => write!(f, "[multimodal content]"),
+        }
+    }
+}
+
+/// A content part for multimodal messages.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentPart {
+    /// Text content.
+    Text {
+        /// The text content.
+        text: String,
+    },
+    /// Image content (URL or base64 data URL).
+    ImageUrl {
+        /// Image URL configuration.
+        image_url: ImageUrl,
+    },
+}
+
+impl ContentPart {
+    /// Create a text content part.
+    #[must_use]
+    pub fn text(s: impl Into<String>) -> Self {
+        Self::Text { text: s.into() }
+    }
+
+    /// Create an image URL content part.
+    #[must_use]
+    pub fn image_url(url: impl Into<String>) -> Self {
+        Self::ImageUrl {
+            image_url: ImageUrl {
+                url: url.into(),
+                detail: None,
+            },
+        }
+    }
+
+    /// Create an image URL content part with detail level.
+    #[must_use]
+    pub fn image_url_with_detail(url: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::ImageUrl {
+            image_url: ImageUrl {
+                url: url.into(),
+                detail: Some(detail.into()),
+            },
+        }
+    }
+}
+
+/// Image URL configuration for multimodal content.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ImageUrl {
+    /// Image URL (can be HTTP URL or base64 data URL).
+    pub url: String,
+    /// Detail level for image processing: "auto", "low", or "high".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// Role of a message author.

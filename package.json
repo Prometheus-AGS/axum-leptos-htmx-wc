@@ -8,12 +8,16 @@
     "build:ts": "bun build web/main.ts --outdir static --minify --target browser",
     "build:css": "tailwindcss -i static/styles.css -o static/app.css --minify",
     "copy:wasm": "cp node_modules/@electric-sql/pglite/dist/pglite.wasm static/ && cp node_modules/@electric-sql/pglite/dist/pglite.data static/",
-    "dev": "bun run dev:ts & bun run dev:css",
+    "dev": "cargo run --bin axum-leptos-htmx-wc & bun run dev:ts & bun run dev:css",
+    "dev:assets": "bun run dev:ts & bun run dev:css",
     "dev:ts": "bun build web/main.ts --outdir static --target browser --watch",
     "dev:css": "tailwindcss -i static/styles.css -o static/app.css --watch",
     "check": "bun x tsc --noEmit",
     "lint": "bun x eslint web/ --ext .ts",
-    "format": "bun x prettier --write web/"
+    "format": "bun x prettier --write web/",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.14",
@@ -27,6 +31,7 @@
     "@playwright/test": "^1.57.0",
     "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/typography": "^0.5.19",
+    "@tauri-apps/cli": "^2.9.6",
     "@types/dompurify": "^3.2.0",
     "@typescript-eslint/eslint-plugin": "^8.50.1",
     "@typescript-eslint/parser": "^8.50.1",

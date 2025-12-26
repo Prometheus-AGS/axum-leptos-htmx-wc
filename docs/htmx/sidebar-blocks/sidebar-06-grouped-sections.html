@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sidebar 06 — Grouped Sections (WC + Alpine + HTMX)</title>
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    :root{--primary-hue:25;--primary:hsl(var(--primary-hue) 90% 55%);--bg:hsl(var(--primary-hue) 22% 98%);--surface:hsl(var(--primary-hue) 18% 96%);--surface2:hsl(var(--primary-hue) 16% 93%);--text:hsl(var(--primary-hue) 14% 14%);--muted:hsl(var(--primary-hue) 10% 40%);--ring:hsl(var(--primary-hue) 90% 62%);--shadow:0 16px 40px rgba(0,0,0,.10);--radius:18px;--gap:16px;--font:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;}
+    *{box-sizing:border-box} body{margin:0;font-family:var(--font);color:var(--text);background:radial-gradient(circle at top left,var(--bg) 0,var(--surface) 42%,transparent 100%);min-height:100vh}
+    .app{min-height:100vh;display:grid;grid-template-columns:320px 1fr;gap:var(--gap);padding:var(--gap)}
+    .zone{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .top{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .title{font-weight:760} .subtitle{color:var(--muted);font-size:13px}
+    .content{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-height:0}
+    .main{display:grid;grid-template-rows:auto 1fr;gap:var(--gap);min-height:0}
+    #region-main.htmx-request{opacity:.65}
+    @media(max-width:768px){.app{grid-template-columns:1fr;padding-bottom:92px} mz-group-sidebar{display:none} .bottom-nav{display:flex}}
+    .bottom-nav{display:none;position:fixed;left:12px;right:12px;bottom:12px;padding:10px;gap:8px;background:var(--surface);box-shadow:var(--shadow);border-radius:22px;align-items:center;justify-content:space-between}
+    .bottom-nav a{flex:1;text-align:center;padding:10px 8px;border-radius:16px;text-decoration:none;color:var(--text);font-size:13px}
+    .bottom-nav a[data-active="true"]{background:color-mix(in hsl,var(--primary) 14%,var(--surface2))}
+  </style>
+</head>
+<body>
+  <div class="app" x-data="app()" x-init="init()">
+    <mz-group-sidebar class="zone" x-bind:active-route="activeRoute"></mz-group-sidebar>
+
+    <div class="main">
+      <header class="top">
+        <div>
+          <div class="title">Sidebar 06 — Grouped Sections</div>
+          <div class="subtitle">Section headers (Projects / Admin)</div>
+        </div>
+        <div class="subtitle">Route: <strong x-text="activeRoute"></strong></div>
+      </header>
+
+      <main id="region-main" class="content">
+        <h2 style="margin:0 0 6px 0;">Home</h2>
+        <p style="margin:0;color:var(--muted)">Grouped navigation items.</p>
+      </main>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Primary mobile" x-data="app()" x-init="init(false)">
+    <a href="/home" hx-get="/home" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/home'?'true':'false'">Home</a>
+    <a href="/projects/a" hx-get="/projects/a" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/projects/a'?'true':'false'">Proj A</a>
+    <a href="/admin/users" hx-get="/admin/users" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true" x-bind:data-active="activeRoute==='/admin/users'?'true':'false'">Users</a>
+  </nav>
+
+  <script>
+    function app(){ return { activeRoute: location.pathname==='/'?'/home':location.pathname, init(){ document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:this.activeRoute}})); } } }
+
+    class MzGroupSidebar extends HTMLElement{
+      static observedAttributes=['active-route'];
+      constructor(){ super(); this.attachShadow({mode:'open'}); this._a='/home'; }
+      connectedCallback(){ document.body.addEventListener('mz-active-route',(e)=>{this._a=e.detail.route; this.render();}); this.render(); }
+      attributeChangedCallback(n,ov,nv){ if(n==='active-route'){this._a=nv||'/home'; this.render();} }
+      render(){
+        const a=this._a;
+        const item=(r,l,i)=>`<a href="${r}" data-active="${a===r?'true':'false'}" hx-get="${r}" hx-target="#region-main" hx-swap="innerHTML" hx-push-url="true"><span class="ic">${i}</span><span>${l}</span></a>`;
+        const section=(label,inner)=>`<div class="sec"><div class="h">${label}</div>${inner}</div>`;
+        this.shadowRoot.innerHTML=`
+          <style>
+            :host{display:block;height:100%}
+            .w{padding:14px;display:flex;flex-direction:column;gap:10px;height:100%}
+            .b{padding:10px 12px;border-radius:16px;background:var(--surface2);display:flex;gap:10px;align-items:center}
+            .k{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:color-mix(in hsl,var(--primary) 16%,var(--surface2));color:var(--primary);font-weight:800}
+            .h1{font-weight:760} .s{font-size:12px;color:var(--muted)}
+            .sec{display:grid;gap:6px;margin-top:6px}
+            .h{font-size:11px;letter-spacing:.12em;color:var(--muted);padding:6px 10px;text-transform:uppercase}
+            a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;color:var(--text);text-decoration:none}
+            a:hover{background:var(--surface2)}
+            a[data-active="true"]{background:color-mix(in hsl,var(--primary) 14%,var(--surface2));outline:2px solid color-mix(in hsl,var(--ring) 45%,transparent)}
+            .ic{width:30px;height:30px;border-radius:14px;display:grid;place-items:center;background:color-mix(in hsl,var(--surface2) 70%,white);font-weight:900}
+            .f{margin-top:auto;padding:10px 12px;border-radius:16px;background:color-mix(in hsl,var(--surface2) 70%,white);color:var(--muted);font-size:12px}
+          </style>
+          <div class="w">
+            <div class="b"><div class="k">G</div><div><div class="h1">Grouped</div><div class="s">Sidebar 06</div></div></div>
+            ${section('General', item('/home','Home','H') + item('/activity','Activity','A'))}
+            ${section('Projects', item('/projects/a','Project A','1') + item('/projects/b','Project B','2'))}
+            ${section('Admin', item('/admin/users','Users','U') + item('/admin/audit','Audit','⟂'))}
+            <div class="f">Sections + links</div>
+          </div>`;
+      }
+    }
+    customElements.define('mz-group-sidebar', MzGroupSidebar);
+
+    const FRAG={
+      '/home': `<h2 style="margin:0 0 6px 0;">Home</h2><p style="margin:0;color:var(--muted)">Mocked home fragment.</p>`,
+      '/activity': `<h2 style="margin:0 0 6px 0;">Activity</h2><p style="margin:0;color:var(--muted)">Mocked activity fragment.</p>`,
+      '/projects/a': `<h2 style="margin:0 0 6px 0;">Project A</h2><p style="margin:0;color:var(--muted)">Mocked project A fragment.</p>`,
+      '/projects/b': `<h2 style="margin:0 0 6px 0;">Project B</h2><p style="margin:0;color:var(--muted)">Mocked project B fragment.</p>`,
+      '/admin/users': `<h2 style="margin:0 0 6px 0;">Users</h2><p style="margin:0;color:var(--muted)">Mocked users fragment.</p>`,
+      '/admin/audit': `<h2 style="margin:0 0 6px 0;">Audit</h2><p style="margin:0;color:var(--muted)">Mocked audit fragment.</p>`
+    };
+    document.body.addEventListener('htmx:beforeRequest',(evt)=>{const p=evt.detail.pathInfo?.path; if(FRAG[p]){evt.preventDefault(); history.pushState({},'',p); document.querySelector('#region-main').innerHTML=FRAG[p]; document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:p}}));}});
+    window.addEventListener('popstate',()=>document.body.dispatchEvent(new CustomEvent('mz-active-route',{detail:{route:location.pathname}})));
+  </script>
+</body>
+</html>

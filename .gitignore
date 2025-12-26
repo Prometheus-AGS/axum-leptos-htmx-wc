@@ -36,3 +36,7 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+
+.fastembed_cache/
+
+config.yaml

@@ -1,0 +1,195 @@
+warning: unused import: `axum_extra::routing::TypedPath`
+ --> src/uar/api/mod.rs:6:5
+  |
+6 | use axum_extra::routing::TypedPath;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `serde::Deserialize`
+ --> src/uar/api/mod.rs:7:5
+  |
+7 | use serde::Deserialize;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: `axum-leptos-htmx-wc` (lib) generated 2 warnings (run `cargo fix --lib -p axum-leptos-htmx-wc` to apply 2 suggestions)
+   Compiling axum-leptos-htmx-wc v0.1.0 (/Users/gqadonis/Projects/references/axum-leptos-htmx-wc)
+warning: unused import: `futures::StreamExt`
+  --> src/main.rs:35:5
+   |
+35 | use futures::StreamExt;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: field `orchestrator` is never read
+  --> src/main.rs:57:5
+   |
+52 | struct AppState {
+   |        -------- field in this struct
+...
+57 |     orchestrator: Arc<Orchestrator>,
+   |     ^^^^^^^^^^^^
+   |
+   = note: `AppState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `chat_non_streaming` is never used
+   --> src/llm/orchestrator.rs:488:18
+    |
+ 72 | impl Orchestrator {
+    | ----------------- method in this implementation
+...
+488 |     pub async fn chat_non_streaming(&s...
+    |                  ^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `new_empty` and `new_with_test_tool` are never used
+   --> src/mcp/registry.rs:121:12
+    |
+ 34 | impl McpRegistry {
+    | ---------------- associated functions in this implementation
+...
+121 |     pub fn new_empty() -> Self {
+    |            ^^^^^^^^^
+...
+130 |     pub fn new_with_test_tool(na...
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: function `sse_event` is never used
+   --> src/normalized.rs:202:8
+    |
+202 | pub fn sse_event(evt: &Normalize...
+    |        ^^^^^^^^^
+
+warning: function `event_name` is never used
+   --> src/normalized.rs:213:8
+    |
+213 | pub fn event_name(evt: &Normaliz...
+    |        ^^^^^^^^^^
+
+warning: function `agui_sse_event` is never used
+   --> src/normalized.rs:234:8
+    |
+234 | pub fn agui_sse_event(evt: &Norm...
+    |        ^^^^^^^^^^^^^^
+
+warning: function `dual_sse_event` is never used
+   --> src/normalized.rs:387:8
+    |
+387 | pub fn dual_sse_event(evt: &Norm...
+    |        ^^^^^^^^^^^^^^
+
+warning: methods `system_prompt`, `messages_with_system`, and `message_count` are never used
+   --> src/session/thread.rs:78:12
+    |
+ 47 | impl Session {
+    | ------------ methods in this implementation
+...
+ 78 |     pub fn system_prompt(&self) ->...
+    |            ^^^^^^^^^^^^^
+...
+149 |     pub fn messages_with_system(&s...
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+167 |     pub fn message_count(&self) ->...
+    |            ^^^^^^^^^^^^^
+
+warning: methods `remove` and `list_ids` are never used
+   --> src/session/thread.rs:278:12
+    |
+227 | impl SessionStore {
+    | ----------------- methods in this implementation
+...
+278 |     pub fn remove(&self, id: &st...
+    |            ^^^^^^
+...
+316 |     pub fn list_ids(&self) -> Ve...
+    |            ^^^^^^^^
+
+warning: function `to_ag_ui` is never used
+ --> src/uar/api/adapters.rs:4:8
+  |
+4 | pub fn to_ag_ui(event: &Normalized...
+  |        ^^^^^^^^
+
+warning: struct `ToolDefinition` is never constructed
+ --> src/uar/domain/tools.rs:4:12
+  |
+4 | pub struct ToolDefinition {
+  |            ^^^^^^^^^^^^^^
+
+warning: enum `ToolTransport` is never used
+  --> src/uar/domain/tools.rs:18:10
+   |
+18 | pub enum ToolTransport {
+   |          ^^^^^^^^^^^^^
+
+warning: struct `ToolCall` is never constructed
+  --> src/uar/domain/tools.rs:25:12
+   |
+25 | pub struct ToolCall {
+   |            ^^^^^^^^
+
+warning: struct `ToolResult` is never constructed
+  --> src/uar/domain/tools.rs:32:12
+   |
+32 | pub struct ToolResult {
+   |            ^^^^^^^^^^
+
+warning: method `get_run` is never used
+   --> src/uar/runtime/manager.rs:260:18
+    |
+ 25 | impl RunManager {
+    | --------------- method in this implementation
+...
+260 |     pub async fn get_run(&self, ...
+    |                  ^^^^^^^
+
+warning: methods `register`, `get`, and `list` are never used
+  --> src/uar/runtime/skills.rs:16:12
+   |
+ 9 | impl SkillRegistry {
+   | ------------------ methods in this implementation
+...
+16 |     pub fn register(&mut self, sk...
+   |            ^^^^^^^^
+...
+20 |     pub fn get(&self, id: &str) -...
+   |            ^^^
+...
+24 |     pub fn list(&self) -> Vec<Ski...
+   |            ^^^^
+
+warning: `axum-leptos-htmx-wc` (bin "axum-leptos-htmx-wc") generated 19 warnings (2 duplicates)
+warning: unused import: `Orchestrator`
+ --> tests/uar_integration.rs:1:58
+  |
+1 | use axum_leptos_htmx_wc::llm::{LlmProtocol, LlmSettings, Orchestrator, Provider};
+  |                                                          ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Mutex`
+  --> tests/uar_integration.rs:16:19
+   |
+16 | use tokio::sync::{Mutex, RwLock};
+   |                   ^^^^^
+
+error[E0308]: mismatched types
+   --> tests/uar_integration.rs:266:5
+    |
+227 |   fn setup_real_env_with_tools() -> (
+    |  ___________________________________-
+228 | |     Arc<RunManager>,
+229 | |     Arc<SessionStore>,
+230 | |     Arc<RwLock<SkillRegistry>>,
+231 | | ) {
+    | |_- expected `(Arc<RunManager>, Arc<SessionStore>, Arc<tokio::sync::RwLock<SkillRegistry>>)` because of return type
+...
+266 |       (run_manager, Arc::new(sessions))
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected a tuple with 3 elements, found one with 2 elements
+    |
+    = note: expected tuple `(Arc<RunManager>, Arc<SessionStore>, Arc<tokio::sync::RwLock<SkillRegistry>>)`
+               found tuple `(Arc<RunManager>, Arc<SessionStore>)`
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `axum-leptos-htmx-wc` (test "uar_integration") generated 2 warnings
+error: could not compile `axum-leptos-htmx-wc` (test "uar_integration") due to 1 previous error; 2 warnings emitted

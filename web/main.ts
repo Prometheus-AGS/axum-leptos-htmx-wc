@@ -20,6 +20,7 @@ import { ThemeSwitcher } from "./components/theme-switcher/theme-switcher";
 import { TokenCounter } from "./components/token-counter/token-counter";
 import { ConversationSidebar } from "./components/conversation-sidebar/conversation-sidebar";
 import { SessionRestoreDialog } from "./components/session-restore-dialog/session-restore-dialog";
+import { FileUpload } from "./components/file-upload/file-upload";
 
 // PGlite Store
 import { pgliteStore } from "./stores/pglite-store";
@@ -223,6 +224,7 @@ function registerComponents(): void {
     { name: "token-counter", component: TokenCounter },
     { name: "conversation-sidebar", component: ConversationSidebar },
     { name: "session-restore-dialog", component: SessionRestoreDialog },
+    { name: "file-upload", component: FileUpload },
   ];
   
   for (const { name, component } of components) {

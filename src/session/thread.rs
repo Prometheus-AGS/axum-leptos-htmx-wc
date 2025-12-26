@@ -2,11 +2,13 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
-use crate::llm::{Message, MessageRole, ToolCall};
+use crate::llm::{Message, MessageContent, MessageRole, ToolCall};
 
 /// Default session timeout (30 minutes).
 #[allow(dead_code)]
@@ -29,11 +31,40 @@ struct SessionInner {
     messages: RwLock<Vec<Message>>,
     /// Session creation time.
     #[allow(dead_code)]
-    created_at: Instant,
+    created_at: DateTime<Utc>,
     /// Last activity time.
-    last_activity: RwLock<Instant>,
+    last_activity: RwLock<DateTime<Utc>>,
     /// Optional system prompt.
     system_prompt: RwLock<Option<String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SessionState {
+    pub id: String,
+    pub messages: Vec<Message>,
+    pub created_at: String,    // RFC3339
+    pub last_activity: String, // RFC3339
+    pub system_prompt: Option<String>,
+}
+
+impl Serialize for Session {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let state = self.to_state();
+        state.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Session {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let state = SessionState::deserialize(deserializer)?;
+        Ok(Session::from_state(state))
+    }
 }
 
 impl Clone for Session {
@@ -47,7 +78,7 @@ impl Clone for Session {
 impl Session {
     /// Create a new session with the given ID.
     fn new(id: String) -> Self {
-        let now = Instant::now();
+        let now = Utc::now();
         Self {
             inner: Arc::new(SessionInner {
                 id,
@@ -55,6 +86,35 @@ impl Session {
                 created_at: now,
                 last_activity: RwLock::new(now),
                 system_prompt: RwLock::new(None),
+            }),
+        }
+    }
+
+    pub fn to_state(&self) -> SessionState {
+        SessionState {
+            id: self.inner.id.clone(),
+            messages: self.inner.messages.read().unwrap().clone(),
+            created_at: self.inner.created_at.to_rfc3339(),
+            last_activity: self.inner.last_activity.read().unwrap().to_rfc3339(),
+            system_prompt: self.inner.system_prompt.read().unwrap().clone(),
+        }
+    }
+
+    pub fn from_state(state: SessionState) -> Self {
+        let created_at = DateTime::parse_from_rfc3339(&state.created_at)
+            .unwrap_or_else(|_| DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z").unwrap())
+            .with_timezone(&Utc);
+        let last_activity = DateTime::parse_from_rfc3339(&state.last_activity)
+            .unwrap_or_else(|_| DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z").unwrap())
+            .with_timezone(&Utc);
+
+        Self {
+            inner: Arc::new(SessionInner {
+                id: state.id,
+                messages: RwLock::new(state.messages),
+                created_at,
+                last_activity: RwLock::new(last_activity),
+                system_prompt: RwLock::new(state.system_prompt),
             }),
         }
     }
@@ -83,7 +143,7 @@ impl Session {
     pub fn add_user_message(&self, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::User,
-            content: content.into(),
+            content: MessageContent::text(content),
             tool_call_id: None,
             tool_calls: None,
         };
@@ -95,7 +155,7 @@ impl Session {
     pub fn add_assistant_message(&self, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::Assistant,
-            content: content.into(),
+            content: MessageContent::text(content),
             tool_call_id: None,
             tool_calls: None,
         };
@@ -111,7 +171,7 @@ impl Session {
     ) {
         let msg = Message {
             role: MessageRole::Assistant,
-            content: content.unwrap_or_default(),
+            content: MessageContent::text(content.unwrap_or_default()),
             tool_call_id: None,
             tool_calls: Some(tool_calls),
         };
@@ -123,7 +183,7 @@ impl Session {
     pub fn add_tool_result(&self, tool_call_id: impl Into<String>, content: impl Into<String>) {
         let msg = Message {
             role: MessageRole::Tool,
-            content: content.into(),
+            content: MessageContent::text(content),
             tool_call_id: Some(tool_call_id.into()),
             tool_calls: None,
         };
@@ -152,7 +212,7 @@ impl Session {
         if let Some(prompt) = self.system_prompt() {
             result.push(Message {
                 role: MessageRole::System,
-                content: prompt,
+                content: MessageContent::text(prompt),
                 tool_call_id: None,
                 tool_calls: None,
             });
@@ -179,7 +239,7 @@ impl Session {
     /// Update the last activity timestamp.
     fn touch(&self) {
         let mut guard = self.inner.last_activity.write().unwrap();
-        *guard = Instant::now();
+        *guard = Utc::now();
     }
 
     /// Check if the session has expired.
@@ -194,14 +254,26 @@ impl Session {
     #[allow(dead_code)]
     pub fn is_expired_with_timeout(&self, timeout: Duration) -> bool {
         let last = *self.inner.last_activity.read().unwrap();
-        last.elapsed() > timeout
+        // Convert Duration to chrono::Duration?
+        // chrono subtraction: now - last -> Duration
+        // We want (now - last) > timeout
+        let now = Utc::now();
+        if let Ok(duration) = (now - last).to_std() {
+            duration > timeout
+        } else {
+            // Negative duration means clock skew or "last" is in future.
+            false
+        }
     }
 
     /// Get the session age.
     #[must_use]
     #[allow(dead_code)]
     pub fn age(&self) -> Duration {
-        self.inner.created_at.elapsed()
+        let now = Utc::now();
+        (now - self.inner.created_at)
+            .to_std()
+            .unwrap_or(Duration::from_secs(0))
     }
 }
 

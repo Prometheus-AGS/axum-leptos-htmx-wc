@@ -1,0 +1,42 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/uar_test
+      - SURREAL_URL=ws://surreal:8000/rpc
+      - REDIS_URL=redis://redis:6379
+      - RUST_LOG=info
+    depends_on:
+      - postgres
+      - surreal
+      - redis
+    networks:
+      - uar-test-net
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=uar_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks:
+      - uar-test-net
+
+  surreal:
+    image: surrealdb/surrealdb:latest
+    command: start --log warn --user root --pass root memory
+    networks:
+      - uar-test-net
+
+  redis:
+    image: redis/redis-stack:latest
+    networks:
+      - uar-test-net
+
+networks:
+  uar-test-net:
+    driver: bridge
