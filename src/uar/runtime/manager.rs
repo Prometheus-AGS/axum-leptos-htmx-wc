@@ -110,25 +110,54 @@ impl RunManager {
         let mut messages = Vec::new();
         let mut system_prompt = artifact.prompt.system.clone();
 
-        // RAG Retrieval
-        if let Some(db) = &self.persistence {
-            match self.vector_matcher.embed_batch(vec![input.clone()]).await {
-                Ok(embeddings) => {
-                    if let Some(query_vec) = embeddings.first() {
-                        match db.search_knowledge(query_vec, 3, 0.7).await {
-                            Ok(matches) => {
-                                if !matches.is_empty() {
-                                    system_prompt.push_str("\n\n[RELEVANT KNOWLEDGE]\n");
-                                    for m in matches {
-                                        system_prompt.push_str(&format!("- {}\n", m.chunk.content));
+        // RAG Retrieval - scoped to agent's configured knowledge bases
+        if artifact.memory.kb.enabled {
+            if let Some(db) = &self.persistence {
+                match self.vector_matcher.embed_batch(vec![input.clone()]).await {
+                    Ok(embeddings) => {
+                        if let Some(query_vec) = embeddings.first() {
+                            // Get agent's configured KBs (or use all if empty)
+                            let kb_names = &artifact.memory.kb.knowledge_bases;
+                            
+                            let search_result = if kb_names.is_empty() {
+                                // No specific KBs configured - search all
+                                db.search_knowledge(query_vec, 3, 0.7).await
+                            } else {
+                                // Resolve KB names to IDs and search scoped
+                                let mut kb_ids = Vec::new();
+                                for name in kb_names {
+                                    if let Ok(Some(kb)) = db.get_knowledge_base_by_name(name).await {
+                                        kb_ids.push(kb.id);
+                                    } else {
+                                        tracing::warn!("Knowledge base not found: {}", name);
                                     }
                                 }
+                                
+                                if kb_ids.is_empty() {
+                                    // All configured KBs were not found - fallback to all
+                                    tracing::warn!("No configured knowledge bases found, searching all");
+                                    db.search_knowledge(query_vec, 3, 0.7).await
+                                } else {
+                                    let kb_id_refs: Vec<&str> = kb_ids.iter().map(|s| s.as_str()).collect();
+                                    db.search_knowledge_scoped(&kb_id_refs, query_vec, 3, 0.7).await
+                                }
+                            };
+                            
+                            match search_result {
+                                Ok(matches) => {
+                                    if !matches.is_empty() {
+                                        system_prompt.push_str("\n\n[RELEVANT KNOWLEDGE]\n");
+                                        for m in matches {
+                                            system_prompt.push_str(&format!("- {}\n", m.chunk.content));
+                                        }
+                                    }
+                                }
+                                Err(e) => tracing::error!("RAG search failed: {:?}", e),
                             }
-                            Err(e) => tracing::error!("RAG search failed: {:?}", e),
                         }
                     }
+                    Err(e) => tracing::error!("RAG embedding failed: {:?}", e),
                 }
-                Err(e) => tracing::error!("RAG embedding failed: {:?}", e),
             }
         }
 

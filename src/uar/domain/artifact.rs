@@ -129,8 +129,9 @@ impl Default for ConversationMemory {
 pub struct KbMemory {
     #[serde(default)]
     pub enabled: bool,
+    /// Knowledge base names this agent has access to (empty = Default KB only)
     #[serde(default)]
-    pub collections: Vec<String>,
+    pub knowledge_bases: Vec<String>,
     #[serde(default)]
     pub citation_required: bool,
 }

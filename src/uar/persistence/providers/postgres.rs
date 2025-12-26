@@ -1,5 +1,7 @@
 use crate::session::Session;
-use crate::uar::domain::knowledge::{KnowledgeBase, KnowledgeChunk, KnowledgeMatch};
+use crate::uar::domain::knowledge::{
+    DocumentStatus, KnowledgeBase, KnowledgeChunk, KnowledgeDocument, KnowledgeMatch,
+};
 use crate::uar::domain::skills::{Skill, SkillMatch};
 use crate::uar::persistence::PersistenceLayer;
 use anyhow::Result;
@@ -135,14 +137,18 @@ impl PersistenceLayer for PostgresProvider {
 
         sqlx::query(
             r#"
-            INSERT INTO knowledge_bases (id, config, created_at, updated_at)
-            VALUES ($1, $2, NOW(), NOW())
+            INSERT INTO knowledge_bases (id, name, description, config, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
             ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
                 config = EXCLUDED.config,
                 updated_at = NOW()
             "#,
         )
         .bind(&kb.id)
+        .bind(&kb.name)
+        .bind(&kb.description)
         .bind(config)
         .execute(&self.pool)
         .await?;
@@ -223,6 +229,7 @@ impl PersistenceLayer for PostgresProvider {
             let chunk = KnowledgeChunk {
                 id,
                 kb_id,
+                document_id: None, // Not returned in search results
                 content,
                 metadata: metadata_val,
                 embedding: vec![], // we don't return embedding in search results unless needed
@@ -398,5 +405,344 @@ impl PersistenceLayer for PostgresProvider {
             });
         }
         Ok(matches)
+    }
+
+    // =========================================================================
+    // Knowledge Base Retrieval Methods
+    // =========================================================================
+
+    async fn get_knowledge_base(&self, id: &str) -> Result<Option<KnowledgeBase>> {
+        let row = sqlx::query(
+            "SELECT id, name, description, config, created_at, updated_at FROM knowledge_bases WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let id: String = row.try_get("id")?;
+            let name: Option<String> = row.try_get("name")?;
+            let description: Option<String> = row.try_get("description")?;
+            let config_val: serde_json::Value = row.try_get("config")?;
+            let config = serde_json::from_value(config_val)?;
+            let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at")?;
+            let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at")?;
+
+            Ok(Some(KnowledgeBase {
+                id,
+                name: name.unwrap_or_default(),
+                description,
+                config,
+                created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_knowledge_base_by_name(&self, name: &str) -> Result<Option<KnowledgeBase>> {
+        let row = sqlx::query(
+            "SELECT id, name, description, config, created_at, updated_at FROM knowledge_bases WHERE name = $1",
+        )
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let id: String = row.try_get("id")?;
+            let name: Option<String> = row.try_get("name")?;
+            let description: Option<String> = row.try_get("description")?;
+            let config_val: serde_json::Value = row.try_get("config")?;
+            let config = serde_json::from_value(config_val)?;
+            let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at")?;
+            let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at")?;
+
+            Ok(Some(KnowledgeBase {
+                id,
+                name: name.unwrap_or_default(),
+                description,
+                config,
+                created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_knowledge_bases(&self) -> Result<Vec<KnowledgeBase>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, config, created_at, updated_at FROM knowledge_bases ORDER BY created_at",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut kbs = Vec::new();
+        for row in rows {
+            let id: String = row.try_get("id")?;
+            let name: Option<String> = row.try_get("name")?;
+            let description: Option<String> = row.try_get("description")?;
+            let config_val: serde_json::Value = row.try_get("config")?;
+            let config = serde_json::from_value(config_val)?;
+            let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at")?;
+            let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at")?;
+
+            kbs.push(KnowledgeBase {
+                id,
+                name: name.unwrap_or_default(),
+                description,
+                config,
+                created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+            });
+        }
+        Ok(kbs)
+    }
+
+    async fn delete_knowledge_base(&self, id: &str) -> Result<()> {
+        // CASCADE will handle chunks and documents
+        sqlx::query("DELETE FROM knowledge_bases WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Scoped Knowledge Search
+    // =========================================================================
+
+    async fn search_knowledge_scoped(
+        &self,
+        kb_ids: &[&str],
+        query_vec: &[f32],
+        limit: usize,
+        min_score: f32,
+    ) -> Result<Vec<KnowledgeMatch>> {
+        if kb_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let embedding_vector = Vector::from(query_vec.to_vec());
+        let limit_i64 = limit as i64;
+        let min_score_f64 = min_score as f64;
+        let kb_ids_vec: Vec<String> = kb_ids.iter().map(|s| s.to_string()).collect();
+
+        let rows = sqlx::query(
+            r#"
+            SELECT id, kb_id, document_id, content, metadata, created_at, 1 - (embedding <=> $1) as score
+            FROM knowledge_chunks
+            WHERE kb_id = ANY($4) AND 1 - (embedding <=> $1) >= $3
+            ORDER BY embedding <=> $1
+            LIMIT $2
+            "#,
+        )
+        .bind(embedding_vector)
+        .bind(limit_i64)
+        .bind(min_score_f64)
+        .bind(&kb_ids_vec)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut matches = Vec::new();
+        for row in rows {
+            let id: uuid::Uuid = row.try_get("id")?;
+            let kb_id: String = row.try_get("kb_id")?;
+            let document_id: Option<String> = row.try_get("document_id")?;
+            let content: String = row.try_get("content")?;
+            let metadata_val: Option<serde_json::Value> = row.try_get("metadata")?;
+            let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at")?;
+            let created_at_str = created_at.map(|d| d.to_rfc3339()).unwrap_or_default();
+            let score: f64 = row.try_get("score")?;
+
+            let chunk = KnowledgeChunk {
+                id,
+                kb_id,
+                document_id,
+                content,
+                metadata: metadata_val,
+                embedding: vec![],
+                created_at: created_at_str,
+            };
+
+            matches.push(KnowledgeMatch {
+                chunk,
+                score: score as f32,
+            });
+        }
+        Ok(matches)
+    }
+
+    // =========================================================================
+    // Document Tracking
+    // =========================================================================
+
+    async fn save_document(&self, doc: &KnowledgeDocument) -> Result<()> {
+        let status_str = match &doc.status {
+            DocumentStatus::Pending => "pending",
+            DocumentStatus::Processing => "processing",
+            DocumentStatus::Indexed => "indexed",
+            DocumentStatus::Failed { .. } => "failed",
+        };
+        let error_msg = match &doc.status {
+            DocumentStatus::Failed { error } => Some(error.clone()),
+            _ => None,
+        };
+
+        sqlx::query(
+            r#"
+            INSERT INTO knowledge_documents (id, kb_id, filename, file_path, mime_type, chunk_count, status, error_message, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                filename = EXCLUDED.filename,
+                file_path = EXCLUDED.file_path,
+                mime_type = EXCLUDED.mime_type,
+                chunk_count = EXCLUDED.chunk_count,
+                status = EXCLUDED.status,
+                error_message = EXCLUDED.error_message,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(&doc.id)
+        .bind(&doc.kb_id)
+        .bind(&doc.filename)
+        .bind(&doc.file_path)
+        .bind(&doc.mime_type)
+        .bind(doc.chunk_count as i32)
+        .bind(status_str)
+        .bind(error_msg)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_document(&self, id: &str) -> Result<Option<KnowledgeDocument>> {
+        let row = sqlx::query(
+            "SELECT id, kb_id, filename, file_path, mime_type, chunk_count, status, error_message, created_at, updated_at FROM knowledge_documents WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let id: String = row.try_get("id")?;
+            let kb_id: String = row.try_get("kb_id")?;
+            let filename: String = row.try_get("filename")?;
+            let file_path: Option<String> = row.try_get("file_path")?;
+            let mime_type: String = row.try_get("mime_type")?;
+            let chunk_count: i32 = row.try_get("chunk_count")?;
+            let status_str: String = row.try_get("status")?;
+            let error_message: Option<String> = row.try_get("error_message")?;
+            let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at")?;
+            let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at")?;
+
+            let status = match status_str.as_str() {
+                "processing" => DocumentStatus::Processing,
+                "indexed" => DocumentStatus::Indexed,
+                "failed" => DocumentStatus::Failed {
+                    error: error_message.unwrap_or_default(),
+                },
+                _ => DocumentStatus::Pending,
+            };
+
+            Ok(Some(KnowledgeDocument {
+                id,
+                kb_id,
+                filename,
+                file_path,
+                mime_type: Some(mime_type),
+                chunk_count: chunk_count as usize,
+                status,
+                created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_documents(&self, kb_id: &str) -> Result<Vec<KnowledgeDocument>> {
+        let rows = sqlx::query(
+            "SELECT id, kb_id, filename, file_path, mime_type, chunk_count, status, error_message, created_at, updated_at FROM knowledge_documents WHERE kb_id = $1 ORDER BY created_at",
+        )
+        .bind(kb_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut docs = Vec::new();
+        for row in rows {
+            let id: String = row.try_get("id")?;
+            let kb_id: String = row.try_get("kb_id")?;
+            let filename: String = row.try_get("filename")?;
+            let file_path: Option<String> = row.try_get("file_path")?;
+            let mime_type: String = row.try_get("mime_type")?;
+            let chunk_count: i32 = row.try_get("chunk_count")?;
+            let status_str: String = row.try_get("status")?;
+            let error_message: Option<String> = row.try_get("error_message")?;
+            let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at")?;
+            let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at")?;
+
+            let status = match status_str.as_str() {
+                "processing" => DocumentStatus::Processing,
+                "indexed" => DocumentStatus::Indexed,
+                "failed" => DocumentStatus::Failed {
+                    error: error_message.unwrap_or_default(),
+                },
+                _ => DocumentStatus::Pending,
+            };
+
+            docs.push(KnowledgeDocument {
+                id,
+                kb_id,
+                filename,
+                file_path,
+                mime_type: Some(mime_type),
+                chunk_count: chunk_count as usize,
+                status,
+                created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+            });
+        }
+        Ok(docs)
+    }
+
+    async fn update_document_status(&self, doc_id: &str, status: &DocumentStatus) -> Result<()> {
+        let status_str = match status {
+            DocumentStatus::Pending => "pending",
+            DocumentStatus::Processing => "processing",
+            DocumentStatus::Indexed => "indexed",
+            DocumentStatus::Failed { .. } => "failed",
+        };
+        let error_msg = match status {
+            DocumentStatus::Failed { error } => Some(error.clone()),
+            _ => None,
+        };
+
+        sqlx::query(
+            "UPDATE knowledge_documents SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3",
+        )
+        .bind(status_str)
+        .bind(error_msg)
+        .bind(doc_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_document(&self, doc_id: &str) -> Result<()> {
+        // Delete associated chunks first
+        sqlx::query("DELETE FROM knowledge_chunks WHERE document_id = $1")
+            .bind(doc_id)
+            .execute(&self.pool)
+            .await?;
+
+        // Delete the document
+        sqlx::query("DELETE FROM knowledge_documents WHERE id = $1")
+            .bind(doc_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

@@ -1,5 +1,7 @@
 use crate::session::Session;
-use crate::uar::domain::knowledge::{KnowledgeBase, KnowledgeChunk, KnowledgeMatch};
+use crate::uar::domain::knowledge::{
+    DocumentStatus, KnowledgeBase, KnowledgeChunk, KnowledgeDocument, KnowledgeMatch,
+};
 use crate::uar::domain::skills::{Skill, SkillMatch};
 use crate::uar::persistence::PersistenceLayer;
 use anyhow::Result;
@@ -248,6 +250,132 @@ impl PersistenceLayer for SurrealDbProvider {
         matches.truncate(limit);
 
         Ok(matches)
+    }
+
+    // =========================================================================
+    // Knowledge Base Retrieval Methods
+    // =========================================================================
+
+    async fn get_knowledge_base(&self, id: &str) -> Result<Option<KnowledgeBase>> {
+        let kb: Option<KnowledgeBase> = self.db.select(("knowledge_bases", id)).await?;
+        Ok(kb)
+    }
+
+    async fn get_knowledge_base_by_name(&self, name: &str) -> Result<Option<KnowledgeBase>> {
+        let sql = "SELECT * FROM knowledge_bases WHERE name = $name LIMIT 1";
+        let mut response = self.db.query(sql).bind(("name", name.to_string())).await?;
+        let kb: Option<KnowledgeBase> = response.take(0)?;
+        Ok(kb)
+    }
+
+    async fn list_knowledge_bases(&self) -> Result<Vec<KnowledgeBase>> {
+        let kbs: Vec<KnowledgeBase> = self.db.select("knowledge_bases").await?;
+        Ok(kbs)
+    }
+
+    async fn delete_knowledge_base(&self, id: &str) -> Result<()> {
+        // Delete the KB - SurrealDB doesn't have FK CASCADE, so we delete related records first
+        let _: Option<KnowledgeBase> = self.db.delete(("knowledge_bases", id)).await?;
+        // Also delete related chunks and documents
+        let sql = "DELETE FROM knowledge_chunks WHERE kb_id = $id";
+        self.db.query(sql).bind(("id", id.to_string())).await?;
+        let sql = "DELETE FROM knowledge_documents WHERE kb_id = $id";
+        self.db.query(sql).bind(("id", id.to_string())).await?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Scoped Knowledge Search
+    // =========================================================================
+
+    async fn search_knowledge_scoped(
+        &self,
+        kb_ids: &[&str],
+        query_vec: &[f32],
+        limit: usize,
+        min_score: f32,
+    ) -> Result<Vec<KnowledgeMatch>> {
+        if kb_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Query with kb_id filter
+        let kb_ids_vec: Vec<String> = kb_ids.iter().map(|s| s.to_string()).collect();
+        let sql = "SELECT * FROM knowledge_chunks WHERE kb_id IN $kb_ids";
+        let mut res = self.db.query(sql).bind(("kb_ids", kb_ids_vec)).await?;
+        let chunks: Vec<KnowledgeChunk> = res.take(0)?;
+
+        // In-memory cosine similarity
+        let mut matches: Vec<KnowledgeMatch> = chunks
+            .into_iter()
+            .map(|c| {
+                let score = cosine_similarity(&c.embedding, query_vec);
+                KnowledgeMatch { chunk: c, score }
+            })
+            .filter(|m| m.score >= min_score)
+            .collect();
+
+        matches.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        matches.truncate(limit);
+
+        Ok(matches)
+    }
+
+    // =========================================================================
+    // Document Tracking
+    // =========================================================================
+
+    async fn save_document(&self, doc: &KnowledgeDocument) -> Result<()> {
+        let _: Option<KnowledgeDocument> = self
+            .db
+            .upsert(("knowledge_documents", doc.id.clone()))
+            .content(doc.clone())
+            .await?;
+        Ok(())
+    }
+
+    async fn get_document(&self, id: &str) -> Result<Option<KnowledgeDocument>> {
+        let doc: Option<KnowledgeDocument> = self.db.select(("knowledge_documents", id)).await?;
+        Ok(doc)
+    }
+
+    async fn list_documents(&self, kb_id: &str) -> Result<Vec<KnowledgeDocument>> {
+        let sql = "SELECT * FROM knowledge_documents WHERE kb_id = $kb_id ORDER BY created_at";
+        let mut res = self
+            .db
+            .query(sql)
+            .bind(("kb_id", kb_id.to_string()))
+            .await?;
+        let docs: Vec<KnowledgeDocument> = res.take(0)?;
+        Ok(docs)
+    }
+
+    async fn update_document_status(&self, doc_id: &str, status: &DocumentStatus) -> Result<()> {
+        let sql = "UPDATE knowledge_documents SET status = $status, updated_at = time::now() WHERE id = $id";
+        self.db
+            .query(sql)
+            .bind(("id", doc_id.to_string()))
+            .bind(("status", serde_json::to_value(status)?))
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_document(&self, doc_id: &str) -> Result<()> {
+        // Delete associated chunks first
+        let sql = "DELETE FROM knowledge_chunks WHERE document_id = $doc_id";
+        self.db
+            .query(sql)
+            .bind(("doc_id", doc_id.to_string()))
+            .await?;
+
+        // Delete the document
+        let _: Option<KnowledgeDocument> = self.db.delete(("knowledge_documents", doc_id)).await?;
+
+        Ok(())
     }
 }
 

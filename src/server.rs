@@ -23,11 +23,14 @@ use crate::mcp::registry::McpRegistry;
 use crate::session::SessionStore;
 use crate::uar::{
     self,
+    defaults::ensure_default_knowledge_base,
     persistence::{
         PersistenceLayer,
         providers::{postgres::PostgresProvider, surreal::SurrealDbProvider},
     },
-    rag::{chunking::ChunkingStrategy, ingest::IngestService},
+    rag::{
+        chunking::ChunkingStrategy, ingest::IngestService, ingestion_worker::IngestionWorkerPool,
+    },
     runtime::{manager::RunManager, matching::vector::VectorMatcher, skills::SkillRegistry},
 };
 
@@ -88,6 +91,14 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
                     .await;
             }
         });
+
+        // Ensure default knowledge base exists
+        if let Err(e) = ensure_default_knowledge_base(&**p, None).await {
+            tracing::error!("Failed to ensure default KB: {:?}", e);
+        } else {
+            info!("Default knowledge base ensured.");
+        }
+
         info!("Persistence and RAG enabled.");
     }
 
@@ -173,6 +184,43 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
             "/api/uar",
             uar::api::router().with_state(state.run_manager.clone()),
         )
+        // Knowledge Base API
+        .nest("/api/uar/knowledge-bases", {
+            // Initialize ingestion worker pool if persistence available
+            let ingestion_pool = if let Some(p) = &persistence {
+                if let Some(ingest) = &state.ingest_service {
+                    match IngestionWorkerPool::new(
+                        0,   // auto-detect CPU count
+                        100, // max queue depth
+                        ingest.clone(),
+                        p.clone(),
+                    ) {
+                        Ok(pool) => {
+                            info!("Ingestion worker pool initialized");
+                            Some(Arc::new(pool))
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create ingestion pool: {:?}", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            uar::api::knowledge::build_router().with_state(Arc::new(
+                uar::api::knowledge::KnowledgeApiState {
+                    persistence: persistence
+                        .clone()
+                        .expect("Persistence required for KB API"),
+                    vector_matcher: vector_matcher.clone(),
+                    ingestion_pool,
+                },
+            ))
+        })
         .route("/api/ingest", post(uar::api::ingest::ingest_handler))
         .route(
             "/api/memory",

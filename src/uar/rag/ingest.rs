@@ -91,6 +91,7 @@ impl IngestService {
             let k_chunk = KnowledgeChunk {
                 id: chunk_id,
                 kb_id: kb_id.to_string(),
+                document_id: None, // No document tracking in basic ingest
                 content: segment,
                 metadata: Some(serde_json::to_value(metadata)?),
                 embedding: embedding.clone(),
@@ -101,6 +102,55 @@ impl IngestService {
         }
 
         Ok(())
+    }
+
+    /// Ingest text content directly (for worker pool use).
+    /// Returns the number of chunks created.
+    pub async fn ingest_text(
+        &self,
+        content: &str,
+        kb_id: &str,
+        document_id: String,
+    ) -> Result<usize> {
+        // 1. Chunking
+        let chunks = self.chunker.chunk(content).await?;
+
+        if chunks.is_empty() {
+            return Ok(0);
+        }
+
+        // 2. Embedding
+        let embeddings = self.vector_matcher.embed_batch(chunks.clone()).await?;
+
+        // 3. Storage
+        for (i, segment) in chunks.iter().enumerate() {
+            let embedding = embeddings
+                .get(i)
+                .ok_or_else(|| anyhow!("Missing embedding for chunk {}", i))?;
+
+            let mut metadata = HashMap::new();
+            metadata.insert(
+                "document_id".to_string(),
+                serde_json::Value::String(document_id.clone()),
+            );
+            metadata.insert("index".to_string(), serde_json::json!(i));
+
+            let chunk_id = Uuid::new_v4();
+
+            let k_chunk = KnowledgeChunk {
+                id: chunk_id,
+                kb_id: kb_id.to_string(),
+                document_id: Some(document_id.clone()),
+                content: segment.clone(),
+                metadata: Some(serde_json::to_value(&metadata)?),
+                embedding: embedding.clone(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            };
+
+            self.persistence.save_chunk(&k_chunk).await?;
+        }
+
+        Ok(chunks.len())
     }
 
     /// Recursively scan and ingest a directory

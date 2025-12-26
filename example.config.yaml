@@ -206,3 +206,43 @@ vision:
   # Default: true
   # Env: UAR_VISION__AUTO_DETECT
   auto_detect: true
+
+# =============================================================================
+# KNOWLEDGE BASES (RAG Document Scoping)
+# =============================================================================
+
+knowledge_bases:
+  # Default knowledge base - documents go here if no KB specified
+  default:
+    name: "default"
+    description: "Default knowledge base for general documents"
+    embedding_provider: "fastembed"
+    embedding_model: "BAAI/bge-small-en-v1.5"
+    # vector_dimensions: 384  # Automatically determined from model
+    file_processor: "auto"
+    chunking:
+      strategy: "recursive"
+      chunk_size: 512
+
+  # Additional named knowledge bases (optional)
+  # named:
+  #   technical-docs:
+  #     name: "technical-docs"
+  #     description: "Technical documentation and API references"
+  #     embedding_provider: "openai"
+  #     embedding_model: "text-embedding-3-small"
+  #     vector_dimensions: 1536
+  #     file_processor: "unstructured"
+  #     chunking:
+  #       strategy: "semantic"
+  #       semantic_threshold: 0.75
+  #
+  #   code-examples:
+  #     name: "code-examples"
+  #     description: "Code samples and snippets"
+  #     embedding_provider: "fastembed"
+  #     embedding_model: "BAAI/bge-small-en-v1.5"
+  #     file_processor: "kreuzberg"
+  #     chunking:
+  #       strategy: "token"
+  #       chunk_size: 256

@@ -1,5 +1,6 @@
 pub mod adapters;
 pub mod ingest;
+pub mod knowledge;
 pub mod memory;
 pub mod openai;
 pub mod routes;

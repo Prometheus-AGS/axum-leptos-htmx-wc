@@ -1,6 +1,7 @@
 pub mod artifact;
 pub mod context;
 pub mod events;
+pub mod graph;
 pub mod knowledge;
 pub mod matching;
 pub mod memory;

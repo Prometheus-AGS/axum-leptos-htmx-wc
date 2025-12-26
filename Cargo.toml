@@ -93,6 +93,13 @@ base64 = "0.22"
 # Kreuzberg - document intelligence framework with Rust core (4.0 RC)
 kreuzberg = { git = "https://github.com/kreuzberg-dev/kreuzberg.git", tag = "v4.0.0-rc.17" }
 
+# Worker pool for scalable document ingestion
+prometheus_parking_lot = { git = "https://github.com/Prometheus-AGS/prometheus-parking-lot-rs", features = ["tokio-runtime"] }
+num_cpus = "1.16"
+
+# Graph algorithms for community detection (Leiden)
+petgraph = "0.8"
+
 
 
 # Lints (M-STATIC-VERIFICATION)

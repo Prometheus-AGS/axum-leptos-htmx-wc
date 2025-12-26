@@ -2,6 +2,7 @@ use crate::llm::{LlmProtocol, LlmSettings, Provider};
 use clap::Parser;
 use config::{Config, Environment};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
 
 #[derive(Parser, Debug)]
@@ -48,6 +49,8 @@ pub struct AppConfig {
     pub kreuzberg: Option<KreuzbergConfig>,
     #[serde(default)]
     pub vision: VisionConfig,
+    #[serde(default)]
+    pub knowledge_bases: KnowledgeBasesConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -252,6 +255,94 @@ impl Default for VisionConfig {
         Self {
             model: None,
             auto_detect: true,
+        }
+    }
+}
+
+// =============================================================================
+// KNOWLEDGE BASES CONFIGURATION
+// =============================================================================
+
+/// Top-level configuration for knowledge bases.
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct KnowledgeBasesConfig {
+    /// Default knowledge base configuration (always exists)
+    #[serde(default)]
+    pub default: Option<KnowledgeBaseConfig>,
+    /// Additional named knowledge bases
+    #[serde(default)]
+    pub named: HashMap<String, KnowledgeBaseConfig>,
+}
+
+/// Configuration for a single knowledge base.
+#[derive(Debug, Deserialize, Clone)]
+pub struct KnowledgeBaseConfig {
+    /// Unique name for the knowledge base
+    pub name: String,
+    /// Description of the knowledge base
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Embedding provider: "fastembed", "openai", "mistral"
+    #[serde(default = "KnowledgeBaseConfig::default_embedding_provider")]
+    pub embedding_provider: String,
+    /// Model ID for the embedding provider
+    #[serde(default = "KnowledgeBaseConfig::default_embedding_model")]
+    pub embedding_model: String,
+    /// Vector dimensions (None = use model default)
+    #[serde(default)]
+    pub vector_dimensions: Option<usize>,
+    /// File processor: "auto", "unstructured", "mistral", "kreuzberg"
+    #[serde(default = "KnowledgeBaseConfig::default_file_processor")]
+    pub file_processor: String,
+    /// Chunking strategy configuration
+    #[serde(default)]
+    pub chunking: ChunkingConfig,
+}
+
+impl KnowledgeBaseConfig {
+    fn default_embedding_provider() -> String {
+        "fastembed".to_string()
+    }
+
+    fn default_embedding_model() -> String {
+        "BAAI/bge-small-en-v1.5".to_string()
+    }
+
+    fn default_file_processor() -> String {
+        "auto".to_string()
+    }
+}
+
+/// Chunking strategy configuration.
+#[derive(Debug, Deserialize, Clone)]
+pub struct ChunkingConfig {
+    /// Strategy: "fixed", "recursive", "token", "sentence", "semantic", "document"
+    #[serde(default = "ChunkingConfig::default_strategy")]
+    pub strategy: String,
+    /// Chunk size in characters (for fixed/recursive) or tokens
+    #[serde(default = "ChunkingConfig::default_chunk_size")]
+    pub chunk_size: usize,
+    /// Semantic similarity threshold (for semantic strategy only)
+    #[serde(default)]
+    pub semantic_threshold: Option<f32>,
+}
+
+impl ChunkingConfig {
+    fn default_strategy() -> String {
+        "recursive".to_string()
+    }
+
+    fn default_chunk_size() -> usize {
+        512
+    }
+}
+
+impl Default for ChunkingConfig {
+    fn default() -> Self {
+        Self {
+            strategy: Self::default_strategy(),
+            chunk_size: Self::default_chunk_size(),
+            semantic_threshold: None,
         }
     }
 }
