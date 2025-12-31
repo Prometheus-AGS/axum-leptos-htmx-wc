@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <style>
+        :root {
+            --primary: #007acc;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #17a2b8;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --border: #dee2e6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary);
+        }
+
+        .metric-card.success { border-left-color: var(--success); }
+        .metric-card.warning { border-left-color: var(--warning); }
+        .metric-card.danger { border-left-color: var(--danger); }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-change {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .metric-change.positive { color: var(--success); }
+        .metric-change.negative { color: var(--danger); }
+        .metric-change.neutral { color: #666; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .chart-container h3 {
+            margin-bottom: 1rem;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.25rem 0.75rem;
+            border: 1px solid var(--border);
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--light);
+        }
+
+        .btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .alerts-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .alert-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
+            border-left: 4px solid;
+            font-size: 0.9rem;
+        }
+
+        .alert-item.critical {
+            background: #f8d7da;
+            border-left-color: var(--danger);
+            color: #721c24;
+        }
+
+        .alert-item.warning {
+            background: #fff3cd;
+            border-left-color: var(--warning);
+            color: #856404;
+        }
+
+        .alert-item.info {
+            background: #d1ecf1;
+            border-left-color: var(--info);
+            color: #0c5460;
+        }
+
+        .test-table {
+            width: 100%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .test-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .test-table th,
+        .test-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .test-table th {
+            background: var(--light);
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .test-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-badge.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.failure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-badge.running {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+            margin-bottom: 0;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .tab:hover {
+            background: var(--light);
+        }
+
+        .tab.active {
+            border-bottom-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .tab-content {
+            background: white;
+            border-radius: 0 0 8px 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .refresh-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .refresh-button:hover {
+            background: #0056b3;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 4px solid var(--danger);
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .tab {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span class="status-indicator" id="status-indicator"></span>
+            🧪 Test Monitoring Dashboard
+            <button class="refresh-button" onclick="refreshAll()">Refresh</button>
+        </h1>
+    </div>
+
+    <div class="container">
+        <!-- Key Metrics -->
+        <div class="metrics-grid" id="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" id="coverage-value">--</div>
+                <div class="metric-label">Overall Coverage</div>
+                <div class="metric-change" id="coverage-change">No change</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-value" id="success-rate-value">--</div>
+                <div class="metric-label">Success Rate</div>
+                <div class="metric-change" id="success-rate-change">No change</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-value" id="avg-duration-value">--</div>
+                <div class="metric-label">Avg Test Duration</div>
+                <div class="metric-change" id="avg-duration-change">No change</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-value" id="total-tests-value">--</div>
+                <div class="metric-label">Total Tests</div>
+                <div class="metric-change" id="total-tests-change">No change</div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div class="dashboard-grid">
+            <div class="chart-container">
+                <h3>
+                    Coverage Trend
+                    <div class="chart-controls">
+                        <button class="btn active" data-period="7">7D</button>
+                        <button class="btn" data-period="30">30D</button>
+                        <button class="btn" data-period="90">90D</button>
+                    </div>
+                </h3>
+                <canvas id="coverage-chart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="alerts-panel">
+                <h3>🚨 Active Alerts</h3>
+                <div id="alerts-list">
+                    <div class="loading">Loading alerts...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Views -->
+        <div class="tabs">
+            <div class="tab active" data-tab="performance">Performance</div>
+            <div class="tab" data-tab="reliability">Reliability</div>
+            <div class="tab" data-tab="coverage">Coverage Details</div>
+            <div class="tab" data-tab="runs">Test Runs</div>
+        </div>
+
+        <div class="tab-content">
+            <!-- Performance Tab -->
+            <div class="tab-panel active" id="performance-panel">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                    <div class="chart-container">
+                        <h3>Performance Trend</h3>
+                        <canvas id="performance-chart" width="400" height="200"></canvas>
+                    </div>
+                    <div>
+                        <h4>Recent Performance Regressions</h4>
+                        <div id="regression-list" class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reliability Tab -->
+            <div class="tab-panel" id="reliability-panel" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                    <div>
+                        <h4>Flaky Tests</h4>
+                        <div id="flaky-tests-list" class="loading">Loading...</div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Reliability Trend</h3>
+                        <canvas id="reliability-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coverage Details Tab -->
+            <div class="tab-panel" id="coverage-panel" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                    <div>
+                        <h4>Coverage Breakdown</h4>
+                        <div class="metric-card">
+                            <div class="metric-value" id="rust-coverage">--</div>
+                            <div class="metric-label">Rust Backend</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value" id="typescript-coverage">--</div>
+                            <div class="metric-label">TypeScript Frontend</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Coverage Distribution</h3>
+                        <canvas id="coverage-distribution-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Runs Tab -->
+            <div class="tab-panel" id="runs-panel" style="display: none;">
+                <div class="test-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Run ID</th>
+                                <th>Environment</th>
+                                <th>Mode</th>
+                                <th>Duration</th>
+                                <th>Tests</th>
+                                <th>Coverage</th>
+                                <th>Status</th>
+                                <th>Started</th>
+                            </tr>
+                        </thead>
+                        <tbody id="test-runs-table">
+                            <tr>
+                                <td colspan="8" class="loading">Loading test runs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let charts = {};
+        let data = {};
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTabs();
+            initializeCharts();
+            loadDashboardData();
+
+            // Auto-refresh every 30 seconds
+            setInterval(loadDashboardData, 30000);
+        });
+
+        // Tab functionality
+        function initializeTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    switchTab(tabName);
+                });
+            });
+        }
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab panels
+            document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+            document.getElementById(`${tabName}-panel`).style.display = 'block';
+
+            // Load tab-specific data
+            loadTabData(tabName);
+        }
+
+        // Initialize charts
+        function initializeCharts() {
+            // Coverage trend chart
+            const coverageCtx = document.getElementById('coverage-chart').getContext('2d');
+            charts.coverage = new Chart(coverageCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Coverage %',
+                        data: [],
+                        borderColor: '#007acc',
+                        backgroundColor: 'rgba(0, 122, 204, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            // Performance trend chart
+            const performanceCtx = document.getElementById('performance-chart').getContext('2d');
+            charts.performance = new Chart(performanceCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Avg Duration (ms)',
+                        data: [],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+
+            // Reliability trend chart
+            const reliabilityCtx = document.getElementById('reliability-chart').getContext('2d');
+            charts.reliability = new Chart(reliabilityCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Success Rate %',
+                        data: [],
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            // Coverage distribution chart
+            const distributionCtx = document.getElementById('coverage-distribution-chart').getContext('2d');
+            charts.distribution = new Chart(distributionCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Rust Backend', 'TypeScript Frontend', 'Uncovered'],
+                    datasets: [{
+                        data: [0, 0, 100],
+                        backgroundColor: ['#007acc', '#3178C6', '#e9ecef']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api');
+                if (!response.ok) throw new Error('Failed to load dashboard data');
+
+                data.dashboard = await response.json();
+                updateMetrics();
+                updateCoverageTrend();
+                updateAlerts();
+
+                document.getElementById('status-indicator').style.background = '#28a745';
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                document.getElementById('status-indicator').style.background = '#dc3545';
+                showError('Failed to load dashboard data: ' + error.message);
+            }
+        }
+
+        // Update key metrics
+        function updateMetrics() {
+            if (!data.dashboard) return;
+
+            const { coverage_summary, performance_summary, reliability_summary } = data.dashboard;
+
+            // Coverage
+            document.getElementById('coverage-value').textContent =
+                coverage_summary.overall_coverage.toFixed(1) + '%';
+            updateChangeIndicator('coverage-change', coverage_summary.trend_direction,
+                coverage_summary.trend_percentage);
+
+            // Success Rate
+            document.getElementById('success-rate-value').textContent =
+                reliability_summary.success_rate.toFixed(1) + '%';
+
+            // Average Duration
+            document.getElementById('avg-duration-value').textContent =
+                Math.round(performance_summary.average_test_duration) + 'ms';
+
+            // Total Tests
+            document.getElementById('total-tests-value').textContent =
+                performance_summary.total_test_count;
+        }
+
+        // Update change indicators
+        function updateChangeIndicator(elementId, direction, percentage) {
+            const element = document.getElementById(elementId);
+            element.className = 'metric-change ' + direction.toLowerCase();
+
+            if (direction === 'Up') {
+                element.textContent = `▲ +${percentage.toFixed(1)}%`;
+            } else if (direction === 'Down') {
+                element.textContent = `▼ -${percentage.toFixed(1)}%`;
+            } else {
+                element.textContent = 'No significant change';
+            }
+        }
+
+        // Update coverage trend chart
+        async function updateCoverageTrend() {
+            try {
+                const response = await fetch('/api/metrics/coverage-trend?days=30');
+                const trendData = await response.json();
+
+                const labels = trendData.map(d => new Date(d.timestamp).toLocaleDateString());
+                const coverageData = trendData.map(d => d.coverage_percentage);
+
+                charts.coverage.data.labels = labels;
+                charts.coverage.data.datasets[0].data = coverageData;
+                charts.coverage.update();
+            } catch (error) {
+                console.error('Failed to load coverage trend:', error);
+            }
+        }
+
+        // Update alerts
+        async function updateAlerts() {
+            try {
+                const response = await fetch('/api/metrics/regression-alerts');
+                const alerts = await response.json();
+
+                const alertsList = document.getElementById('alerts-list');
+
+                if (alerts.length === 0) {
+                    alertsList.innerHTML = '<div class="alert-item info">✅ No active alerts</div>';
+                } else {
+                    alertsList.innerHTML = alerts.map(alert => `
+                        <div class="alert-item ${getSeverityClass(alert.severity)}">
+                            ⚠️ <strong>${alert.test_name}</strong><br>
+                            Performance regression: ${alert.regression_percentage.toFixed(1)}% slower
+                            <br><small>Baseline: ${alert.baseline_duration}ms → Current: ${alert.current_duration}ms</small>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load alerts:', error);
+                document.getElementById('alerts-list').innerHTML =
+                    '<div class="alert-item critical">❌ Failed to load alerts</div>';
+            }
+        }
+
+        // Load tab-specific data
+        async function loadTabData(tabName) {
+            switch (tabName) {
+                case 'performance':
+                    await loadPerformanceData();
+                    break;
+                case 'reliability':
+                    await loadReliabilityData();
+                    break;
+                case 'coverage':
+                    await loadCoverageData();
+                    break;
+                case 'runs':
+                    await loadTestRunsData();
+                    break;
+            }
+        }
+
+        // Load performance data
+        async function loadPerformanceData() {
+            try {
+                const response = await fetch('/api/metrics/performance-trend?days=30');
+                const performanceData = await response.json();
+
+                const labels = performanceData.map(d => new Date(d.timestamp).toLocaleDateString());
+                const durations = performanceData.map(d => d.average_duration);
+
+                charts.performance.data.labels = labels;
+                charts.performance.data.datasets[0].data = durations;
+                charts.performance.update();
+
+                // Load regression list
+                const regressionResponse = await fetch('/api/metrics/regression-alerts');
+                const regressions = await regressionResponse.json();
+
+                const regressionList = document.getElementById('regression-list');
+                if (regressions.length === 0) {
+                    regressionList.innerHTML = '<p>No performance regressions detected.</p>';
+                } else {
+                    regressionList.innerHTML = regressions.map(r => `
+                        <div class="alert-item ${getSeverityClass(r.severity)}">
+                            <strong>${r.test_name}</strong><br>
+                            ${r.regression_percentage.toFixed(1)}% slower
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load performance data:', error);
+            }
+        }
+
+        // Load reliability data
+        async function loadReliabilityData() {
+            try {
+                const response = await fetch('/api/metrics/flaky-tests');
+                const flakyTests = await response.json();
+
+                const flakyTestsList = document.getElementById('flaky-tests-list');
+                if (flakyTests.length === 0) {
+                    flakyTestsList.innerHTML = '<p>No flaky tests detected.</p>';
+                } else {
+                    flakyTestsList.innerHTML = flakyTests.map(test => `
+                        <div class="alert-item warning">
+                            <strong>${test.test_name}</strong><br>
+                            Failure rate: ${test.failure_rate.toFixed(1)}%<br>
+                            Stability score: ${test.stability_score.toFixed(2)}
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load reliability data:', error);
+            }
+        }
+
+        // Load coverage data
+        async function loadCoverageData() {
+            if (!data.dashboard) return;
+
+            const { coverage_summary } = data.dashboard;
+
+            document.getElementById('rust-coverage').textContent =
+                coverage_summary.rust_coverage ?
+                coverage_summary.rust_coverage.toFixed(1) + '%' : 'N/A';
+
+            document.getElementById('typescript-coverage').textContent =
+                coverage_summary.typescript_coverage ?
+                coverage_summary.typescript_coverage.toFixed(1) + '%' : 'N/A';
+
+            // Update distribution chart
+            const rustCov = coverage_summary.rust_coverage || 0;
+            const tsCov = coverage_summary.typescript_coverage || 0;
+            const uncovered = 100 - coverage_summary.overall_coverage;
+
+            charts.distribution.data.datasets[0].data = [rustCov, tsCov, uncovered];
+            charts.distribution.update();
+        }
+
+        // Load test runs data
+        async function loadTestRunsData() {
+            try {
+                const response = await fetch('/api/metrics/historical?days=7&limit=20');
+                const runs = await response.json();
+
+                const tbody = document.getElementById('test-runs-table');
+
+                if (runs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8">No test runs found</td></tr>';
+                } else {
+                    tbody.innerHTML = runs.map(run => `
+                        <tr>
+                            <td><code>${run.run_id.substring(0, 8)}...</code></td>
+                            <td>${run.environment}</td>
+                            <td><span class="status-badge">${run.mode}</span></td>
+                            <td>${run.total_duration ? formatDuration(run.total_duration) : 'Running'}</td>
+                            <td>${run.phase_metrics ? Object.values(run.phase_metrics).reduce((sum, p) => sum + p.tests_total, 0) : 0}</td>
+                            <td>${run.coverage_metrics.overall_coverage.toFixed(1)}%</td>
+                            <td><span class="status-badge ${getRunStatus(run)}">${getRunStatus(run)}</span></td>
+                            <td>${formatTimestamp(run.start_time)}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load test runs:', error);
+                document.getElementById('test-runs-table').innerHTML =
+                    '<tr><td colspan="8" class="error-message">Failed to load test runs</td></tr>';
+            }
+        }
+
+        // Utility functions
+        function getSeverityClass(severity) {
+            switch (severity) {
+                case 'Critical': return 'critical';
+                case 'High': return 'critical';
+                case 'Medium': return 'warning';
+                case 'Low': return 'info';
+                default: return 'info';
+            }
+        }
+
+        function getRunStatus(run) {
+            if (!run.end_time) return 'running';
+            return run.phase_metrics && Object.values(run.phase_metrics).some(p => p.tests_failed > 0) ? 'failure' : 'success';
+        }
+
+        function formatDuration(durationNanos) {
+            const ms = durationNanos / 1000000;
+            if (ms < 1000) return Math.round(ms) + 'ms';
+            const seconds = ms / 1000;
+            if (seconds < 60) return seconds.toFixed(1) + 's';
+            const minutes = seconds / 60;
+            return minutes.toFixed(1) + 'min';
+        }
+
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp).toLocaleString();
+        }
+
+        function showError(message) {
+            const container = document.querySelector('.container');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            container.insertBefore(errorDiv, container.firstChild);
+
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+
+        // Refresh functionality
+        async function refreshAll() {
+            document.querySelector('.refresh-button').textContent = 'Refreshing...';
+            await loadDashboardData();
+            const activeTab = document.querySelector('.tab.active').dataset.tab;
+            await loadTabData(activeTab);
+            document.querySelector('.refresh-button').textContent = 'Refresh';
+        }
+
+        // Period selection for coverage chart
+        document.querySelectorAll('[data-period]').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                const days = this.dataset.period;
+                try {
+                    const response = await fetch(`/api/metrics/coverage-trend?days=${days}`);
+                    const trendData = await response.json();
+
+                    const labels = trendData.map(d => new Date(d.timestamp).toLocaleDateString());
+                    const coverageData = trendData.map(d => d.coverage_percentage);
+
+                    charts.coverage.data.labels = labels;
+                    charts.coverage.data.datasets[0].data = coverageData;
+                    charts.coverage.update();
+                } catch (error) {
+                    console.error('Failed to load coverage trend:', error);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

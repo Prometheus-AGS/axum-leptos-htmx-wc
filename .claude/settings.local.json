@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(tree:*)",
-      "mcp__tavily-mcp__tavily-search"
+      "mcp__tavily-mcp__tavily-search",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(SKIP_MODEL_BUILD=1 cargo test:*)",
+      "Bash(bun run test)",
+      "Bash(ls:*)",
+      "Bash(cargo test:*)",
+      "Bash(npx playwright test)",
+      "mcp__mcp-filesystem__directory_tree",
+      "mcp__mcp-filesystem__read_file_lines"
     ]
   }
 }

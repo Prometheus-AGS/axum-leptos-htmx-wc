@@ -18,6 +18,22 @@ tempfile = "3.24.0"
 tokio = { version = "1.0", features = ["full", "test-util"] }
 tower = { version = "0.5.2", features = ["util"] }
 
+# Testing infrastructure dependencies
+grcov = "0.8"
+testcontainers = "0.23"
+mockall = "0.13"
+tokio-test = "0.4"
+
+[build-dependencies]
+burn-import = { version = "0.16.0", optional = true }
+ureq = "3.0.0"
+
+[features]
+default = []
+model-build = ["dep:burn-import"]
+sqlx = []
+
+
 [dependencies]
 # Web framework
 axum = { version = "0.8", features = ["multipart"] }
@@ -65,8 +81,9 @@ anyhow = "1.0.100"
 axum-extra = { version = "0.12.3", features = ["typed-routing", "typed-header"] }
 tower = "0.5.2"
 tokio-stream = { version = "0.1.17", features = ["net", "sync"] }
-serde_yaml = "0.9.34"
-fastembed = "5.5.0"
+serde_yml = "0.0.12"
+burn = { version = "0.16.0", features = ["wgpu", "train", "ndarray"] }
+tokenizers = { version = "0.20.0", default-features = false, features = ["onig", "esaxx_fast"] }
 tiktoken-rs = "0.9.1"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "json", "migrate"] }
 pgvector = { version = "0.4.1", features = ["sqlx"] }

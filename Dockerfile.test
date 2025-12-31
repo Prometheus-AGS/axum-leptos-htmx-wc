@@ -1,0 +1,284 @@
+# Multi-stage Docker build for testing environment
+# This Dockerfile creates a comprehensive testing environment with all necessary tools
+
+FROM node:18-bookworm AS node-deps
+WORKDIR /app
+COPY package.json bun.lockb* ./
+RUN npm install -g bun && bun install --frozen-lockfile
+
+FROM rust:1.75-bookworm AS rust-deps
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release && rm -rf src
+
+# Test execution environment
+FROM rust:1.75-bookworm
+
+# Install system dependencies for testing
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    gnupg \
+    ca-certificates \
+    postgresql-client \
+    redis-tools \
+    jq \
+    python3 \
+    python3-pip \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js and Bun for TypeScript testing
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g bun
+
+# Install Playwright and dependencies
+RUN npx playwright install-deps
+RUN npx playwright install chromium
+
+# Install Rust toolchain components for testing and coverage
+RUN rustup component add rustfmt clippy
+RUN cargo install grcov
+RUN cargo install cargo-tarpaulin
+
+# Set up work directory
+WORKDIR /app
+
+# Copy dependency files
+COPY --from=node-deps /app/node_modules ./node_modules
+COPY --from=rust-deps /app/target ./target
+
+# Copy source code
+COPY . .
+
+# Create directories for test results and coverage
+RUN mkdir -p /test-results /coverage /reports
+
+# Set environment variables for testing
+ENV RUST_LOG=debug
+ENV CARGO_INCREMENTAL=0
+ENV RUSTFLAGS="-C instrument-coverage"
+ENV LLVM_PROFILE_FILE="/coverage/rust-%p-%m.profraw"
+ENV NODE_ENV=test
+ENV CI=true
+
+# Install additional test utilities
+RUN pip3 install --no-cache-dir \
+    pytest \
+    pytest-html \
+    requests \
+    beautifulsoup4
+
+# Create test scripts directory
+RUN mkdir -p /scripts
+
+# Create comprehensive test runner script
+RUN cat > /scripts/run-tests.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "🧪 Starting comprehensive test suite..."
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Test results directory
+RESULTS_DIR="/test-results"
+COVERAGE_DIR="/coverage"
+REPORTS_DIR="/reports"
+
+# Ensure directories exist
+mkdir -p "$RESULTS_DIR" "$COVERAGE_DIR" "$REPORTS_DIR"
+
+# Function to run with timing
+run_with_timing() {
+    local name="$1"
+    shift
+    echo -e "${BLUE}🏃 Running: $name${NC}"
+    local start_time=$(date +%s)
+
+    if "$@"; then
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        echo -e "${GREEN}✅ $name completed in ${duration}s${NC}"
+        return 0
+    else
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        echo -e "${RED}❌ $name failed after ${duration}s${NC}"
+        return 1
+    fi
+}
+
+# 1. Rust unit tests with coverage
+echo -e "${YELLOW}📝 Phase 1: Rust Unit Tests${NC}"
+run_with_timing "Rust unit tests" \
+    cargo test --lib --bins --tests \
+    --exclude-from-test integration \
+    --exclude-from-test e2e
+
+# 2. TypeScript unit tests with coverage
+echo -e "${YELLOW}🌐 Phase 2: TypeScript Unit Tests${NC}"
+run_with_timing "TypeScript tests" \
+    bun test --coverage --reporter json > "$RESULTS_DIR/typescript-results.json"
+
+# 3. Rust integration tests
+echo -e "${YELLOW}🔗 Phase 3: Rust Integration Tests${NC}"
+run_with_timing "Rust integration tests" \
+    cargo test --test '*_integration' \
+    --test-threads 1
+
+# 4. API integration tests
+echo -e "${YELLOW}🌍 Phase 4: API Integration Tests${NC}"
+run_with_timing "API tests" \
+    cargo test tests::api \
+    --test-threads 1
+
+# 5. End-to-end tests with Playwright
+echo -e "${YELLOW}🎭 Phase 5: End-to-End Tests${NC}"
+run_with_timing "E2E tests" \
+    npx playwright test --reporter=json --output-dir="$RESULTS_DIR/playwright"
+
+# 6. Performance tests (if enabled)
+if [[ "${RUN_PERFORMANCE_TESTS:-false}" == "true" ]]; then
+    echo -e "${YELLOW}⚡ Phase 6: Performance Tests${NC}"
+    run_with_timing "Performance tests" \
+        cargo test --test performance --release
+fi
+
+# 7. Generate coverage reports
+echo -e "${YELLOW}📊 Phase 7: Coverage Report Generation${NC}"
+
+# Rust coverage
+run_with_timing "Rust coverage report" \
+    grcov . --binary-path ./target/debug/deps/ \
+    -s . \
+    -t html,lcov,json,cobertura \
+    --branch \
+    --ignore-not-existing \
+    --ignore '../*' \
+    --ignore "/*" \
+    --ignore "tests/*" \
+    --ignore "target/*" \
+    -o "$COVERAGE_DIR/rust"
+
+# TypeScript coverage (handled by c8/nyc via bun test)
+echo -e "${GREEN}📋 Coverage reports generated${NC}"
+
+# 8. Generate unified test report
+echo -e "${YELLOW}📋 Phase 8: Unified Report Generation${NC}"
+cat > "$REPORTS_DIR/test-summary.json" << REPORT_EOF
+{
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)",
+  "test_run_id": "$(uuidgen)",
+  "environment": {
+    "rust_version": "$(rustc --version)",
+    "node_version": "$(node --version)",
+    "bun_version": "$(bun --version)",
+    "os": "$(uname -a)"
+  },
+  "phases": {
+    "rust_unit": {"status": "completed"},
+    "typescript_unit": {"status": "completed"},
+    "rust_integration": {"status": "completed"},
+    "api_integration": {"status": "completed"},
+    "e2e": {"status": "completed"},
+    "coverage": {"status": "completed"}
+  },
+  "artifacts": {
+    "coverage_dir": "$COVERAGE_DIR",
+    "results_dir": "$RESULTS_DIR",
+    "reports_dir": "$REPORTS_DIR"
+  }
+}
+REPORT_EOF
+
+echo -e "${GREEN}🎉 Test suite completed successfully!${NC}"
+echo -e "${BLUE}📁 Results: $RESULTS_DIR${NC}"
+echo -e "${BLUE}📊 Coverage: $COVERAGE_DIR${NC}"
+echo -e "${BLUE}📋 Reports: $REPORTS_DIR${NC}"
+EOF
+
+# Make script executable
+RUN chmod +x /scripts/run-tests.sh
+
+# Create health check script
+RUN cat > /scripts/healthcheck.sh << 'EOF'
+#!/bin/bash
+set -e
+
+# Check if all required services are available
+echo "🔍 Checking service dependencies..."
+
+# Check PostgreSQL
+if ! pg_isready -h postgres -p 5432 -U postgres -d uar_test -q; then
+    echo "❌ PostgreSQL not ready"
+    exit 1
+fi
+
+# Check Redis
+if ! redis-cli -h redis -p 6379 ping >/dev/null 2>&1; then
+    echo "❌ Redis not ready"
+    exit 1
+fi
+
+# Check SurrealDB
+if ! curl -sf http://surreal:8000/health >/dev/null 2>&1; then
+    echo "❌ SurrealDB not ready"
+    exit 1
+fi
+
+# Check Unstructured API
+if ! curl -sf http://unstructured:8000/healthcheck >/dev/null 2>&1; then
+    echo "❌ Unstructured API not ready"
+    exit 1
+fi
+
+# Check main application
+if ! curl -sf http://app:3001/health >/dev/null 2>&1; then
+    echo "❌ Main application not ready"
+    exit 1
+fi
+
+echo "✅ All services ready"
+exit 0
+EOF
+
+RUN chmod +x /scripts/healthcheck.sh
+
+# Create quick smoke test script
+RUN cat > /scripts/smoke-test.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "🚭 Running smoke tests..."
+
+# Quick connectivity tests
+curl -f http://app:3001/health || exit 1
+pg_isready -h postgres -p 5432 -U postgres -d uar_test || exit 1
+redis-cli -h redis -p 6379 ping || exit 1
+
+# Quick compilation check
+cargo check --all-targets || exit 1
+
+# Quick TypeScript check
+bun run check || exit 1
+
+echo "✅ Smoke tests passed"
+EOF
+
+RUN chmod +x /scripts/smoke-test.sh
+
+# Set default command
+CMD ["/scripts/run-tests.sh"]
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /scripts/healthcheck.sh

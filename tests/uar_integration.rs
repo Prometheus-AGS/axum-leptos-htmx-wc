@@ -12,6 +12,7 @@ use axum_leptos_htmx_wc::uar::{
 };
 use dotenvy::dotenv;
 use serde_json::json;
+use serial_test::serial;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -157,6 +158,7 @@ fn test_m1_parse_agent_artifact() {
 }
 
 #[test]
+#[serial]
 fn test_m1_serialize_events() {
     let evt = NormalizedEvent::Citation {
         run_id: "run_123".into(),
@@ -188,6 +190,7 @@ fn test_m1_serialize_events() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_m2_run_lifecycle() {
     let (run_manager, sessions) = setup_real_env().await;
 
@@ -251,6 +254,7 @@ async fn test_m2_run_lifecycle() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_m3_api_flow() {
     // This test simulates the API layer logic: Start -> Stream -> Done
     let (run_manager, sessions) = setup_real_env().await;
@@ -289,6 +293,7 @@ async fn test_m3_api_flow() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_m4_tool_execution() {
     // This test verifies the full tool execution loop mapping.
     // We use a dummy "mirror" tool inside McpRegistry.
@@ -381,6 +386,7 @@ async fn test_m4_tool_execution() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_m6_skills_execution() {
     use axum_leptos_htmx_wc::uar::domain::skills::{Skill, SkillConstraints, SkillTriggers};
 
@@ -521,6 +527,7 @@ async fn test_m6_skills_execution() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_verify_legacy_mcp_tools() {
     // This test attempts to load the REAL mcp.json and verify tools are discoverable.
     // It specifically targets the "time" server which uses `npx` and should run locally without keys.
@@ -589,6 +596,7 @@ async fn test_verify_legacy_mcp_tools() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_verify_filesystem_skills() {
     let _ = dotenv();
     let (_, _, skills) = setup_real_env_with_tools().await;
@@ -614,6 +622,7 @@ async fn test_verify_filesystem_skills() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_vector_skill_matching() {
     let _ = tracing_subscriber::fmt().with_test_writer().try_init();
 

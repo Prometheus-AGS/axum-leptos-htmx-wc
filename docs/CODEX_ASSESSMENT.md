@@ -23,7 +23,7 @@ Where the implementation is currently weakest (relative to S-tier polish):
 - **Design system consistency**: parts of the Web Components UI still use ad-hoc Tailwind colors (`gray-*`, borders) that conflict with the “Material 3 Flat 2.0 / token-based theming” docs.
 - **Lifecycle correctness / perf traps**: some Web Component event listener code risks leaks and unnecessary work (e.g., bind/remove mismatch, heavy console logging, smooth scrolling on every micro-update).
 - **Tauri friction points**: streaming (EventSource/SSE) and asset loading strategy needs an explicit plan for Tauri’s custom protocol vs localhost, plus packaging of MCP servers.
-
+- **HTMX integration**: the `hx-trigger` and `hx-swap` attributes are used consistently, but the `hx-target` attribute is missing in some cases, which could lead to unexpected behavior.
 ---
 
 ## What Changed / Additional Context vs `docs/CLAUDE_ASSESSMENT.md`

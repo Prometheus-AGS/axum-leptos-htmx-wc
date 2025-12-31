@@ -25,17 +25,22 @@ export class TranscriptView {
   private pendingScroll = false;
   private isUserScrolling = false;
 
+  private _handleScroll: EventListener;
+
   constructor(container: HTMLElement) {
     this.container = container;
-    this.setupScrollListener();
+    this._handleScroll = this.handleScroll.bind(this);
+    this.container.addEventListener("scroll", this._handleScroll);
   }
 
-  private setupScrollListener() {
-    this.container.addEventListener("scroll", () => {
+  private handleScroll() {
       const { scrollTop, scrollHeight, clientHeight } = this.container;
       // If user is not at the bottom (with some buffer), they are scrolling up
       this.isUserScrolling = scrollHeight - scrollTop - clientHeight > 100;
-    });
+  }
+
+  destroy() {
+      this.container.removeEventListener("scroll", this._handleScroll);
   }
 
   /**
@@ -113,7 +118,7 @@ export class TranscriptView {
 
     const resultContainer = el.querySelector(".tool-result-container");
     const statusIndicator = el.querySelector(".status-indicator");
-    const containerBorder = el.querySelector(".bg-white, .dark\\:bg-gray-900");
+    const containerBorder = el.querySelector(".bg-surface, .border-panelBorder");
 
     // Reveal result footer
     if (resultContainer) {
@@ -261,4 +266,5 @@ export class TranscriptView {
       this.itemMap.clear();
       this.isUserScrolling = false;
   }
+
 }

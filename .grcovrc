@@ -1,0 +1,34 @@
+# grcov configuration for Rust code coverage
+
+# Output formats
+output-types = ["html", "lcov", "json", "cobertura"]
+
+# Source directory
+source-dir = "src"
+
+# Include patterns
+include = [
+    "src/*"
+]
+
+# Exclude patterns
+ignore = [
+    "build.rs",
+    "target/*",
+    "tests/*",
+    "**/test_*",
+    "**/tests/*",
+    "**/*test.rs",
+    "**/fixtures/*",
+    "**/*.pb.rs",  # Generated protobuf files
+    "**/generated/*"
+]
+
+# Binary filters
+ignore-not-existing = true
+keep-only = "src"
+
+# Options
+branch = true
+threads = 0  # Use all available threads
+precision = 2

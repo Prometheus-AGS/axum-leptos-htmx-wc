@@ -1,0 +1,52 @@
+# Git
+.git/
+.gitignore
+
+# Dependencies
+node_modules/
+target/
+.yarn/
+.pnp.*
+
+# Environment & Secrets
+.env*
+*.key
+*.pem
+
+# Logs
+*.log*
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing artifacts
+tests/coverage/
+test-results/
+playwright-report/
+coverage_report/
+*.prof*
+*.gcda
+*.gcno
+.nyc_output/
+
+# Generated files
+src-tauri/gen/
+*.tsbuildinfo
+.fastembed_cache/
+
+# Documentation
+*.md
+docs/

@@ -132,7 +132,7 @@ impl SkillRegistry {
         let yaml = parts[1];
         let body = parts[2].trim().to_string();
 
-        let manifest: SkillManifest = serde_yaml::from_str(yaml)?;
+        let manifest: SkillManifest = serde_yml::from_str(yaml)?;
         Ok((manifest, body))
     }
 

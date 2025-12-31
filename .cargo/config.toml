@@ -1,0 +1,14 @@
+[env]
+# LLVM instrumentation for code coverage
+RUSTFLAGS = "-C instrument-coverage"
+
+[target.'cfg(test)']
+# Additional flags for test builds
+rustflags = [
+    "-C", "instrument-coverage",
+    "-C", "link-dead-code"
+]
+
+[build]
+# Ensure coverage instrumentation in test builds
+target-dir = "target"
