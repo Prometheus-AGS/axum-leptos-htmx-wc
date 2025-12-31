@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-use tower_http::services::ServeFile;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use tracing::info;
@@ -231,6 +231,7 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
             "/v1/chat/completions",
             post(uar::api::openai::routes::chat_completions),
         )
+        .fallback_service(ServeDir::new("static")) // Serve all static files (js, css, etc)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             uar::security::middleware::auth_middleware,

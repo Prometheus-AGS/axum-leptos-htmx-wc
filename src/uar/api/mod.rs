@@ -4,6 +4,7 @@ pub mod knowledge;
 pub mod memory;
 pub mod openai;
 pub mod routes;
+pub mod settings;
 pub mod sse;
 pub mod upload;
 

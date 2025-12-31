@@ -64,7 +64,7 @@ export class ChatStream extends HTMLElement {
   connectedCallback(): void {
     // 1. Setup DOM structure
     this.innerHTML = `
-      <div id="chat-transcript" class="flex flex-col h-full overflow-y-auto px-4 py-4 space-y-6 scroll-smooth"></div>
+      <div id="chat-transcript" class="flex flex-col h-full overflow-y-auto px-4 py-4 space-y-6"></div>
       <div id="sse-listener" style="display:none;"></div>
     `;
     
@@ -93,7 +93,10 @@ export class ChatStream extends HTMLElement {
 
   disconnectedCallback(): void {
     if (this.controller) this.controller.reset();
-    if (this.view) this.view.reset();
+    if (this.view) {
+        this.view.reset();
+        this.view.destroy();
+    }
     
     // Clean up HTMX attributes to ensure connection closes
     // Clean up EventSource

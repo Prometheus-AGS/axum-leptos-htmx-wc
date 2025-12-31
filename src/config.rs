@@ -386,6 +386,17 @@ impl AppConfig {
             .set_default("file_processing.max_total_size", 104_857_600_i64)?
             // Vision defaults
             .set_default("vision.auto_detect", true)?;
+
+        // 2. Config File Loading (Explicit > Implicit)
+        if let Some(config_path) = &cli.config {
+            builder = builder.add_source(config::File::with_name(config_path));
+        } else {
+            // implicit: ./config.yaml if exists
+            let cwd_config = std::path::Path::new("config.yaml");
+            if cwd_config.exists() {
+                builder = builder.add_source(config::File::from(cwd_config));
+            }
+        }
         // 4. Manual CLI Overrides
         // ...
         if let Some(rl) = cli.rate_limit_enabled {

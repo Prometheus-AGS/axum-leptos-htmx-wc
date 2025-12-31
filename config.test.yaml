@@ -1,0 +1,37 @@
+server:
+  port: 3001
+  host: "127.0.0.1"
+
+security:
+  jwt_required: false
+  jwt_secret: "test_secret_key_must_be_at_least_32_chars_long"
+
+resilience:
+  rate_limit_enabled: false
+  timeout_disabled: true
+  requests_per_second: 100.0
+  burst_size: 50.0
+
+persistence:
+  provider: "postgres"
+  database_url: "postgres://postgres:postgres@localhost:5431/uar_test"
+  vector_dimension: 384
+  external_cache_enabled: true
+
+file_processing:
+  provider: "local"
+  upload_dir: "./tmp/uar-test-uploads"
+  max_files_per_prompt: 5
+  max_file_size: 10485760
+  max_total_size: 20971520
+
+unstructured:
+  api_url: "http://localhost:8000/general/v0/general"
+  api_key: "test_key"
+
+vision:
+  auto_detect: false
+  model: null
+
+knowledge_bases:
+  named: {}

@@ -1,0 +1,541 @@
+name: Comprehensive Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test execution mode'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+        - quick
+        - full
+        - ci
+      coverage_threshold:
+        description: 'Minimum coverage percentage'
+        required: false
+        default: '80'
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Optimize build times
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_LOG: debug
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  # Pre-flight checks
+  preflight:
+    name: Pre-flight Checks
+    runs-on: ubuntu-latest
+    outputs:
+      rust-version: ${{ steps.versions.outputs.rust }}
+      node-version: ${{ steps.versions.outputs.node }}
+      test-mode: ${{ steps.config.outputs.test-mode }}
+      coverage-threshold: ${{ steps.config.outputs.coverage-threshold }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Extract versions
+        id: versions
+        run: |
+          echo "rust=$(rustc --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+          echo "node=$(node --version)" >> $GITHUB_OUTPUT
+
+      - name: Configure test parameters
+        id: config
+        run: |
+          TEST_MODE="${{ github.event.inputs.test_mode || 'ci' }}"
+          COVERAGE_THRESHOLD="${{ github.event.inputs.coverage_threshold || '80' }}"
+          echo "test-mode=${TEST_MODE}" >> $GITHUB_OUTPUT
+          echo "coverage-threshold=${COVERAGE_THRESHOLD}" >> $GITHUB_OUTPUT
+
+      - name: Validate configuration files
+        run: |
+          # Check if required config files exist
+          test -f test-config.yaml || { echo "test-config.yaml not found"; exit 1; }
+          test -f docker-compose.test.yaml || { echo "docker-compose.test.yaml not found"; exit 1; }
+          test -f Dockerfile.test || { echo "Dockerfile.test not found"; exit 1; }
+
+  # Code quality checks
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: preflight
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Set up Node.js and Bun
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Node dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Check Rust formatting
+        run: cargo fmt -- --check
+
+      - name: Check TypeScript formatting
+        run: bun run format --check
+
+      - name: Rust clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: TypeScript lint
+        run: bun run lint
+
+      - name: TypeScript type check
+        run: bun run check
+
+  # Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    needs: preflight
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Rust security audit
+        run: cargo audit
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Node.js security audit
+        run: bun audit
+
+  # Build verification
+  build-verification:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: [preflight, code-quality]
+    strategy:
+      matrix:
+        rust-version: [stable, beta]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust-version }}
+
+      - name: Set up Node.js and Bun
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-build-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock', '**/bun.lockb') }}
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Build Rust project
+        run: cargo build --release --verbose
+
+      - name: Build frontend assets
+        run: bun run build
+
+      - name: Verify build artifacts
+        run: |
+          test -f target/release/axum-leptos-htmx-wc || { echo "Rust binary not found"; exit 1; }
+          test -f static/main.js || { echo "Frontend JS bundle not found"; exit 1; }
+          test -f static/app.css || { echo "Frontend CSS bundle not found"; exit 1; }
+
+  # Comprehensive test suite
+  comprehensive-tests:
+    name: Comprehensive Tests
+    runs-on: ubuntu-latest
+    needs: [preflight, build-verification]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: uar_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis/redis-stack:latest
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Set up Node.js and Bun
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install coverage tools
+        run: |
+          cargo install grcov
+          cargo install cargo-llvm-cov
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock', '**/bun.lockb') }}
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Set up test environment
+        run: |
+          # Create test directories
+          mkdir -p tests/coverage/{rust,typescript,unified}
+
+          # Set environment variables for tests
+          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/uar_test" >> $GITHUB_ENV
+          echo "REDIS_URL=redis://localhost:6379" >> $GITHUB_ENV
+          echo "TEST_MODE=true" >> $GITHUB_ENV
+          echo "COVERAGE=true" >> $GITHUB_ENV
+
+      - name: Install Playwright
+        run: |
+          npx playwright install --with-deps chromium
+
+      - name: Run comprehensive test suite
+        run: |
+          chmod +x tools/test-all.sh
+          ./tools/test-all.sh --${{ needs.preflight.outputs.test-mode }} --no-cleanup
+        env:
+          POSTGRES_URL: postgres://postgres:postgres@localhost:5432/uar_test
+          REDIS_URL: redis://localhost:6379
+
+      - name: Generate coverage reports
+        run: |
+          chmod +x tools/coverage.sh
+          ./tools/coverage.sh --unified
+
+      - name: Check coverage thresholds
+        run: |
+          THRESHOLD=${{ needs.preflight.outputs.coverage-threshold }}
+          echo "Checking coverage against threshold: ${THRESHOLD}%"
+
+          # Extract Rust coverage percentage
+          if [[ -f "tests/coverage/rust/coverage.json" ]]; then
+            RUST_COVERAGE=$(jq -r '.percent_covered // 0' tests/coverage/rust/coverage.json)
+            echo "Rust coverage: ${RUST_COVERAGE}%"
+
+            if (( $(echo "$RUST_COVERAGE < $THRESHOLD" | bc -l) )); then
+              echo "❌ Rust coverage ${RUST_COVERAGE}% is below threshold ${THRESHOLD}%"
+              exit 1
+            else
+              echo "✅ Rust coverage ${RUST_COVERAGE}% meets threshold ${THRESHOLD}%"
+            fi
+          fi
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: tests/coverage/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: tests/coverage/rust/lcov.info,tests/coverage/typescript/lcov.info
+          flags: comprehensive
+          name: comprehensive-tests
+          fail_ci_if_error: true
+
+  # Performance benchmarks
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: [preflight, comprehensive-tests]
+    if: github.event_name == 'schedule' || github.event.inputs.test_mode == 'full'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-perf-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run performance benchmarks
+        run: |
+          # Create performance test results directory
+          mkdir -p performance-results
+
+          # Run Rust benchmarks if they exist
+          if cargo test --benches --no-run 2>/dev/null; then
+            cargo test --benches --release -- --nocapture | tee performance-results/rust-benchmarks.txt
+          else
+            echo "No Rust benchmarks found" > performance-results/rust-benchmarks.txt
+          fi
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results
+          path: performance-results/
+          retention-days: 30
+
+  # Docker integration tests
+  docker-integration:
+    name: Docker Integration Tests
+    runs-on: ubuntu-latest
+    needs: [preflight, build-verification]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker test image
+        run: |
+          docker build -f Dockerfile.test -t test-runner .
+
+      - name: Run Docker Compose tests
+        run: |
+          # Start services
+          docker-compose -f docker-compose.test.yaml up -d --wait
+
+          # Run tests in test container
+          docker-compose -f docker-compose.test.yaml run --rm test-runner
+
+          # Clean up
+          docker-compose -f docker-compose.test.yaml down -v
+
+  # Test result analysis and reporting
+  test-analysis:
+    name: Test Analysis & Reporting
+    runs-on: ubuntu-latest
+    needs: [comprehensive-tests, docker-integration]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Generate unified test report
+        run: |
+          mkdir -p final-report
+
+          # Create comprehensive test summary
+          cat > final-report/test-summary.md << 'EOF'
+          # Comprehensive Test Suite Results
+
+          ## Test Execution Summary
+          - **Workflow Run**: ${{ github.run_number }}
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Test Mode**: ${{ needs.preflight.outputs.test-mode }}
+          - **Coverage Threshold**: ${{ needs.preflight.outputs.coverage-threshold }}%
+          - **Triggered by**: ${{ github.event_name }}
+
+          ## Environment Information
+          - **Rust Version**: ${{ needs.preflight.outputs.rust-version }}
+          - **Node Version**: ${{ needs.preflight.outputs.node-version }}
+          - **Runner OS**: ${{ runner.os }}
+
+          ## Job Results
+          EOF
+
+          # Add job status information
+          echo "- **Pre-flight Checks**: ${{ needs.preflight.result }}" >> final-report/test-summary.md
+          echo "- **Code Quality**: ${{ needs.code-quality.result }}" >> final-report/test-summary.md
+          echo "- **Security Audit**: ${{ needs.security-audit.result }}" >> final-report/test-summary.md
+          echo "- **Build Verification**: ${{ needs.build-verification.result }}" >> final-report/test-summary.md
+          echo "- **Comprehensive Tests**: ${{ needs.comprehensive-tests.result }}" >> final-report/test-summary.md
+          echo "- **Docker Integration**: ${{ needs.docker-integration.result }}" >> final-report/test-summary.md
+
+          # Add coverage information if available
+          if [[ -f "artifacts/coverage-reports/unified/test-summary.json" ]]; then
+            echo "" >> final-report/test-summary.md
+            echo "## Coverage Reports" >> final-report/test-summary.md
+            echo "Coverage reports are available in the artifacts section." >> final-report/test-summary.md
+          fi
+
+      - name: Upload final report
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-test-report
+          path: final-report/
+          retention-days: 30
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('final-report/test-summary.md', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🧪 Comprehensive Test Suite Results\n\n${summary}\n\n🔗 [View detailed results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
+
+  # Notification and cleanup
+  cleanup-and-notify:
+    name: Cleanup & Notifications
+    runs-on: ubuntu-latest
+    needs: [comprehensive-tests, docker-integration, test-analysis]
+    if: always()
+    steps:
+      - name: Clean up Docker resources
+        run: |
+          # Clean up any remaining Docker resources
+          docker system prune -f || true
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "🚨 Test suite failed! Check the logs for details."
+          echo "Failed jobs:"
+          echo "- Comprehensive Tests: ${{ needs.comprehensive-tests.result }}"
+          echo "- Docker Integration: ${{ needs.docker-integration.result }}"
+          echo "- Test Analysis: ${{ needs.test-analysis.result }}"
+
+      - name: Celebrate on success
+        if: success()
+        run: |
+          echo "🎉 All tests passed successfully!"
+          echo "✅ Code quality checks passed"
+          echo "✅ Security audit passed"
+          echo "✅ Build verification passed"
+          echo "✅ Comprehensive tests passed"
+          echo "✅ Docker integration tests passed"

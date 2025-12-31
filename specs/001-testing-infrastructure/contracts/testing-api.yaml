@@ -1,0 +1,1192 @@
+openapi: 3.0.3
+info:
+  title: Testing Infrastructure API
+  description: API for comprehensive test execution, coverage tracking, and quality gates
+  version: 1.0.0
+  contact:
+    name: Development Team
+    url: https://github.com/your-org/project
+
+servers:
+  - url: http://localhost:3000/api/testing
+    description: Development server
+  - url: https://api.yourdomain.com/testing
+    description: Production server
+
+paths:
+  # Test Suite Management
+  /suites:
+    get:
+      summary: List all test suites
+      description: Retrieve all configured test suites with optional filtering
+      tags: [Test Suites]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [unit, integration, e2e, performance]
+          description: Filter by suite type
+        - name: language
+          in: query
+          schema:
+            type: string
+            enum: [rust, typescript, mixed]
+          description: Filter by target language
+      responses:
+        '200':
+          description: List of test suites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestSuite'
+
+    post:
+      summary: Create a new test suite
+      description: Register a new test suite configuration
+      tags: [Test Suites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTestSuiteRequest'
+      responses:
+        '201':
+          description: Test suite created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuite'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /suites/{suiteId}:
+    get:
+      summary: Get test suite details
+      description: Retrieve detailed information about a specific test suite
+      tags: [Test Suites]
+      parameters:
+        - name: suiteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Test suite details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuiteDetail'
+        '404':
+          description: Test suite not found
+
+    put:
+      summary: Update test suite
+      description: Update test suite configuration
+      tags: [Test Suites]
+      parameters:
+        - name: suiteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTestSuiteRequest'
+      responses:
+        '200':
+          description: Test suite updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuite'
+        '404':
+          description: Test suite not found
+
+  # Test Execution
+  /suites/{suiteId}/execute:
+    post:
+      summary: Execute test suite
+      description: Start execution of a test suite in specified environment
+      tags: [Test Execution]
+      parameters:
+        - name: suiteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteTestSuiteRequest'
+      responses:
+        '202':
+          description: Test execution started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestExecution'
+        '400':
+          description: Invalid execution request
+        '404':
+          description: Test suite not found
+
+  /executions/{executionId}:
+    get:
+      summary: Get execution status
+      description: Retrieve current status and progress of test execution
+      tags: [Test Execution]
+      parameters:
+        - name: executionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Execution status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestExecution'
+        '404':
+          description: Execution not found
+
+  /executions/{executionId}/stop:
+    post:
+      summary: Stop test execution
+      description: Cancel running test execution
+      tags: [Test Execution]
+      parameters:
+        - name: executionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Execution stopped successfully
+        '404':
+          description: Execution not found
+        '409':
+          description: Execution cannot be stopped (already completed)
+
+  # Test Reports
+  /reports:
+    get:
+      summary: List test reports
+      description: Retrieve test execution reports with filtering and pagination
+      tags: [Reports]
+      parameters:
+        - name: suite_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by test suite
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [passed, failed, partial]
+          description: Filter by report status
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter reports from this date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter reports to this date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of test reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestReportList'
+
+  /reports/{reportId}:
+    get:
+      summary: Get detailed test report
+      description: Retrieve comprehensive test report including coverage and performance data
+      tags: [Reports]
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detailed test report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestReportDetail'
+        '404':
+          description: Report not found
+
+  /reports/{reportId}/coverage:
+    get:
+      summary: Get coverage report
+      description: Retrieve detailed code coverage information
+      tags: [Coverage]
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, html, xml, lcov]
+            default: json
+          description: Report format
+      responses:
+        '200':
+          description: Coverage report in requested format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageReport'
+            text/html:
+              schema:
+                type: string
+            application/xml:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+
+  # Test Environments
+  /environments:
+    get:
+      summary: List test environments
+      description: Retrieve all available test environments
+      tags: [Environments]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [creating, ready, running, destroying, failed]
+          description: Filter by environment status
+      responses:
+        '200':
+          description: List of test environments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestEnvironment'
+
+    post:
+      summary: Create test environment
+      description: Create new isolated test environment
+      tags: [Environments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEnvironmentRequest'
+      responses:
+        '201':
+          description: Environment creation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestEnvironment'
+        '400':
+          description: Invalid environment configuration
+
+  /environments/{environmentId}:
+    get:
+      summary: Get environment details
+      description: Retrieve detailed information about test environment
+      tags: [Environments]
+      parameters:
+        - name: environmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Environment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestEnvironmentDetail'
+        '404':
+          description: Environment not found
+
+    delete:
+      summary: Destroy test environment
+      description: Clean up and destroy test environment
+      tags: [Environments]
+      parameters:
+        - name: environmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Environment destruction started
+        '404':
+          description: Environment not found
+        '409':
+          description: Environment is currently in use
+
+  /environments/{environmentId}/health:
+    get:
+      summary: Check environment health
+      description: Verify that all services in environment are healthy
+      tags: [Environments]
+      parameters:
+        - name: environmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Environment health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentHealth'
+
+  # Quality Gates
+  /quality-gates:
+    get:
+      summary: List quality gates
+      description: Retrieve all configured quality gates
+      tags: [Quality Gates]
+      responses:
+        '200':
+          description: List of quality gates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QualityGate'
+
+    post:
+      summary: Create quality gate
+      description: Create new quality gate with thresholds
+      tags: [Quality Gates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQualityGateRequest'
+      responses:
+        '201':
+          description: Quality gate created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityGate'
+
+  /quality-gates/{gateId}/evaluate:
+    post:
+      summary: Evaluate quality gate
+      description: Check if test report meets quality gate criteria
+      tags: [Quality Gates]
+      parameters:
+        - name: gateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                report_id:
+                  type: string
+                  format: uuid
+                  description: Test report to evaluate
+      responses:
+        '200':
+          description: Quality gate evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityGateResult'
+
+  # Coverage Trends
+  /coverage/trends:
+    get:
+      summary: Get coverage trends
+      description: Retrieve coverage percentage trends over time
+      tags: [Analytics]
+      parameters:
+        - name: suite_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by test suite
+        - name: language
+          in: query
+          schema:
+            type: string
+            enum: [rust, typescript, mixed]
+          description: Filter by language
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, quarter]
+            default: week
+          description: Time period for trend analysis
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Coverage trend data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageTrends'
+
+  # Performance Analytics
+  /performance/regressions:
+    get:
+      summary: Get performance regressions
+      description: Retrieve detected performance regressions
+      tags: [Analytics]
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+          description: Filter by regression severity
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Performance regression data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceRegressions'
+
+components:
+  schemas:
+    TestSuite:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [unit, integration, e2e, performance]
+        language:
+          type: string
+          enum: [rust, typescript, mixed]
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        config:
+          type: object
+          additionalProperties: true
+
+    TestSuiteDetail:
+      allOf:
+        - $ref: '#/components/schemas/TestSuite'
+        - type: object
+          properties:
+            test_cases:
+              type: array
+              items:
+                $ref: '#/components/schemas/TestCase'
+            recent_executions:
+              type: array
+              items:
+                $ref: '#/components/schemas/TestExecution'
+
+    TestCase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        suite_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        file_path:
+          type: string
+        line_number:
+          type: integer
+        type:
+          type: string
+          enum: [unit, integration, e2e, performance]
+        status:
+          type: string
+          enum: [pending, running, passed, failed, skipped]
+        duration_ms:
+          type: integer
+        retry_count:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+
+    TestExecution:
+      type: object
+      properties:
+        id:
+          type: string
+        suite_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        progress:
+          type: object
+          properties:
+            total_tests:
+              type: integer
+            completed_tests:
+              type: integer
+            current_test:
+              type: string
+              nullable: true
+
+    TestReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        execution_id:
+          type: string
+        suite_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [passed, failed, partial]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        total_tests:
+          type: integer
+        passed_tests:
+          type: integer
+        failed_tests:
+          type: integer
+        skipped_tests:
+          type: integer
+        overall_coverage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        performance_metrics:
+          type: object
+          additionalProperties: true
+        failure_summary:
+          type: object
+          additionalProperties: true
+        regression_detected:
+          type: boolean
+        report_url:
+          type: string
+          format: uri
+
+    TestReportDetail:
+      allOf:
+        - $ref: '#/components/schemas/TestReport'
+        - type: object
+          properties:
+            test_results:
+              type: array
+              items:
+                $ref: '#/components/schemas/TestResult'
+            coverage_report:
+              $ref: '#/components/schemas/CoverageReport'
+
+    TestReportList:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestReport'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            has_next:
+              type: boolean
+            has_prev:
+              type: boolean
+
+    TestResult:
+      type: object
+      properties:
+        test_case_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [passed, failed, skipped]
+        duration_ms:
+          type: integer
+        error_message:
+          type: string
+          nullable: true
+        stack_trace:
+          type: string
+          nullable: true
+        retry_count:
+          type: integer
+
+    CoverageReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        test_report_id:
+          type: string
+          format: uuid
+        language:
+          type: string
+          enum: [rust, typescript]
+        total_lines:
+          type: integer
+        covered_lines:
+          type: integer
+        coverage_percentage:
+          type: number
+          format: float
+        uncovered_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineRange'
+        excluded_patterns:
+          type: array
+          items:
+            type: string
+        generated_at:
+          type: string
+          format: date-time
+        report_format:
+          type: string
+          enum: [html, xml, json, lcov]
+        file_path:
+          type: string
+        file_coverage:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileCoverage'
+
+    FileCoverage:
+      type: object
+      properties:
+        file_path:
+          type: string
+        total_lines:
+          type: integer
+        covered_lines:
+          type: integer
+        coverage_percentage:
+          type: number
+          format: float
+        uncovered_ranges:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineRange'
+
+    LineRange:
+      type: object
+      properties:
+        file_path:
+          type: string
+        start_line:
+          type: integer
+        end_line:
+          type: integer
+
+    TestEnvironment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [docker, local, cloud]
+        status:
+          type: string
+          enum: [creating, ready, running, destroying, failed]
+        config:
+          type: object
+          additionalProperties: true
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceConfig'
+        health_checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthCheck'
+        created_at:
+          type: string
+          format: date-time
+        destroyed_at:
+          type: string
+          format: date-time
+          nullable: true
+        resource_limits:
+          $ref: '#/components/schemas/ResourceLimits'
+
+    TestEnvironmentDetail:
+      allOf:
+        - $ref: '#/components/schemas/TestEnvironment'
+        - type: object
+          properties:
+            logs:
+              type: array
+              items:
+                $ref: '#/components/schemas/EnvironmentLog'
+            current_usage:
+              $ref: '#/components/schemas/ResourceUsage'
+
+    ServiceConfig:
+      type: object
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+        ports:
+          type: array
+          items:
+            type: string
+        environment:
+          type: object
+          additionalProperties: true
+        health_check:
+          $ref: '#/components/schemas/HealthCheck'
+
+    HealthCheck:
+      type: object
+      properties:
+        service:
+          type: string
+        endpoint:
+          type: string
+        expected_status:
+          type: integer
+        timeout_ms:
+          type: integer
+        retry_count:
+          type: integer
+
+    ResourceLimits:
+      type: object
+      properties:
+        cpu_limit:
+          type: string
+        memory_limit:
+          type: string
+        disk_limit:
+          type: string
+
+    ResourceUsage:
+      type: object
+      properties:
+        cpu_usage:
+          type: string
+        memory_usage:
+          type: string
+        disk_usage:
+          type: string
+
+    EnvironmentLog:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        service:
+          type: string
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+        message:
+          type: string
+
+    EnvironmentHealth:
+      type: object
+      properties:
+        overall_status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [healthy, unhealthy]
+              last_check:
+                type: string
+                format: date-time
+              error:
+                type: string
+                nullable: true
+
+    QualityGate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        coverage_threshold:
+          type: number
+          format: float
+        test_reliability_threshold:
+          type: number
+          format: float
+        performance_thresholds:
+          type: object
+          additionalProperties: true
+        critical_tests:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    QualityGateResult:
+      type: object
+      properties:
+        gate_id:
+          type: string
+          format: uuid
+        report_id:
+          type: string
+          format: uuid
+        passed:
+          type: boolean
+        evaluated_at:
+          type: string
+          format: date-time
+        results:
+          type: object
+          properties:
+            coverage_check:
+              type: object
+              properties:
+                passed:
+                  type: boolean
+                actual_coverage:
+                  type: number
+                  format: float
+                required_coverage:
+                  type: number
+                  format: float
+            reliability_check:
+              type: object
+              properties:
+                passed:
+                  type: boolean
+                actual_reliability:
+                  type: number
+                  format: float
+                required_reliability:
+                  type: number
+                  format: float
+            performance_check:
+              type: object
+              properties:
+                passed:
+                  type: boolean
+                regressions:
+                  type: array
+                  items:
+                    type: string
+            critical_tests_check:
+              type: object
+              properties:
+                passed:
+                  type: boolean
+                failed_critical_tests:
+                  type: array
+                  items:
+                    type: string
+
+    CoverageTrends:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [day, week, month, quarter]
+        data_points:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              rust_coverage:
+                type: number
+                format: float
+              typescript_coverage:
+                type: number
+                format: float
+              overall_coverage:
+                type: number
+                format: float
+
+    PerformanceRegressions:
+      type: object
+      properties:
+        regressions:
+          type: array
+          items:
+            type: object
+            properties:
+              test_name:
+                type: string
+              metric:
+                type: string
+                enum: [response_time, throughput, memory_usage]
+              current_value:
+                type: number
+              baseline_value:
+                type: number
+              regression_percentage:
+                type: number
+              severity:
+                type: string
+                enum: [low, medium, high, critical]
+              detected_at:
+                type: string
+                format: date-time
+
+    # Request Schemas
+    CreateTestSuiteRequest:
+      type: object
+      required:
+        - name
+        - type
+        - language
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [unit, integration, e2e, performance]
+        language:
+          type: string
+          enum: [rust, typescript, mixed]
+        config:
+          type: object
+          additionalProperties: true
+
+    UpdateTestSuiteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+
+    ExecuteTestSuiteRequest:
+      type: object
+      required:
+        - environment_id
+      properties:
+        environment_id:
+          type: string
+          format: uuid
+        execution_mode:
+          type: string
+          enum: [full, fast, changed_only]
+          default: full
+        parallel:
+          type: boolean
+          default: true
+        timeout_seconds:
+          type: integer
+          default: 900
+
+    CreateEnvironmentRequest:
+      type: object
+      required:
+        - name
+        - type
+        - services
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [docker, local, cloud]
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceConfig'
+        resource_limits:
+          $ref: '#/components/schemas/ResourceLimits'
+
+    CreateQualityGateRequest:
+      type: object
+      required:
+        - name
+        - coverage_threshold
+      properties:
+        name:
+          type: string
+        coverage_threshold:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        test_reliability_threshold:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          default: 98
+        performance_thresholds:
+          type: object
+          additionalProperties: true
+        critical_tests:
+          type: array
+          items:
+            type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

@@ -1,0 +1,143 @@
+import { renderMarkdown } from "../../utils/markdown";
+import { createUniqueId } from "../../utils/html";
+
+export class SettingsView extends HTMLElement {
+  private _schema: any = null;
+  private _data: any = null;
+
+  connectedCallback() {
+      this.loadSettings();
+  }
+
+  async loadSettings() {
+      // Fetch schema types (simulated for now, would be /api/settings/types)
+      // and data
+      this.renderLoading();
+      
+      try {
+          // Mock fetching for UI dev
+          this._schema = {
+              "llm": {
+                  "type": "object",
+                  "properties": {
+                      "provider": { 
+                          "type": "string", 
+                          "enum": ["openai", "anthropic", "google"],
+                          "title": "Default Provider"
+                      },
+                      "model": { 
+                          "type": "string",
+                          "title": "Default Model" 
+                      },
+                      "temperature": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 2,
+                          "title": "Temperature"
+                      }
+                  }
+              }
+          };
+          
+          this._data = {
+              "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o",
+                  "temperature": 0.7
+              }
+          };
+          
+          this.renderForm();
+      } catch (e) {
+          this.renderError(e);
+      }
+  }
+
+  renderLoading() {
+      this.innerHTML = `<div class="p-8 text-center text-textMuted animate-pulse">Loading settings...</div>`;
+  }
+
+  renderError(e: any) {
+      this.innerHTML = `<div class="p-8 text-center text-red-500">Failed to load settings: ${e.message}</div>`;
+  }
+
+  renderForm() {
+      // Simple schema-to-form generator
+      const sections = Object.keys(this._schema).map(key => {
+          const sectionSchema = this._schema[key];
+          const sectionData = this._data[key] || {};
+          
+          return `
+            <div class="mb-8 p-6 bg-surface border border-panelBorder rounded-xl">
+                <h3 class="text-lg font-semibold mb-4 capitalize">${key} Settings</h3>
+                <div class="space-y-4">
+                    ${this.renderFields(key, sectionSchema.properties, sectionData)}
+                </div>
+            </div>
+          `;
+      }).join('');
+
+      this.innerHTML = `
+        <div class="max-w-3xl mx-auto py-8 px-4">
+            <h2 class="text-2xl font-bold mb-6">Settings</h2>
+            <form id="settings-form" onsubmit="return false;">
+                ${sections}
+                <div class="sticky bottom-4 flex justify-end gap-3 mt-8 p-4 bg-surface/80 backdrop-blur-md border border-panelBorder rounded-lg shadow-lg">
+                    <button type="button" class="px-4 py-2 text-sm font-medium text-textMuted hover:text-textPrimary transition-colors" onclick="this.closest('settings-view').reset()">Reset</button>
+                    <button type="button" class="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm" onclick="this.closest('settings-view').save()">Save Changes</button>
+                </div>
+            </form>
+        </div>
+      `;
+  }
+
+  renderFields(sectionKey: string, properties: any, data: any): string {
+      return Object.keys(properties).map(propKey => {
+          const prop = properties[propKey];
+          const value = data[propKey];
+          const fullKey = `${sectionKey}.${propKey}`;
+          
+          if (prop.enum) {
+              const options = prop.enum.map((opt: string) => 
+                  `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
+              ).join('');
+              return `
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
+                    <select name="${fullKey}" class="px-3 py-2 bg-background border border-panelBorder rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                        ${options}
+                    </select>
+                </div>
+              `;
+          }
+          
+          if (prop.type === 'number') {
+               return `
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
+                    <input type="number" name="${fullKey}" value="${value}" step="0.1" min="${prop.minimum}" max="${prop.maximum}" class="px-3 py-2 bg-background border border-panelBorder rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
+                </div>
+              `;
+          }
+
+          return `
+            <div class="flex flex-col gap-1.5">
+                <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
+                <input type="text" name="${fullKey}" value="${value || ''}" class="px-3 py-2 bg-background border border-panelBorder rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
+            </div>
+          `;
+      }).join('');
+  }
+
+  save() {
+      // Collect form data and PUT to API
+      console.log("Saving settings...");
+      // Implementation pending API integration
+  }
+  
+  reset() {
+      this.loadSettings();
+  }
+}
+
+customElements.define("settings-view", SettingsView);

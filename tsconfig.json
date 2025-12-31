@@ -31,6 +31,8 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
 
     "baseUrl": ".",
     "paths": {

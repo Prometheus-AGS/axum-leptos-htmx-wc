@@ -64,7 +64,7 @@ impl FileProcessor for LocalProvider {
 
         Ok(ProcessingResult {
             content,
-            mime_type,
+            mime_type: mime_type.to_string(),
             metadata: None,
             images: vec![],
         })

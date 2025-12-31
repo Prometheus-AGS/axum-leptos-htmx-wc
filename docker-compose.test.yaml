@@ -8,12 +8,37 @@ services:
       - SURREAL_URL=ws://surreal:8000/rpc
       - REDIS_URL=redis://redis:6379
       - RUST_LOG=info
+      - UAR_FILE_PROCESSING__UNSTRUCTURED__API_URL=http://unstructured:8000/general/v0/general
+      - UAR_FILE_PROCESSING__UNSTRUCTURED__API_KEY=test_key
+      - TEST_MODE=true
+      - COVERAGE=true
+    ports:
+      - "3001:3001"
     depends_on:
-      - postgres
-      - surreal
-      - redis
+      postgres:
+        condition: service_healthy
+      surreal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      unstructured:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
     networks:
       - uar-test-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '1.0'
 
   postgres:
     image: pgvector/pgvector:pg17
@@ -21,22 +46,128 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=uar_test
+      - POSTGRES_INITDB_ARGS=--auth-host=trust
+    ports:
+      - "5431:5432"
     tmpfs:
       - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d uar_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - uar-test-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
 
   surreal:
     image: surrealdb/surrealdb:latest
     command: start --log warn --user root --pass root memory
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     networks:
       - uar-test-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
 
   redis:
     image: redis/redis-stack:latest
+    ports:
+      - "6378:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
       - uar-test-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+
+  unstructured:
+    image: downloads.unstructured.io/unstructured-io/unstructured-api:latest
+    platform: linux/amd64
+    ports:
+      - "8000:8000"
+    environment:
+      - UNSTRUCTURED_API_KEY=test_key
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthcheck || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - uar-test-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Test utilities and monitoring
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - TEST_CONFIG=/config/test-config.yaml
+      - RUST_LOG=debug
+      - COVERAGE=true
+    volumes:
+      - ./test-config.yaml:/config/test-config.yaml:ro
+      - ./tests:/tests:ro
+      - test-results:/test-results
+      - test-coverage:/coverage
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - uar-test-net
+    profiles:
+      - test
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
 
 networks:
   uar-test-net:
     driver: bridge
+
+volumes:
+  test-results:
+    driver: local
+  test-coverage:
+    driver: local
