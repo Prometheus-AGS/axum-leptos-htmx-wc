@@ -16,9 +16,14 @@ bun.lockb
 .env.*.local
 
 # Build outputs
+/static/main.js
+/static/main.js.map
+/static/app.css
 /static/app.js
 /static/app.js.map
 /static/styles.css
+/static/*.wasm
+/static/*.data
 
 # IDE & Editor
 .vscode/
@@ -40,3 +45,19 @@ Thumbs.db
 .fastembed_cache/
 
 config.yaml
+
+# Testing artifacts
+tests/coverage/
+test-results/
+playwright-report/
+coverage/
+coverage_report/
+*.prof*
+*.gcda
+*.gcno
+test-config.yaml
+.nyc_output/
+
+# Generated files
+src-tauri/gen/
+*.tsbuildinfo
