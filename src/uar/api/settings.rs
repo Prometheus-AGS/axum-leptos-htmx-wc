@@ -4,7 +4,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, put},
+    routing::{get, post},
 };
 use serde_json::Value; // Added missing import
 // Assuming a DB pool state type exists, e.g., AppState

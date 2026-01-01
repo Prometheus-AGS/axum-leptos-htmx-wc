@@ -17,6 +17,7 @@ pub struct ModelPricing {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ModelCapabilities {
     pub streaming: bool,
     pub vision: bool,

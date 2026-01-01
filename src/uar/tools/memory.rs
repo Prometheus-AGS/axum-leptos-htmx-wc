@@ -24,11 +24,11 @@ impl MemorySaveTool {
 
 #[async_trait]
 impl NativeTool for MemorySaveTool {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "memory_save"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Save a piece of information to long-term memory. Use to remember facts, user preferences, or important context."
     }
 
@@ -62,11 +62,11 @@ impl NativeTool for MemorySaveTool {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .filter_map(|v| v.as_str().map(str::to_string))
                     .collect()
             })
             .unwrap_or_default();
-        let agent_id = args["agent_id"].as_str().map(|s| s.to_string());
+        let agent_id = args["agent_id"].as_str().map(str::to_string);
 
         let embeddings = self
             .vector_matcher
@@ -112,11 +112,11 @@ impl MemoryRecallTool {
 
 #[async_trait]
 impl NativeTool for MemoryRecallTool {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "memory_recall"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Search long-term memory for relevant information."
     }
 

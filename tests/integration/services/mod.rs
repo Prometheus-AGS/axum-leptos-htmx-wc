@@ -1,3 +1,5 @@
+#![allow(clippy::pedantic)]
+
 use std::time::Duration;
 use tracing::{info, error};
 
@@ -36,7 +38,7 @@ async fn execute_llm_integration_test(environment_id: &str) -> Result<crate::cer
 
     info!("Testing LLM integration in environment: {}", environment_id);
 
-    let mut suite = ServiceIntegrationSuite::new();
+    let suite = ServiceIntegrationSuite::new();
 
     // Test all configured LLM services
     let mut all_results = Vec::new();
@@ -89,7 +91,7 @@ async fn execute_mcp_integration_test(environment_id: &str) -> Result<crate::cer
 
     info!("Testing MCP integration in environment: {}", environment_id);
 
-    let mut suite = ServiceIntegrationSuite::new();
+    let suite = ServiceIntegrationSuite::new();
 
     // Test all configured MCP services
     let mut all_results = Vec::new();
@@ -145,7 +147,7 @@ async fn execute_external_api_test(environment_id: &str) -> Result<crate::certif
 
     info!("Testing external API integration in environment: {}", environment_id);
 
-    let mut suite = ServiceIntegrationSuite::new();
+    let suite = ServiceIntegrationSuite::new();
 
     // Test all configured external APIs
     let mut all_results = Vec::new();
@@ -253,7 +255,7 @@ async fn execute_streaming_integration_test(environment_id: &str) -> Result<crat
 
     info!("Testing streaming integration in environment: {}", environment_id);
 
-    let mut suite = ServiceIntegrationSuite::new();
+    let suite = ServiceIntegrationSuite::new();
 
     // Test streaming for each LLM service
     let mut streaming_results = Vec::new();
@@ -330,7 +332,7 @@ async fn execute_tool_calling_test(environment_id: &str) -> Result<crate::certif
 
     info!("Testing tool calling integration in environment: {}", environment_id);
 
-    let mut suite = ServiceIntegrationSuite::new();
+    let suite = ServiceIntegrationSuite::new();
 
     // Test tool calling for services that support it
     let mut tool_calling_results = Vec::new();

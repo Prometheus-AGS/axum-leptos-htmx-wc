@@ -139,7 +139,7 @@ export class ChatToolCall extends HTMLElement {
 
     this.innerHTML = `
       <article class="chat-tool-call rounded-xl bg-surfaceContainer overflow-hidden" style="max-width: 800px; width: 100%;">
-        <div class="tool-call-header flex items-center justify-between px-4 py-3 bg-surfaceContainerHigh cursor-pointer hover:bg-surfaceContainerHighest transition-colors">
+        <div class="tool-call-header flex items-center justify-between px-4 py-3 bg-surfaceVariant cursor-pointer hover:bg-surfaceContainerHighest transition-colors">
           <div class="flex items-center gap-2 flex-1">
             <svg class="w-4 h-4 text-textPrimary transition-transform ${this._isExpanded ? 'rotate-0' : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               ${chevronIcon}
@@ -162,7 +162,7 @@ export class ChatToolCall extends HTMLElement {
             `
                 : ""
             }
-            <div class="bg-surfaceContainerLow rounded-lg p-3">
+            <div class="bg-surfaceVariant rounded-lg p-3">
               <div class="text-xs font-medium text-textSecondary mb-2">Arguments</div>
               <div class="relative">
                 <pre id="${codeId}" class="bg-surfaceContainerHighest rounded-lg p-3 text-xs overflow-x-auto max-h-48 text-textPrimary"><code class="language-json">${escapeHtml(formattedArgs)}</code></pre>
@@ -172,7 +172,7 @@ export class ChatToolCall extends HTMLElement {
             ${
               resultData
                 ? `
-              <div class="bg-surfaceContainerLow rounded-lg p-3">
+              <div class="bg-surfaceVariant rounded-lg p-3">
                 <div class="text-xs font-medium text-textSecondary mb-2">Result</div>
                 <div class="relative">
                   <pre id="${resultId}" class="bg-surfaceContainerHighest rounded-lg p-3 text-xs overflow-x-auto max-h-64 text-textPrimary"><code>${escapeHtml(resultData.content)}</code></pre>

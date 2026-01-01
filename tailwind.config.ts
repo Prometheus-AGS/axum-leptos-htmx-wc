@@ -20,6 +20,8 @@ const config: Config = {
           surface: "hsl(210 15% 95%)",
           surfaceVariant: "hsl(210 12% 92%)",
           surfaceContainer: "hsl(210 18% 96%)",
+          surfaceContainerHigh: "hsl(210 16% 94%)",
+          surfaceContainerHighest: "hsl(210 14% 92%)",
           bubbleUser: "hsl(262 60% 92%)",
           bubbleAssistant: "hsl(210 15% 94%)",
           bubbleTool: "hsl(210 12% 96%)",
@@ -60,6 +62,8 @@ const config: Config = {
         surface: "hsl(220 20% 12%)",          // Primary surface
         surfaceVariant: "hsl(220 18% 16%)",   // Secondary surface
         surfaceContainer: "hsl(220 22% 10%)", // Container background
+        surfaceContainerHigh: "hsl(220 18% 14%)",
+        surfaceContainerHighest: "hsl(220 18% 18%)",
         
         // Chat bubble backgrounds - significant contrast
         bubbleUser: "hsl(262 60% 18%)",       // User message bubble (purple tint)

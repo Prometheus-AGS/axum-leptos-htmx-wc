@@ -3,15 +3,15 @@ use axum::{
     extract::{DefaultBodyLimit, Path, Request, State},
     http::StatusCode,
     middleware::Next,
-    response::IntoResponse,
-    routing::{get, get_service, post},
+    response::{Html, IntoResponse},
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 use tracing::info;
@@ -53,33 +53,31 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
     }
 
     // Initialize persistence based on config
-    let persistence: Arc<dyn PersistenceLayer> = match config.persistence.provider.as_str() {
-        "surrealdb" => {
+    let persistence: Arc<dyn PersistenceLayer> =
+        if config.persistence.provider.as_str() == "surrealdb" {
             let provider = SurrealDbProvider::new(&config.persistence.database_url)
                 .await
                 .expect("Failed to initialize SurrealDB");
             Arc::new(provider)
-        }
-        _ => {
+        } else {
             let provider = PostgresProvider::new(&config.persistence.database_url)
                 .await
                 .expect("Failed to initialize Postgres");
             Arc::new(provider)
-        }
-    };
-    let persistence = Some(persistence.clone());
+        };
+    let persistence = Some(Arc::clone(&persistence));
 
     // Initialize Ingest Service if persistence is available
     if let Some(p) = &persistence {
         let ingest = Arc::new(IngestService::new(
-            p.clone(),
-            vector_matcher.clone(),
+            Arc::clone(p),
+            Arc::clone(&vector_matcher),
             ChunkingStrategy::Semantic { threshold: 0.5 },
         ));
-        ingest_service = Some(ingest.clone());
+        ingest_service = Some(Arc::clone(&ingest));
 
         // Spawn File Watcher
-        let ingest_svc_clone = ingest.clone();
+        let ingest_svc_clone = Arc::clone(&ingest);
         tokio::spawn(async move {
             let ingest_dir = std::path::PathBuf::from("/data/ingest");
             if !ingest_dir.exists() {
@@ -111,12 +109,12 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
     if let Some(p) = &persistence {
         // Register Memory Tools
         let save_tool = Arc::new(crate::uar::tools::memory::MemorySaveTool::new(
-            p.clone(),
-            vector_matcher.clone(),
+            Arc::clone(p),
+            Arc::clone(&vector_matcher),
         ));
         let recall_tool = Arc::new(crate::uar::tools::memory::MemoryRecallTool::new(
-            p.clone(),
-            vector_matcher.clone(),
+            Arc::clone(p),
+            Arc::clone(&vector_matcher),
         ));
 
         mcp_registry = mcp_registry
@@ -140,7 +138,7 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
     // Skills initialization
     let mut skills_registry = SkillRegistry::new(None, None);
     if let Err(e) = skills_registry.load_from_dir("skills").await {
-        eprintln!("Warning: Failed to load skills: {:?}", e);
+        eprintln!("Warning: Failed to load skills: {e:?}");
     }
     let skills = Arc::new(RwLock::new(skills_registry));
 
@@ -149,17 +147,19 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
             settings.clone(),
             Arc::clone(&mcp),
             sessions.clone(),
-            skills.clone(),
-            vector_matcher.clone(), // Passed explicitly
-            persistence.clone(),    // Passed explicitly
+            Arc::clone(&skills),
+            Arc::clone(&vector_matcher), // Passed explicitly
+            persistence.clone(),         // Passed explicitly
         )
         .await,
     );
 
     // Initialize Global Rate Limiter
+    #[allow(clippy::cast_sign_loss)]
+    let burst_size = config.resilience.burst_size.max(0.0) as u32;
     let rate_limiter = Arc::new(uar::security::rate_limit::AppRateLimiter::new(
         config.resilience.requests_per_second,
-        config.resilience.burst_size as u32,
+        burst_size,
     ));
 
     let state = AppState {
@@ -168,21 +168,24 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
         sessions,
         run_manager,
         ingest_service,
-        vector_matcher: vector_matcher.clone(),
+        vector_matcher: Arc::clone(&vector_matcher),
         persistence: persistence.clone(),
         rate_limiter,
-        config: config.clone(),
+        config: Arc::clone(&config),
     };
 
     // Build router
     let app = Router::new()
-        .route("/", get_service(ServeFile::new("static/index.html")))
-        .route("/about", get_service(ServeFile::new("static/about.html")))
+        .route("/", get(index_handler))
+        .route("/about", get(about_handler))
+        .route("/health", get(health_handler))
+        .route("/healthz", get(health_handler))
+        .route("/readyz", get(health_handler))
         .route("/api/chat", post(api_chat))
         .route("/api/sessions/{id}/messages", get(api_get_messages))
         .nest(
             "/api/uar",
-            uar::api::router().with_state(state.run_manager.clone()),
+            uar::api::router().with_state(Arc::clone(&state.run_manager)),
         )
         // Knowledge Base API
         .nest("/api/uar/knowledge-bases", {
@@ -192,8 +195,8 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
                     match IngestionWorkerPool::new(
                         0,   // auto-detect CPU count
                         100, // max queue depth
-                        ingest.clone(),
-                        p.clone(),
+                        Arc::clone(ingest),
+                        Arc::clone(p),
                     ) {
                         Ok(pool) => {
                             info!("Ingestion worker pool initialized");
@@ -216,7 +219,7 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
                     persistence: persistence
                         .clone()
                         .expect("Persistence required for KB API"),
-                    vector_matcher: vector_matcher.clone(),
+                    vector_matcher: Arc::clone(&vector_matcher),
                     ingestion_pool,
                 },
             ))
@@ -324,6 +327,18 @@ pub async fn start_server(config: Arc<AppConfig>, settings: LlmSettings) -> anyh
 // API Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
+async fn index_handler() -> Html<String> {
+    Html(crate::ui::shell::render_index())
+}
+
+async fn about_handler() -> Html<String> {
+    Html(crate::ui::shell::render_about())
+}
+
+async fn health_handler() -> StatusCode {
+    StatusCode::OK
+}
+
 /// Request body for chat API.
 #[derive(Debug, Deserialize)]
 struct ChatRequest {
@@ -376,7 +391,7 @@ async fn api_chat(
         )
         .await;
 
-    let stream_url = format!("/api/uar/runs/{}/stream", run_id);
+    let stream_url = format!("/api/uar/runs/{run_id}/stream");
 
     Ok(Json(ChatResponse {
         session_id,

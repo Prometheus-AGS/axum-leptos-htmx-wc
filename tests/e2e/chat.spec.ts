@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('basic chat flow and persistence', async ({ page }) => {
   // Capture console logs

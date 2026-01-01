@@ -1,0 +1,39 @@
+name: Tests (Full)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    env:
+      SKIP_MODEL_BUILD: "1"
+      RUN_LLM_TESTS: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install JS dependencies
+        run: bun install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Install grcov
+        run: cargo install grcov
+
+      - name: Run full test suite
+        run: ./tools/test-all.sh --full

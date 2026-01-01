@@ -4,6 +4,7 @@
 //! Supports 56+ file formats including PDF, Office documents, images, and more.
 
 use async_trait::async_trait;
+use std::fmt::Write;
 use std::path::Path;
 
 use crate::config::KreuzbergConfig;
@@ -32,7 +33,7 @@ impl KreuzbergProvider {
         }
     }
 
-    /// Build the Kreuzberg ExtractionConfig from our config.
+    /// Build the Kreuzberg `ExtractionConfig` from our config.
     fn build_extraction_config(&self) -> kreuzberg::ExtractionConfig {
         let mut config = kreuzberg::ExtractionConfig::default();
 
@@ -65,8 +66,8 @@ impl FileProcessor for KreuzbergProvider {
             kreuzberg::extract_file_sync(path_buf, None, &extraction_config)
         })
         .await
-        .map_err(|e| ProcessingError::ProviderError(format!("Task join error: {}", e)))?
-        .map_err(|e| ProcessingError::ProviderError(format!("Kreuzberg error: {}", e)))?;
+        .map_err(|e| ProcessingError::ProviderError(format!("Task join error: {e}")))?
+        .map_err(|e| ProcessingError::ProviderError(format!("Kreuzberg error: {e}")))?;
 
         // Extract MIME type from the file
         let mime_type = mime_guess::from_path(path)
@@ -80,25 +81,23 @@ impl FileProcessor for KreuzbergProvider {
         if !result.tables.is_empty() {
             content.push_str("\n\n## Extracted Tables\n\n");
             for (i, table) in result.tables.iter().enumerate() {
-                content.push_str(&format!("### Table {}\n\n", i + 1));
+                let _ = writeln!(content, "### Table {}\n", i + 1);
                 // Tables are already in structured format from kreuzberg
-                content.push_str(&format!("{:?}\n\n", table));
+                let _ = writeln!(content, "{table:?}\n");
             }
         }
 
         // Convert metadata to JSON
-        let metadata = if self.config.extract_metadata {
-            Some(serde_json::json!({
+        let metadata = self.config.extract_metadata.then(|| {
+            serde_json::json!({
                 "title": result.metadata.title,
                 "subject": result.metadata.subject,
                 "authors": result.metadata.authors,
                 "keywords": result.metadata.keywords,
                 "language": result.metadata.language,
                 "pages": result.metadata.pages,
-            }))
-        } else {
-            None
-        };
+            })
+        });
 
         // Extract any embedded images (if available)
         let images: Vec<ExtractedImage> = result
@@ -207,8 +206,8 @@ pub async fn process_bytes(
         kreuzberg::extract_bytes_sync(&data_owned, &mime_for_extraction, &extraction_config)
     })
     .await
-    .map_err(|e| ProcessingError::ProviderError(format!("Task join error: {}", e)))?
-    .map_err(|e| ProcessingError::ProviderError(format!("Kreuzberg error: {}", e)))?;
+    .map_err(|e| ProcessingError::ProviderError(format!("Task join error: {e}")))?
+    .map_err(|e| ProcessingError::ProviderError(format!("Kreuzberg error: {e}")))?;
 
     let mut content = result.content;
 
@@ -216,22 +215,21 @@ pub async fn process_bytes(
     if !result.tables.is_empty() {
         content.push_str("\n\n## Extracted Tables\n\n");
         for (i, table) in result.tables.iter().enumerate() {
-            content.push_str(&format!("### Table {}\n\n{:?}\n\n", i + 1, table));
+            let _ = writeln!(content, "### Table {}\n", i + 1);
+            let _ = writeln!(content, "{table:?}\n");
         }
     }
 
-    let metadata = if config.extract_metadata {
-        Some(serde_json::json!({
+    let metadata = config.extract_metadata.then(|| {
+        serde_json::json!({
             "title": result.metadata.title,
             "subject": result.metadata.subject,
             "authors": result.metadata.authors,
             "keywords": result.metadata.keywords,
             "language": result.metadata.language,
             "pages": result.metadata.pages,
-        }))
-    } else {
-        None
-    };
+        })
+    });
 
     let images: Vec<ExtractedImage> = result
         .images

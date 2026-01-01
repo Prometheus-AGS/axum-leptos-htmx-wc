@@ -34,7 +34,7 @@ impl IngestService {
         vector_matcher: Arc<VectorMatcher>,
         strategy: ChunkingStrategy,
     ) -> Self {
-        let chunker = Chunker::new(strategy, Some(vector_matcher.clone()));
+        let chunker = Chunker::new(strategy, Some(Arc::clone(&vector_matcher)));
         Self {
             persistence,
             vector_matcher,
@@ -73,7 +73,7 @@ impl IngestService {
         for (i, segment) in chunks.into_iter().enumerate() {
             let embedding = embeddings
                 .get(i)
-                .ok_or_else(|| anyhow!("Missing embedding for chunk {}", i))?;
+                .ok_or_else(|| anyhow!("Missing embedding for chunk {i}"))?;
 
             let mut metadata = HashMap::new();
             metadata.insert(
@@ -126,7 +126,7 @@ impl IngestService {
         for (i, segment) in chunks.iter().enumerate() {
             let embedding = embeddings
                 .get(i)
-                .ok_or_else(|| anyhow!("Missing embedding for chunk {}", i))?;
+                .ok_or_else(|| anyhow!("Missing embedding for chunk {i}"))?;
 
             let mut metadata = HashMap::new();
             metadata.insert(
@@ -158,12 +158,12 @@ impl IngestService {
         for entry in WalkDir::new(dir)
             .follow_links(true)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
         {
-            if entry.file_type().is_file() {
-                if let Err(e) = self.ingest_file(entry.path(), kb_id).await {
-                    tracing::error!("Failed to ingest {:?}: {:?}", entry.path(), e);
-                }
+            if entry.file_type().is_file()
+                && let Err(e) = self.ingest_file(entry.path(), kb_id).await
+            {
+                tracing::error!("Failed to ingest {:?}: {:?}", entry.path(), e);
             }
         }
         Ok(())
@@ -183,24 +183,24 @@ impl IngestService {
             for entry in WalkDir::new(&dir)
                 .follow_links(true)
                 .into_iter()
-                .filter_map(|e| e.ok())
+                .filter_map(Result::ok)
             {
                 if entry.file_type().is_file() {
                     let path = entry.path().to_path_buf();
                     // Check modified time
-                    if let Ok(metadata) = std::fs::metadata(&path) {
-                        if let Ok(modified) = metadata.modified() {
-                            let should_process = match file_state.get(&path) {
-                                Some(last_mod) => modified > *last_mod,
-                                None => true,
-                            };
+                    if let Ok(metadata) = std::fs::metadata(&path)
+                        && let Ok(modified) = metadata.modified()
+                    {
+                        let should_process = match file_state.get(&path) {
+                            Some(last_mod) => modified > *last_mod,
+                            None => true,
+                        };
 
-                            if should_process {
-                                if let Err(e) = self.ingest_file(&path, &kb_id).await {
-                                    tracing::error!("Watch ingest failed for {:?}: {:?}", path, e);
-                                } else {
-                                    file_state.insert(path, modified);
-                                }
+                        if should_process {
+                            if let Err(e) = self.ingest_file(&path, &kb_id).await {
+                                tracing::error!("Watch ingest failed for {:?}: {:?}", path, e);
+                            } else {
+                                file_state.insert(path, modified);
                             }
                         }
                     }

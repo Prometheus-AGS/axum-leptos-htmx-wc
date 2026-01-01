@@ -1,6 +1,6 @@
 //! Document Ingestion Worker Pool
 //!
-//! Uses `prometheus_parking_lot` WorkerPool for scalable document ingestion.
+//! Uses `prometheus_parking_lot` `WorkerPool` for scalable document ingestion.
 //! This ensures CPU-bound document processing doesn't block the async HTTP server.
 
 use crate::uar::{
@@ -147,7 +147,7 @@ impl DocumentIngestionExecutor {
 // Worker Pool Wrapper
 // =============================================================================
 
-/// High-level wrapper around the `prometheus_parking_lot` WorkerPool
+/// High-level wrapper around the `prometheus_parking_lot` `WorkerPool`
 /// for document ingestion.
 pub struct IngestionWorkerPool {
     /// The underlying worker pool
@@ -217,7 +217,7 @@ impl IngestionWorkerPool {
                 kind: ResourceKind::Cpu, // CPU-bound work
                 units: 10,               // Each document uses 10 resource units
             },
-            created_at_ms: chrono::Utc::now().timestamp_millis() as u128,
+            created_at_ms: u128::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or(0),
             deadline_ms: None,
             mailbox: None,
         };

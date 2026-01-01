@@ -23,10 +23,20 @@ export class TokenCounter extends HTMLElement {
   private _modelId: string = "";
   private _cost: number = 0;
   private _isEstimate: boolean = true;
+  private _handleTokenUpdate: EventListener | null = null;
 
   connectedCallback(): void {
     this.updateFromAttributes();
     this.render();
+    this._handleTokenUpdate = this.handleTokenUpdate.bind(this) as EventListener;
+    window.addEventListener('token-usage-update', this._handleTokenUpdate);
+  }
+
+  disconnectedCallback(): void {
+    if (this._handleTokenUpdate) {
+      window.removeEventListener('token-usage-update', this._handleTokenUpdate);
+      this._handleTokenUpdate = null;
+    }
   }
 
   attributeChangedCallback(): void {
@@ -74,7 +84,7 @@ export class TokenCounter extends HTMLElement {
 
         <!-- Cost (if available) -->
         ${this._cost > 0 ? `
-          <div class="flex items-center gap-1 text-textMuted border-l border-surfaceContainerHighest pl-2">
+          <div class="flex items-center gap-1 text-textMuted bg-surfaceContainerHighest px-2 py-0.5 rounded-full">
             <svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/>
@@ -100,7 +110,7 @@ export class TokenCounter extends HTMLElement {
               <span class="text-textPrimary font-medium">${formatTokenCount(remaining)}</span>
             </div>
             ${this._modelId ? `
-              <div class="flex justify-between gap-4 pt-1 border-t border-surfaceContainer">
+              <div class="flex justify-between gap-4 pt-1">
                 <span class="text-textMuted">Model:</span>
                 <span class="text-textPrimary font-mono text-xs">${this._modelId}</span>
               </div>
@@ -127,20 +137,35 @@ export class TokenCounter extends HTMLElement {
       });
     }
 
-    // Listen for global usage updates
-    window.addEventListener('token-usage-update', (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        if (detail) {
-            this.updateTokens(detail.input, detail.output);
-            if (detail.cost) this.updateCost(detail.cost);
-            if (detail.model) {
-                this._modelId = detail.model;
-                this.render();
-            }
-        }
+    this.bindTooltipHandlers();
+  }
+
+  private bindTooltipHandlers(): void {
+    const container = this.querySelector(".token-counter");
+    const tooltip = this.querySelector(".token-tooltip");
+
+    if (!container || !tooltip) return;
+
+    container.addEventListener("mouseenter", () => {
+      tooltip.classList.remove("hidden");
+    });
+
+    container.addEventListener("mouseleave", () => {
+      tooltip.classList.add("hidden");
     });
   }
 
+  private handleTokenUpdate(e: Event): void {
+    const detail = (e as CustomEvent).detail;
+    if (detail) {
+      this.updateTokens(detail.input, detail.output);
+      if (detail.cost) this.updateCost(detail.cost);
+      if (detail.model) {
+        this._modelId = detail.model;
+        this.render();
+      }
+    }
+  }
   /**
    * Update token counts programmatically
    */

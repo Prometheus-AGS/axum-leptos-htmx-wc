@@ -27,18 +27,22 @@ pub enum NormalizedEvent {
 
     ToolStart {
         run_id: String,
+        call_index: usize,
         tool_call_id: String,
         tool: String,
         input: serde_json::Value,
     },
     ToolDelta {
         run_id: String,
+        call_index: usize,
         tool_call_id: String,
         delta: serde_json::Value,
     },
     ToolEnd {
         run_id: String,
+        call_index: usize,
         tool_call_id: String,
+        tool: String,
         output: serde_json::Value,
         ok: bool,
     },
@@ -55,6 +59,10 @@ pub enum NormalizedEvent {
     },
     RunDone {
         run_id: String,
+    },
+    StatePatch {
+        run_id: String,
+        patch: Vec<StatePatchOp>,
     },
     ContextAction(super::context::ContextAction),
 }
@@ -81,4 +89,12 @@ pub struct ArtifactPayload {
     pub content: String,
     pub language: Option<String>,
     pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StatePatchOp {
+    pub op: String,
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<serde_json::Value>,
 }

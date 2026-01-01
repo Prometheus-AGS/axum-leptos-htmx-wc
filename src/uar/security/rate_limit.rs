@@ -14,7 +14,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 use tracing::warn;
 
-/// Wrapper around Governor Rate Limiter to be stored in AppState
+/// Wrapper around Governor Rate Limiter to be stored in `AppState`
 /// We use a generic non-keyed limiter for global rate limiting as per current design.
 /// (Keyed by IP would require extracting IP which is added complexity).
 #[derive(Debug, Clone)]
@@ -32,6 +32,7 @@ impl AppRateLimiter {
         // Governor's Quota::per_second takes a u32.
         // If we want fractional, we might need per_period.
         // Let's assume u32 for now or ceil.
+        #[allow(clippy::cast_sign_loss)]
         let rps = NonZeroU32::new(requests_per_second.ceil() as u32)
             .unwrap_or(NonZeroU32::new(1).unwrap());
 
@@ -53,11 +54,9 @@ pub async fn rate_limit_middleware(
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    if state.config.resilience.rate_limit_enabled {
-        if !state.rate_limiter.check() {
-            warn!("Rate limit exceeded");
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
+    if state.config.resilience.rate_limit_enabled && !state.rate_limiter.check() {
+        warn!("Rate limit exceeded");
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
     Ok(next.run(req).await)
 }

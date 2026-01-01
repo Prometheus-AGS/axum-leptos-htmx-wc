@@ -4,7 +4,6 @@
 //! Uses petgraph for graph representation and iterative optimization.
 
 use crate::uar::domain::graph::{Community, Entity, Relationship};
-use anyhow::Result;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, HashSet};
@@ -64,13 +63,13 @@ impl LeidenCommunityDetector {
         &self,
         entities: &[Entity],
         relationships: &[Relationship],
-    ) -> Result<Vec<Community>> {
+    ) -> Vec<Community> {
         if entities.is_empty() {
-            return Ok(Vec::new());
+            return Vec::new();
         }
 
         // Build graph from entities and relationships
-        let (graph, id_to_node, _node_to_id) = self.build_graph(entities, relationships);
+        let (graph, id_to_node, _node_to_id) = Self::build_graph(entities, relationships);
 
         // Initialize: each node in its own community
         let mut communities: Vec<HashSet<NodeIndex>> = graph
@@ -92,7 +91,7 @@ impl LeidenCommunityDetector {
 
             // Phase 1: Local moving of nodes
             for node in graph.node_indices() {
-                let current_comm = self.find_community(&communities, node);
+                let current_comm = Self::find_community(&communities, node);
 
                 // Calculate modularity gain for moving to each neighbor's community
                 let mut best_gain = 0.0;
@@ -100,7 +99,7 @@ impl LeidenCommunityDetector {
 
                 for edge in graph.edges(node) {
                     let neighbor = edge.target();
-                    let neighbor_comm = self.find_community(&communities, neighbor);
+                    let neighbor_comm = Self::find_community(&communities, neighbor);
 
                     if neighbor_comm != current_comm {
                         let gain = self.calculate_modularity_gain(
@@ -126,7 +125,7 @@ impl LeidenCommunityDetector {
             }
 
             // Phase 2: Refine communities (simplified - full Leiden includes additional refinement)
-            self.refine_communities(&mut communities);
+            Self::refine_communities(&mut communities);
         }
 
         // Convert to Community structs
@@ -163,12 +162,11 @@ impl LeidenCommunityDetector {
             iterations
         );
 
-        Ok(result)
+        result
     }
 
-    /// Build a petgraph DiGraph from entities and relationships.
+    /// Build a petgraph `DiGraph` from entities and relationships.
     fn build_graph(
-        &self,
         entities: &[Entity],
         relationships: &[Relationship],
     ) -> (
@@ -201,7 +199,7 @@ impl LeidenCommunityDetector {
     }
 
     /// Find which community a node belongs to.
-    fn find_community(&self, communities: &[HashSet<NodeIndex>], node: NodeIndex) -> usize {
+    fn find_community(communities: &[HashSet<NodeIndex>], node: NodeIndex) -> usize {
         for (i, comm) in communities.iter().enumerate() {
             if comm.contains(&node) {
                 return i;
@@ -224,20 +222,20 @@ impl LeidenCommunityDetector {
         let in_edges_to: f64 = graph
             .edges(node)
             .filter(|e| to_comm.contains(&e.target()))
-            .map(|e| *e.weight() as f64)
+            .map(|e| f64::from(*e.weight()))
             .sum();
 
         let in_edges_from: f64 = graph
             .edges(node)
             .filter(|e| from_comm.contains(&e.target()) && e.target() != node)
-            .map(|e| *e.weight() as f64)
+            .map(|e| f64::from(*e.weight()))
             .sum();
 
         (in_edges_to - in_edges_from) * self.config.resolution
     }
 
     /// Refine communities by removing empty ones.
-    fn refine_communities(&self, communities: &mut Vec<HashSet<NodeIndex>>) {
+    fn refine_communities(communities: &mut Vec<HashSet<NodeIndex>>) {
         communities.retain(|c| !c.is_empty());
     }
 }
@@ -260,7 +258,7 @@ mod tests {
     #[test]
     fn test_empty_graph() {
         let detector = LeidenCommunityDetector::new();
-        let result = detector.detect_communities(&[], &[]).unwrap();
+        let result = detector.detect_communities(&[], &[]);
         assert!(result.is_empty());
     }
 
@@ -277,7 +275,7 @@ mod tests {
             created_at: "2024-01-01".to_string(),
         }];
 
-        let result = detector.detect_communities(&entities, &[]).unwrap();
+        let result = detector.detect_communities(&entities, &[]);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].entity_ids.len(), 1);
     }

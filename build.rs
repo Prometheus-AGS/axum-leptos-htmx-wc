@@ -4,10 +4,10 @@ use std::path::Path;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=SKIP_MODEL_BUILD");
 
     // Check if we should skip model building (for testing or CI)
     if env::var("SKIP_MODEL_BUILD").is_ok() {
-        println!("cargo:warning=Skipping model build due to SKIP_MODEL_BUILD env var");
         create_stub_model();
         return;
     }
@@ -26,7 +26,6 @@ fn main() {
 
         // Download model if it doesn't exist
         if !model_path.exists() {
-            println!("cargo:warning=Downloading model from {}...", url);
             fs::create_dir_all(model_dir).expect("Failed to create model directory");
 
             // Use a simple command to download to avoid ureq version complexity in build script for now
@@ -39,9 +38,7 @@ fn main() {
                 .status()
                 .expect("Failed to execute curl");
 
-            if !status.success() {
-                panic!("Failed to download model");
-            }
+            assert!(status.success(), "Failed to download model");
         }
 
         // Download tokenizer files
@@ -52,13 +49,10 @@ fn main() {
         ];
         for file in tokenizer_files {
             let file_path = model_dir.join(file);
-            let file_url = format!(
-                "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/{}",
-                file
-            );
+            let file_url =
+                format!("https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/{file}");
 
             if !file_path.exists() {
-                println!("cargo:warning=Downloading {}...", file);
                 let status = std::process::Command::new("curl")
                     .arg("-L")
                     .arg("-o")
@@ -68,8 +62,7 @@ fn main() {
                     .expect("Failed to execute curl");
 
                 if !status.success() {
-                    // Warning only for config files
-                    println!("cargo:warning=Failed to download {}", file);
+                    // Non-fatal for config files.
                 }
             }
             println!("cargo:rerun-if-changed={}", file_path.display());
@@ -87,7 +80,6 @@ fn main() {
 
     #[cfg(not(feature = "model-build"))]
     {
-        println!("cargo:warning=Model build feature disabled, creating stub");
         create_stub_model();
     }
 }
@@ -97,7 +89,7 @@ fn create_stub_model() {
     let model_dir = Path::new(&out_dir).join("model");
     fs::create_dir_all(&model_dir).expect("Failed to create model directory");
 
-    let stub_code = r#"
+    let stub_code = r"
 use burn::module::Module;
 use burn::tensor::backend::Backend;
 
@@ -119,7 +111,7 @@ impl<B: Backend> Default for Model<B> {
         Self::new()
     }
 }
-"#;
+";
 
     let stub_path = model_dir.join("bg_small_en_v1_5.rs");
     fs::write(stub_path, stub_code).expect("Failed to write stub model");

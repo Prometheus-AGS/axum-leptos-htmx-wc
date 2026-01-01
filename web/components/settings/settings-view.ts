@@ -1,5 +1,6 @@
 import { renderMarkdown } from "../../utils/markdown";
 import { createUniqueId } from "../../utils/html";
+import { debugLog } from "../../utils/logging";
 
 export class SettingsView extends HTMLElement {
   private _schema: any = null;
@@ -58,7 +59,7 @@ export class SettingsView extends HTMLElement {
   }
 
   renderError(e: any) {
-      this.innerHTML = `<div class="p-8 text-center text-red-500">Failed to load settings: ${e.message}</div>`;
+      this.innerHTML = `<div class="p-8 text-center text-danger">Failed to load settings: ${e.message}</div>`;
   }
 
   renderForm() {
@@ -68,7 +69,7 @@ export class SettingsView extends HTMLElement {
           const sectionData = this._data[key] || {};
           
           return `
-            <div class="mb-8 p-6 bg-surface border border-panelBorder rounded-xl">
+            <div class="mb-8 p-6 bg-surfaceContainer rounded-xl">
                 <h3 class="text-lg font-semibold mb-4 capitalize">${key} Settings</h3>
                 <div class="space-y-4">
                     ${this.renderFields(key, sectionSchema.properties, sectionData)}
@@ -82,7 +83,7 @@ export class SettingsView extends HTMLElement {
             <h2 class="text-2xl font-bold mb-6">Settings</h2>
             <form id="settings-form" onsubmit="return false;">
                 ${sections}
-                <div class="sticky bottom-4 flex justify-end gap-3 mt-8 p-4 bg-surface/80 backdrop-blur-md border border-panelBorder rounded-lg shadow-lg">
+                <div class="sticky bottom-4 flex justify-end gap-3 mt-8 p-4 bg-surfaceContainerHighest/80 backdrop-blur-md rounded-lg shadow-lg">
                     <button type="button" class="px-4 py-2 text-sm font-medium text-textMuted hover:text-textPrimary transition-colors" onclick="this.closest('settings-view').reset()">Reset</button>
                     <button type="button" class="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm" onclick="this.closest('settings-view').save()">Save Changes</button>
                 </div>
@@ -104,7 +105,7 @@ export class SettingsView extends HTMLElement {
               return `
                 <div class="flex flex-col gap-1.5">
                     <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
-                    <select name="${fullKey}" class="px-3 py-2 bg-background border border-panelBorder rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                    <select name="${fullKey}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all">
                         ${options}
                     </select>
                 </div>
@@ -115,7 +116,7 @@ export class SettingsView extends HTMLElement {
                return `
                 <div class="flex flex-col gap-1.5">
                     <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
-                    <input type="number" name="${fullKey}" value="${value}" step="0.1" min="${prop.minimum}" max="${prop.maximum}" class="px-3 py-2 bg-background border border-panelBorder rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
+                    <input type="number" name="${fullKey}" value="${value}" step="0.1" min="${prop.minimum}" max="${prop.maximum}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
                 </div>
               `;
           }
@@ -123,7 +124,7 @@ export class SettingsView extends HTMLElement {
           return `
             <div class="flex flex-col gap-1.5">
                 <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
-                <input type="text" name="${fullKey}" value="${value || ''}" class="px-3 py-2 bg-background border border-panelBorder rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
+                <input type="text" name="${fullKey}" value="${value || ''}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
             </div>
           `;
       }).join('');
@@ -131,7 +132,7 @@ export class SettingsView extends HTMLElement {
 
   save() {
       // Collect form data and PUT to API
-      console.log("Saving settings...");
+      debugLog("Saving settings...");
       // Implementation pending API integration
   }
   

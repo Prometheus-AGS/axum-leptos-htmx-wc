@@ -1,9 +1,7 @@
-use burn::module::Module;
-use burn::tensor::backend::Backend;
-
 // Include the generated code
 // burn-import generates a module structure based on the ONNX graph
 pub mod model {
+    #![allow(clippy::pub_underscore_fields, clippy::used_underscore_binding)]
     include!(concat!(env!("OUT_DIR"), "/model/bg_small_en_v1_5.rs"));
 }
 

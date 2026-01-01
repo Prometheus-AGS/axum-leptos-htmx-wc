@@ -1,12 +1,107 @@
 # Codex Architectural Assessment (S‑Tier UI/UX + HTMX + AG‑UI Streaming + Rust/MCP)
 
 **Repo**: `axum-leptos-htmx-wc`  
-**Date**: 2025-12-24  
+**Assessment History**:  
+- 2025-12-24 — Initial assessment  
+- 2025-12-31 10:50 a.m. — Update with testing architecture analysis and spec completion status  
 **Assessment focus**: S-tier UI/UX execution, HTML-first architecture (HTMX + Web Components), AG‑UI/typed streaming, Rust backend + MCP tool ecosystem, and Tauri readiness.
 
 This assessment is intentionally complementary to `docs/CLAUDE_ASSESSMENT.md` and avoids repeating the same recommendations unless additional, concrete context is useful.
 
 ---
+
+## Assessment Update (2025-12-31 10:50 a.m.)
+
+### Executive Summary (Update)
+
+This update re-evaluates the current codebase against the prior Codex and CLAUDE assessments, with a new focus on the **testing architecture and infrastructure** defined in `specs/001-testing-infrastructure/spec.md`.
+
+Key outcomes:
+
+- **UI/UX improvements landed**: token-based theming is now consistent in the chat transcript, scrolling behavior is stabilized, and component lifecycle cleanup is addressed.
+- **Testing infrastructure is partially implemented**: scripts, configs, and test scaffolding exist, but several suites are not wired into `cargo test`, coverage is not enforced end-to-end, and CI workflows described in docs are not present in the repo.
+- **Spec completion estimate (testing-infrastructure)**: **~40%** complete based on functional requirements coverage (details below).
+
+### Resolved Since 2025-12-24 (from prior recommendations)
+
+- **Design token consistency**: Web Component transcript styles now use surface tokens (`bg-surface`, `bg-surfaceContainer`, `bg-surfaceVariant`) instead of ad-hoc `gray-*`/`white` palettes (`web/components/chat-stream/transcript-view.ts`).
+- **Streaming scroll policy**: auto-scroll now uses instant behavior during streaming, reducing jank and user scroll fighting (`web/components/chat-stream/transcript-view.ts`).
+- **Lifecycle cleanup**: `ChatStream` stores bound handlers and removes them on disconnect, avoiding listener leaks (`web/components/chat-stream/chat-stream.ts`).
+- **Debug logging gate**: hot-path SSE logging is now gated behind URL query or `localStorage` flags (`web/components/chat-stream/chat-stream.ts`).
+
+### Testing Architecture & Infrastructure Review (Current State)
+
+**What exists and works**
+
+- `tools/test-all.sh` orchestrates smoke, unit, integration, API, and E2E phases with quick/full/ci modes.
+- `docker-compose.test.yaml` defines Postgres, Redis, Surreal, and Unstructured with health checks and resource limits.
+- Playwright E2E tests exist under `tests/e2e/` and are configured via `playwright.config.ts`.
+- Rust integration tests exist in top-level `tests/*.rs`, including integration flows that use real LLM settings when env vars are provided.
+
+**Critical gaps and wiring issues**
+
+- **TypeScript unit tests are not executed**: `run_typescript_unit_tests` only runs `bun run build` and never invokes a test runner (`tools/test-all.sh`).
+- **Large integration suites are not compiled**: `tests/integration/*` and `tests/certification/*` are subdirectory modules without a top-level `tests/integration.rs` or `tests/certification.rs`, so they are not picked up by `cargo test`.
+- **Config file mismatch for tests**: `tools/test-all.sh` exports `CONFIG_FILE=test-config.yaml`, but `test-config.yaml` is not an `AppConfig` file. `config.test.yaml` exists and is the correct server config, but is not wired into test runs.
+- **Docker services used by local test runs are incomplete**: the test runner starts only Postgres/Redis/Surreal; Unstructured and the app container are not brought up for local runs, which can break file-processing and SSE flows in E2E.
+- **Coverage is not end-to-end**: `tools/coverage.sh` can generate Rust coverage, but `test-all.sh` only calls `grcov` opportunistically, and Playwright/V8 coverage is not collected or merged.
+- **CI workflows described in docs do not exist**: there is no `.github/workflows/` directory to enforce quality gates or run automated tests.
+
+### Spec Compliance (001-testing-infrastructure)
+
+**Scoring method**: Complete = 1.0, Partial = 0.5, Missing = 0.0.
+
+- **Complete**: FR-014 (full vs quick execution modes)
+- **Partial**: FR-001, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-012, FR-013, FR-015
+- **Missing**: FR-002, FR-009, FR-010, FR-011
+
+**Definitive completion estimate**: **~40%** of the testing-infrastructure spec is implemented or partially implemented.
+
+### External Validation (Tavily Research)
+
+External sources confirm the direction but underscore missing wiring for coverage and CI:
+
+- **Playwright coverage**: The official Coverage API (`page.coverage.startJSCoverage()` / `stopJSCoverage()`) should be used to collect V8 coverage data for UI flows and merged into reports.  
+  Source: https://playwright.dev/docs/api/class-coverage
+- **Docker Compose service orchestration**: health checks and environment parity are best practices for integration testing, but should be paired with deterministic migration/fixture steps.  
+  Source: https://docs.docker.com/compose/compose-sdk/
+
+### Updated Recommendations (Prioritized, New)
+
+**P0**
+
+1) **Wire the test suites into execution**  
+   - Add a top-level `tests/integration.rs` (and `tests/certification.rs` if desired) to include `mod integration;` and compile the existing suites.  
+   - Ensure `tools/test-all.sh` runs actual TypeScript unit tests (`bun test` or equivalent).
+
+2) **Fix test configuration drift**  
+   - Stop exporting `CONFIG_FILE=test-config.yaml` to the app process. Use `config.test.yaml` for the server and keep `test-config.yaml` as test-runner config under a separate env var (e.g., `TEST_CONFIG_FILE`).
+
+3) **Make coverage real and enforceable**  
+   - Integrate Playwright coverage collection using the Coverage API and merge into unified reports.
+   - Add explicit coverage thresholds and fail the test run when thresholds are not met.
+
+**P1**
+
+4) **Docker-based parity for local runs**  
+   - Start `unstructured` and (optionally) the app container in `tools/test-all.sh` for parity with `docker-compose.test.yaml`.
+   - Add a migration + fixture step before integration tests.
+
+5) **CI workflows**  
+   - Add minimal GitHub Actions workflows for quick/full test suites and coverage gates.
+
+**P2**
+
+6) **Stabilize LLM-dependent tests**  
+   - Gate real LLM tests behind an explicit opt-in flag and provide deterministic mocks for non-critical suites.
+
+### Bottom Line (Update)
+
+The UI and streaming UX quality has improved measurably since the last assessment, and the testing infrastructure has **strong scaffolding** but remains **only partially wired**. The codebase is closer to the intended spec, but still requires **test execution wiring, coverage enforcement, and CI integration** to reach the certification bar described in `specs/001-testing-infrastructure/spec.md`.
+
+---
+
+## Prior Assessment (2025-12-24)
 
 ## Executive Summary
 
@@ -264,4 +359,3 @@ To reach consistent S-tier UI/UX polish (and reduce Tauri risk), the highest ROI
 1) enforce the design token system everywhere,  
 2) tighten client lifecycle + scrolling + logging for WebView performance,  
 3) formalize the Tauri localhost + MCP packaging plan.
-

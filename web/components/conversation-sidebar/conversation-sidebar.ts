@@ -20,6 +20,7 @@ export class ConversationSidebar extends HTMLElement {
   private activeConversationId: string | null = null;
   private editingId: string | null = null; // ID of conversation being renamed
   private deleteTargetId: string | null = null; // ID of conversation pending deletion
+  private _handleDocumentClick: EventListener | null = null;
 
   async connectedCallback(): Promise<void> {
     this.render();
@@ -34,33 +35,43 @@ export class ConversationSidebar extends HTMLElement {
     }
 
     // Listen for outside clicks to cancel editing
-    document.addEventListener('click', (e) => {
-      if (this.editingId && !(e.target as HTMLElement).closest('.rename-input')) {
-        this.editingId = null;
-        this.render();
-        this.attachEventListeners();
-      }
-    });
+    this._handleDocumentClick = this.handleDocumentClick.bind(this) as EventListener;
+    document.addEventListener('click', this._handleDocumentClick);
+  }
+
+  disconnectedCallback(): void {
+    if (this._handleDocumentClick) {
+      document.removeEventListener('click', this._handleDocumentClick);
+      this._handleDocumentClick = null;
+    }
+  }
+
+  private handleDocumentClick(e: Event): void {
+    if (this.editingId && !(e.target as HTMLElement).closest('.rename-input')) {
+      this.editingId = null;
+      this.render();
+      this.attachEventListeners();
+    }
   }
 
   private render(): void {
     
     this.innerHTML = `
-      <aside class="conversation-sidebar flex flex-col h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ${this.isCollapsed ? 'w-16' : 'w-64'}" data-collapsed="${this.isCollapsed}">
+      <aside class="conversation-sidebar ${this.isCollapsed ? 'collapsed' : ''}" data-collapsed="${this.isCollapsed}">
         <!-- Header -->
-        <div class="h-14 flex items-center justify-between px-3 border-b border-gray-200 dark:border-gray-800">
+        <div class="sidebar-header">
            ${!this.isCollapsed ? `
             <div class="flex items-center gap-2 overflow-hidden">
-                <span class="font-semibold text-sm text-gray-700 dark:text-gray-200 text-nowrap">Chats</span>
+                <span class="sidebar-title text-nowrap">Chats</span>
             </div>
            ` : ''}
            <div class="flex items-center gap-1 ${this.isCollapsed ? 'w-full justify-center flex-col gap-3' : ''}">
                ${!this.isCollapsed ? `
-                <button class="new-chat-btn p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-md transition-colors text-gray-600 dark:text-gray-400" aria-label="New conversation">
+                <button class="new-chat-btn text-textMuted" aria-label="New conversation">
                     <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
                 </button>
                ` : ''}
-               <button class="collapse-btn p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-md transition-colors text-gray-600 dark:text-gray-400" aria-label="${this.isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+               <button class="collapse-btn text-textMuted" aria-label="${this.isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
                 <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     ${this.isCollapsed 
                     ? '<path d="M9 18l6-6-6-6"/>' // ChevronRight
@@ -73,15 +84,15 @@ export class ConversationSidebar extends HTMLElement {
 
         <!-- Search (only when expanded) -->
         ${!this.isCollapsed ? `
-          <div class="p-3">
+          <div class="sidebar-search">
             <div class="relative">
                 <input 
                 type="search" 
-                class="search-input w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1.5 pl-8 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow" 
+                class="search-input"
                 placeholder="Search..."
                 value="${this.searchQuery}"
                 />
-                <svg class="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                 </svg>
             </div>
@@ -89,11 +100,11 @@ export class ConversationSidebar extends HTMLElement {
         ` : ''}
 
         <!-- Conversation List -->
-        <div class="sidebar-content flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 px-2 pb-2">
+        <div class="sidebar-content">
           ${this.isCollapsed ? this.renderCollapsedList() : this.renderGroupedList()}
         </div>
         
-        <div class="mt-auto p-3 border-t border-gray-200 dark:border-gray-800">
+        <div class="mt-auto p-3 bg-surfaceContainer">
              <token-counter 
                 input-tokens="0" 
                 output-tokens="0" 
@@ -115,12 +126,12 @@ export class ConversationSidebar extends HTMLElement {
             </shadcn-alert-dialog-header>
             <shadcn-alert-dialog-footer>
                 <shadcn-alert-dialog-cancel>
-                    <button class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md text-sm font-medium transition-colors">
+                    <button class="px-4 py-2 bg-surfaceContainerHighest hover:bg-surfaceContainer text-textPrimary rounded-md text-sm font-medium transition-colors">
                         Cancel
                     </button>
                 </shadcn-alert-dialog-cancel>
                 <shadcn-alert-dialog-action>
-                    <button class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors">
+                    <button class="px-4 py-2 bg-danger text-white rounded-md text-sm font-medium transition-colors">
                         Delete
                     </button>
                 </shadcn-alert-dialog-action>
@@ -133,7 +144,7 @@ export class ConversationSidebar extends HTMLElement {
   private renderGroupedList(): string {
     if (this.conversations.length === 0) {
       return `
-        <div class="flex flex-col items-center justify-center h-48 text-gray-400 text-xs">
+        <div class="flex flex-col items-center justify-center h-48 text-textMuted text-xs">
           <p>No conversations</p>
         </div>
       `;
@@ -158,7 +169,7 @@ export class ConversationSidebar extends HTMLElement {
       .filter(([_, items]) => items.length > 0)
       .map(([group, items]) => `
         <div class="mb-4">
-            <h3 class="px-2 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide sticky top-0 bg-gray-50 dark:bg-gray-900 z-10">${group}</h3>
+            <h3 class="px-2 py-1.5 text-[10px] font-semibold text-textMuted uppercase tracking-wide sticky top-0 bg-surfaceContainer z-10">${group}</h3>
             <ul class="space-y-0.5">
                 ${items.map(conv => this.renderConversationItem(conv)).join('')}
             </ul>
@@ -194,7 +205,7 @@ export class ConversationSidebar extends HTMLElement {
         ${recent.map(conv => `
           <li class="relative group">
             <button 
-                class="w-10 h-10 mx-auto flex items-center justify-center rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${conv.id === this.activeConversationId ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-500'}"
+                class="conversation-btn-collapsed ${conv.id === this.activeConversationId ? 'active text-primary' : 'text-textMuted'}"
                 data-conversation-id="${conv.id}"
                 title="${this.escapeHtml(conv.title)}"
             >
@@ -205,8 +216,8 @@ export class ConversationSidebar extends HTMLElement {
           </li>
         `).join('')}
         
-        <li class="pt-2 border-t border-gray-200 dark:border-gray-800 mt-2">
-             <button class="new-chat-btn w-10 h-10 mx-auto flex items-center justify-center rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500" aria-label="New conversation">
+        <li class="pt-2 mt-2">
+             <button class="new-chat-btn w-10 h-10 mx-auto flex items-center justify-center rounded-lg text-textMuted" aria-label="New conversation">
                 <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
             </button>
         </li>
@@ -219,32 +230,32 @@ export class ConversationSidebar extends HTMLElement {
     const isEditing = conv.id === this.editingId;
     
     return `
-      <li class="group relative rounded-md overflow-hidden ${isActive ? 'bg-gray-200 dark:bg-gray-800' : 'hover:bg-gray-100 dark:hover:bg-gray-800/50'}" data-conversation-id="${conv.id}">
+      <li class="conversation-item ${isActive ? 'active' : ''}" data-conversation-id="${conv.id}">
         ${isEditing ? `
             <div class="px-2 py-2">
                 <input type="text" 
-                    class="rename-input w-full text-xs px-1.5 py-1 rounded bg-white dark:bg-gray-900 border border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                    class="rename-input w-full text-xs px-2 py-1.5 rounded bg-surfaceContainerHighest text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary/40" 
                     value="${this.escapeHtml(conv.title)}"
                     autofocus
                 />
             </div>
         ` : `
-            <button class="conversation-btn w-full text-left px-3 py-2 flex items-start gap-3">
+            <button class="conversation-btn w-full text-left">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between gap-2 mb-0.5">
-                        <span class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate block">${this.escapeHtml(conv.title)}</span>
+                        <span class="text-xs font-medium text-textPrimary truncate block">${this.escapeHtml(conv.title)}</span>
                     </div>
                     <!-- Assuming message_count can proxy for length, theoretically we could store 'last_message_preview' in DB for better UX -->
-                    <span class="text-[10px] text-gray-500 truncate block">${conv.message_count} messages</span>
+                    <span class="text-[10px] text-textMuted truncate block">${conv.message_count} messages</span>
                 </div>
             </button>
 
             <!-- Hover Actions -->
-            <div class="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-linear-to-l from-gray-100 dark:from-gray-800 from-60% to-transparent pl-4 flex items-center gap-1">
-                 <button class="action-btn rename-btn p-1 hover:text-blue-600 text-gray-400" data-action="rename" title="Rename">
+            <div class="conversation-actions absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-linear-to-l from-surfaceContainer from-60% to-transparent pl-4 flex items-center gap-1">
+                 <button class="action-btn rename-btn p-1 hover:text-primary text-textMuted" data-action="rename" title="Rename">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                  </button>
-                 <button class="action-btn delete-btn p-1 hover:text-red-600 text-gray-400" data-action="delete" title="Delete">
+                 <button class="action-btn delete-btn p-1 hover:text-danger text-textMuted" data-action="delete" title="Delete">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                  </button>
             </div>

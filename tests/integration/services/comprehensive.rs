@@ -1,8 +1,9 @@
+#![allow(dead_code, clippy::pedantic)]
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
-use tracing::{info, warn, error};
+use tracing::info;
 
 /// Comprehensive service integration test suite
 #[derive(Debug, Clone)]
@@ -54,6 +55,7 @@ pub struct MCPConfig {
 
 /// MCP server types
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum MCPServerType {
     Stdio,
     HTTP,
@@ -96,7 +98,7 @@ pub struct ServiceValidationRule {
 }
 
 /// Categories of service validation
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ServiceValidationCategory {
     Connectivity,
     Authentication,
@@ -118,6 +120,7 @@ pub enum ValidationSeverity {
 
 /// Service types being tested
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ServiceType {
     LLM,
     MCP,
@@ -311,7 +314,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Test LLM service integration
-    async fn test_llm_service(&self, config: &LLMConfig) -> Result<Vec<ServiceTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_llm_service(&self, config: &LLMConfig) -> Result<Vec<ServiceTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         info!("Testing LLM service: {}", config.name);
@@ -458,7 +461,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Test LLM streaming
-    async fn test_llm_streaming(&self, config: &LLMConfig) -> Result<ServiceTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_llm_streaming(&self, config: &LLMConfig) -> Result<ServiceTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
 
         // Simulate streaming response
@@ -530,7 +533,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Test LLM tool calling
-    async fn test_llm_tool_calling(&self, config: &LLMConfig) -> Result<ServiceTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_llm_tool_calling(&self, config: &LLMConfig) -> Result<ServiceTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
 
         // Simulate tool calling scenario
@@ -722,7 +725,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Test MCP service integration
-    async fn test_mcp_service(&self, config: &MCPConfig) -> Result<Vec<ServiceTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_mcp_service(&self, config: &MCPConfig) -> Result<Vec<ServiceTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         info!("Testing MCP service: {}", config.name);
@@ -840,7 +843,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Test MCP tool execution
-    async fn test_mcp_tool_execution(&self, config: &MCPConfig, tool_name: &str) -> Result<ServiceTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_mcp_tool_execution(&self, config: &MCPConfig, tool_name: &str) -> Result<ServiceTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
 
         // Simulate tool execution
@@ -922,7 +925,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Test external API integration
-    async fn test_external_api(&self, config: &ExternalAPIConfig) -> Result<Vec<ServiceTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_external_api(&self, config: &ExternalAPIConfig) -> Result<Vec<ServiceTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         info!("Testing external API: {}", config.name);
@@ -1104,7 +1107,7 @@ impl ServiceIntegrationSuite {
     }
 
     /// Check if LLM supports tool calling
-    fn supports_tool_calling(&self, config: &LLMConfig) -> bool {
+    pub fn supports_tool_calling(&self, config: &LLMConfig) -> bool {
         match config.provider {
             LLMProvider::OpenAI | LLMProvider::Anthropic => true,
             LLMProvider::Azure => config.model.contains("gpt-4") || config.model.contains("gpt-3.5"),
@@ -1181,10 +1184,13 @@ impl ServiceIntegrationSuite {
         // Calculate streaming metrics
         let streaming_results: Vec<&ServiceTestResult> = all_results
             .iter()
+            .copied()
             .filter(|r| r.performance_metrics.tokens_per_second.is_some())
             .collect();
 
-        let streaming_performance = if !streaming_results.is_empty() {
+        let streaming_performance = if streaming_results.is_empty() {
+            None
+        } else {
             let total_tokens: u64 = streaming_results
                 .iter()
                 .filter_map(|r| r.response_data.as_ref())
@@ -1208,8 +1214,6 @@ impl ServiceIntegrationSuite {
                 total_tokens_streamed: total_tokens,
                 streaming_sessions: streaming_results.len() as u32,
             })
-        } else {
-            None
         };
 
         // Check performance threshold violations

@@ -9,7 +9,7 @@ use tracing::warn;
 pub enum ChunkingStrategy {
     /// Simple fixed character length
     FixedSize { size: usize },
-    /// Token-based splitting (using cl100k_base via text_splitter)
+    /// Token-based splitting (using `cl100k_base` via `text_splitter`)
     Token { tokens: usize },
     /// Recursive character splitting trying to respect semantic boundaries (paragraphs, etc.)
     Recursive { size: usize },
@@ -133,7 +133,7 @@ impl Chunker {
 
             if sim >= threshold {
                 // Merge
-                current_chunk.push_str(" ");
+                current_chunk.push(' ');
                 current_chunk.push_str(next_sent);
                 // Update average embedding (naive unweighted average)
                 current_emb = current_emb
@@ -157,8 +157,8 @@ impl Chunker {
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let mag_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let mag_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let mag_a = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let mag_b = b.iter().map(|x| x * x).sum::<f32>().sqrt();
     if mag_a == 0.0 || mag_b == 0.0 {
         return 0.0;
     }
@@ -194,7 +194,7 @@ mod tests {
         // It should split by word ideally.
         assert!(!chunks.is_empty());
         for c in chunks {
-            assert!(c.len() <= 10, "Chunk '{}' exceeds size 10", c);
+            assert!(c.len() <= 10, "Chunk '{c}' exceeds size 10");
         }
     }
 

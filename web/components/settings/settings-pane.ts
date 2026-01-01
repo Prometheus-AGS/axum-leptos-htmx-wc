@@ -36,13 +36,13 @@ export class SettingsPane extends HTMLElement {
 
       // Pane 2: List
       const listPane = document.createElement('div');
-      listPane.className = "w-72 border-r border-panelBorder bg-surface flex flex-col";
+      listPane.className = "w-72 bg-surfaceContainer flex flex-col";
       
       listPane.innerHTML = `
-        <div class="p-4 border-b border-panelBorder">
+        <div class="p-4 bg-surfaceContainerHighest">
             <div class="relative">
                 <span class="material-symbols-rounded absolute left-2 top-2 text-textMuted text-sm">search</span>
-                <input type="text" placeholder="Search Providers..." class="w-full pl-8 pr-3 py-1.5 bg-background border border-panelBorder rounded-md text-sm outline-none focus:border-primary">
+                <input type="text" placeholder="Search Providers..." class="w-full pl-8 pr-3 py-1.5 bg-surfaceContainerHighest rounded-md text-sm outline-none focus:ring-2 focus:ring-primary/30">
             </div>
         </div>
         <div class="flex-1 overflow-y-auto p-2 space-y-1">
@@ -52,8 +52,8 @@ export class SettingsPane extends HTMLElement {
                         <div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">${i.name[0]}</div>
                         <span class="text-sm font-medium ${this._selectedItemId === i.id ? 'text-textPrimary' : 'text-textMuted group-hover:text-textPrimary'}">${i.name}</span>
                     </div>
-                    <div class="w-8 h-4 rounded-full ${i.enabled ? 'bg-green-500/20' : 'bg-surfaceVariant'} relative transition-colors">
-                        <div class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full ${i.enabled ? 'bg-green-500 translate-x-4' : 'bg-gray-400'} transition-transform shadow-sm"></div>
+                    <div class="w-8 h-4 rounded-full ${i.enabled ? 'bg-successContainer' : 'bg-surfaceVariant'} relative transition-colors">
+                        <div class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full ${i.enabled ? 'bg-success translate-x-4' : 'bg-surfaceContainerHighest'} transition-transform shadow-sm"></div>
                     </div>
                 </div>
             `).join('')}

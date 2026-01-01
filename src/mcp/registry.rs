@@ -6,14 +6,18 @@ use rmcp::{
     service::ServiceExt,
     transport::{StreamableHttpClientTransport, TokioChildProcess},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::process::Command;
 use url::Url;
 
 #[async_trait]
 pub trait NativeTool: Send + Sync + std::fmt::Debug {
-    fn name(&self) -> &str;
-    fn description(&self) -> &str;
+    fn name(&self) -> &'static str;
+    fn description(&self) -> &'static str;
     fn schema(&self) -> serde_json::Value;
     async fn call(&self, args: serde_json::Value) -> anyhow::Result<serde_json::Value>;
 }
@@ -45,7 +49,8 @@ impl std::fmt::Debug for McpRegistry {
 
 impl McpRegistry {
     pub async fn load_from_file(path: &str) -> anyhow::Result<Self> {
-        let cfg = load_mcp_config(path)?;
+        let resolved = resolve_mcp_config_path(path);
+        let cfg = load_mcp_config(resolved)?;
         Self::from_config(&cfg).await
     }
 
@@ -58,7 +63,8 @@ impl McpRegistry {
                 McpServerEntry::Stdio { command, args, env } => {
                     let env = expand_env_map(env);
 
-                    let mut cmd = Command::new(command);
+                    let command_path = resolve_mcp_command(command);
+                    let mut cmd = Command::new(&command_path);
                     cmd.args(args);
 
                     for (k, v) in env {
@@ -168,8 +174,7 @@ impl McpRegistry {
             meta: None,
         };
 
-        let mut tools = Vec::new();
-        tools.push((ns_name.clone(), tool));
+        let tools = vec![(ns_name.clone(), tool)];
         let mut tool_index = HashMap::new();
         tool_index.insert(ns_name, ("test".to_string(), name.to_string()));
 
@@ -202,6 +207,7 @@ impl McpRegistry {
 
     /// Merge another registry into this one, returning a new registry.
     /// This is used to combine global tools with skill-specific tools.
+    #[must_use]
     pub fn merge(&self, other: &McpRegistry) -> Self {
         let mut services = (*self.services).clone();
         services.extend((*other.services).clone());
@@ -223,6 +229,7 @@ impl McpRegistry {
         }
     }
 
+    #[must_use]
     pub fn with_native_tool(self, tool: Arc<dyn NativeTool>) -> Self {
         let ns_name = Self::sanitize_tool_name(&format!("native__{}", tool.name()));
 
@@ -321,4 +328,39 @@ impl McpRegistry {
         // 4. Return content (simplified)
         Ok(serde_json::to_value(res)?)
     }
+}
+
+fn resolve_mcp_config_path(path: &str) -> PathBuf {
+    if let Ok(env_path) = std::env::var("MCP_CONFIG_PATH") {
+        let candidate = PathBuf::from(env_path);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    let path_buf = PathBuf::from(path);
+    if path_buf.is_relative() && let Ok(dir) = std::env::var("MCP_CONFIG_DIR") {
+        let candidate = PathBuf::from(dir).join(&path_buf);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    path_buf
+}
+
+fn resolve_mcp_command(command: &str) -> PathBuf {
+    let path = Path::new(command);
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+
+    if let Ok(dir) = std::env::var("MCP_SERVER_DIR") {
+        let candidate = PathBuf::from(dir).join(path);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    path.to_path_buf()
 }

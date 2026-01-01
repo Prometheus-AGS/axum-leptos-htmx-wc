@@ -13,28 +13,28 @@ pub struct RouterRequest {
     pub complexity_score: Option<f32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LLMRouter {
     // Model configs could be injected here
 }
 
 impl LLMRouter {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 
     /// Determines the best route based on prompt characteristics.
     /// This is a simplified port of the Single-Round routing logic.
     pub async fn route(&self, request: &RouterRequest) -> RouteTarget {
         // 1. Check for explicit reasoning cues
-        if self.needs_reasoning(&request.prompt) {
+        if Self::needs_reasoning(&request.prompt) {
             return RouteTarget::Reasoning;
         }
 
         // 2. Complexity Analysis (Heuristic or Model-based)
         let score = request
             .complexity_score
-            .unwrap_or_else(|| self.calculate_complexity(&request.prompt));
+            .unwrap_or_else(|| Self::calculate_complexity(&request.prompt));
 
         if score > 0.7 {
             RouteTarget::Smart
@@ -43,13 +43,13 @@ impl LLMRouter {
         }
     }
 
-    fn needs_reasoning(&self, prompt: &str) -> bool {
+    fn needs_reasoning(prompt: &str) -> bool {
         let keys = ["solve", "prove", "math", "logic", "analyze", "why"];
         let lower = prompt.to_lowercase();
         keys.iter().any(|k| lower.contains(k)) && prompt.len() > 50
     }
 
-    fn calculate_complexity(&self, prompt: &str) -> f32 {
+    fn calculate_complexity(prompt: &str) -> f32 {
         // Simple heuristic for now: length + code indicators
         let mut score: f32 = 0.0;
 

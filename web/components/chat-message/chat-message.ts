@@ -68,37 +68,37 @@ export class ChatMessage extends HTMLElement {
       case "user":
         return {
           label: "You",
-          classes: "bg-primary/10 border-primary/50",
+          classes: "bg-bubbleUser text-textPrimary",
           icon: "👤",
         };
       case "assistant":
         return {
           label: "Assistant",
-          classes: "bg-panel border-panelBorder",
+          classes: "bg-bubbleAssistant text-textPrimary",
           icon: "🤖",
         };
       case "tool":
         return {
           label: "Tool",
-          classes: "bg-panel/50 border-panelBorder",
+          classes: "bg-bubbleTool text-textPrimary",
           icon: "🔧",
         };
       case "error":
         return {
           label: "Error",
-          classes: "bg-danger/10 border-danger/50",
+          classes: "bg-dangerContainer text-danger",
           icon: "❌",
         };
       case "system":
         return {
           label: "System",
-          classes: "bg-warning/10 border-warning/50",
+          classes: "bg-warningContainer text-warning",
           icon: "⚙️",
         };
       default:
         return {
           label: "Unknown",
-          classes: "bg-panel border-panelBorder",
+          classes: "bg-bubbleAssistant text-textPrimary",
           icon: "💬",
         };
     }
@@ -114,7 +114,7 @@ export class ChatMessage extends HTMLElement {
     const contentId = createUniqueId("message-content");
 
     this.innerHTML = `
-      <article class="chat-message rounded-xl border p-4 ${config.classes} relative group">
+      <article class="chat-message rounded-xl p-4 ${config.classes} relative group">
         <div class="flex items-center gap-2 text-xs text-textMuted mb-2">
           <span>${config.icon}</span>
           <span class="font-medium">${config.label}</span>

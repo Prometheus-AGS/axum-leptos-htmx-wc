@@ -189,7 +189,7 @@ async fn create_knowledge_base(
     {
         return Err((
             StatusCode::CONFLICT,
-            format!("Knowledge base with name '{}' already exists", req.name),
+            format!("Knowledge base with name '{name}' already exists", name = req.name),
         ));
     }
 
@@ -227,7 +227,7 @@ async fn get_knowledge_base(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Knowledge base '{}' not found", id),
+            format!("Knowledge base '{id}' not found"),
         ))?;
 
     Ok(Json(kb_to_response(kb)))
@@ -246,19 +246,19 @@ async fn update_knowledge_base(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Knowledge base '{}' not found", id),
+            format!("Knowledge base '{id}' not found"),
         ))?;
 
     // Apply updates
     if let Some(name) = req.name {
         // Check uniqueness
-        if let Ok(Some(existing)) = state.persistence.get_knowledge_base_by_name(&name).await {
-            if existing.id != kb.id {
-                return Err((
-                    StatusCode::CONFLICT,
-                    format!("Knowledge base with name '{}' already exists", name),
-                ));
-            }
+        if let Ok(Some(existing)) = state.persistence.get_knowledge_base_by_name(&name).await
+            && existing.id != kb.id
+        {
+            return Err((
+                StatusCode::CONFLICT,
+                format!("Knowledge base with name '{name}' already exists"),
+            ));
         }
         kb.name = name;
     }
@@ -292,7 +292,7 @@ async fn delete_knowledge_base(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Knowledge base '{}' not found", id),
+            format!("Knowledge base '{id}' not found"),
         ))?;
 
     state
@@ -301,7 +301,7 @@ async fn delete_knowledge_base(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    tracing::info!("Deleted knowledge base: {}", id);
+    tracing::info!("Deleted knowledge base: {id}");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -323,7 +323,7 @@ async fn list_documents(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Knowledge base '{}' not found", kb_id),
+            format!("Knowledge base '{kb_id}' not found"),
         ))?;
 
     let docs = state
@@ -350,7 +350,7 @@ async fn upload_document(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Knowledge base '{}' not found", kb_id),
+            format!("Knowledge base '{kb_id}' not found"),
         ))?;
 
     // Read multipart file
@@ -366,7 +366,7 @@ async fn upload_document(
         let field_name = field.name().unwrap_or_default().to_string();
         if field_name == "file" {
             filename = field.file_name().unwrap_or("uploaded_file").to_string();
-            mime_type = field.content_type().map(|s| s.to_string());
+            mime_type = field.content_type().map(ToString::to_string);
             file_data = field
                 .bytes()
                 .await
@@ -431,7 +431,7 @@ async fn upload_document(
     Ok((StatusCode::ACCEPTED, Json(doc_to_response(doc))))
 }
 
-/// GET /{id}/documents/{doc_id} - Get document status
+/// GET `/{id}/documents/{doc_id}` - Get document status
 async fn get_document(
     State(state): State<Arc<KnowledgeApiState>>,
     Path((kb_id, doc_id)): Path<(String, String)>,
@@ -443,21 +443,21 @@ async fn get_document(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Document '{}' not found", doc_id),
+            format!("Document '{doc_id}' not found"),
         ))?;
 
     // Verify document belongs to the KB
     if doc.kb_id != kb_id {
         return Err((
             StatusCode::NOT_FOUND,
-            format!("Document '{}' not found in KB '{}'", doc_id, kb_id),
+            format!("Document '{doc_id}' not found in KB '{kb_id}'"),
         ));
     }
 
     Ok(Json(doc_to_response(doc)))
 }
 
-/// DELETE /{id}/documents/{doc_id} - Delete a document
+/// DELETE `/{id}/documents/{doc_id}` - Delete a document
 async fn delete_document(
     State(state): State<Arc<KnowledgeApiState>>,
     Path((kb_id, doc_id)): Path<(String, String)>,
@@ -470,13 +470,13 @@ async fn delete_document(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Document '{}' not found", doc_id),
+            format!("Document '{doc_id}' not found"),
         ))?;
 
     if doc.kb_id != kb_id {
         return Err((
             StatusCode::NOT_FOUND,
-            format!("Document '{}' not found in KB '{}'", doc_id, kb_id),
+            format!("Document '{doc_id}' not found in KB '{kb_id}'"),
         ));
     }
 
@@ -487,7 +487,7 @@ async fn delete_document(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    tracing::info!("Deleted document: {} from KB {}", doc_id, kb_id);
+    tracing::info!("Deleted document: {doc_id} from KB {kb_id}");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -509,7 +509,7 @@ async fn search_knowledge_base(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((
             StatusCode::NOT_FOUND,
-            format!("Knowledge base '{}' not found", kb_id),
+            format!("Knowledge base '{kb_id}' not found"),
         ))?;
 
     tracing::debug!(
@@ -525,10 +525,10 @@ async fn search_knowledge_base(
         .embed_batch(vec![req.query.clone()])
         .await
         .map_err(|e| {
-            tracing::error!("Failed to embed query: {}", e);
+            tracing::error!("Failed to embed query: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Embedding failed: {}", e),
+                format!("Embedding failed: {e}"),
             )
         })?;
 

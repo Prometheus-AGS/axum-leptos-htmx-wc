@@ -161,13 +161,13 @@ impl HybridRetriever {
     }
 
     /// Calculate RRF score for a result at a given rank.
+    #[allow(clippy::cast_precision_loss)]
     fn rrf_score(&self, rank: usize, weight: f32) -> f32 {
         weight / (self.config.rrf_k + rank as f32 + 1.0)
     }
 
     /// Build RAG context from fused results with citations.
     pub fn build_context(
-        &self,
         results: Vec<ScoredChunk>,
         document_names: &HashMap<String, String>,
     ) -> RAGContext {

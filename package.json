@@ -12,6 +12,7 @@
     "dev:assets": "bun run dev:ts & bun run dev:css",
     "dev:ts": "bun build web/main.ts --outdir static --target browser --watch",
     "dev:css": "tailwindcss -i static/styles.css -o static/app.css --watch",
+    "test": "bun test web/tests",
     "check": "bun x tsc --noEmit",
     "lint": "bun x eslint web/ --ext .ts",
     "format": "bun x prettier --write web/",

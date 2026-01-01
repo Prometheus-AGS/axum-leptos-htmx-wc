@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('verify tool execution and rendering', async ({ page }) => {
   // 1. Setup logs

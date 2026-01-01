@@ -103,6 +103,11 @@ export class StreamController {
         });
         return;
     }
+
+    if (event.kind === "state" && event.phase === "patch") {
+        this.handleStatePatch(event.patch);
+        return;
+    }
   }
 
   private handleMessageDelta(text: string) {
@@ -255,6 +260,14 @@ export class StreamController {
               model: usage.model 
           } 
       }));
+  }
+
+  private handleStatePatch(patch: unknown) {
+      window.dispatchEvent(
+          new CustomEvent('state-patch', {
+              detail: { patch, requestId: this._requestId }
+          })
+      );
   }
 
   private handleDone() {

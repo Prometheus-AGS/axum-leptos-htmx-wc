@@ -7,7 +7,8 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$PROJECT_ROOT/test-config.yaml"
+CONFIG_FILE="$PROJECT_ROOT/config.test.yaml"
+TEST_CONFIG_FILE="$PROJECT_ROOT/test-config.yaml"
 
 # Colors for output
 RED='\033[0;31m'
@@ -23,6 +24,9 @@ MODE="full"
 CLEANUP_AFTER=true
 PARALLEL_TESTS=true
 GENERATE_REPORTS=true
+USE_DOCKER_APP=false
+INTEGRATION_TESTS_RAN=false
+COMPOSE_CMD=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -53,8 +57,12 @@ while [[ $# -gt 0 ]]; do
             GENERATE_REPORTS=false
             shift
             ;;
+        --use-docker-app)
+            USE_DOCKER_APP=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--quick|--full|--ci] [--no-cleanup] [--no-parallel] [--no-reports]"
+            echo "Usage: $0 [--quick|--full|--ci] [--no-cleanup] [--no-parallel] [--no-reports] [--use-docker-app]"
             echo ""
             echo "Modes:"
             echo "  --quick     Run smoke tests and unit tests only"
@@ -65,6 +73,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --no-cleanup    Don't cleanup Docker containers after tests"
             echo "  --no-parallel   Run tests sequentially instead of parallel"
             echo "  --no-reports    Skip report generation"
+            echo "  --use-docker-app  Use Docker app container instead of cargo run for Playwright"
             echo "  -h, --help      Show this help message"
             exit 0
             ;;
@@ -97,9 +106,26 @@ log_section() {
     echo "────────────────────────────────────────"
 }
 
+resolve_compose_command() {
+    if command -v docker-compose >/dev/null 2>&1; then
+        echo "docker-compose"
+        return 0
+    fi
+
+    if docker compose version >/dev/null 2>&1; then
+        echo "docker compose"
+        return 0
+    fi
+
+    return 1
+}
+
 # Export Test Config
-export CONFIG_FILE=test-config.yaml
+export CONFIG_FILE="$CONFIG_FILE"
+export TEST_CONFIG_FILE="$TEST_CONFIG_FILE"
 export APP_ENVIRONMENT=test
+export RUN_LLM_TESTS="${RUN_LLM_TESTS:-0}"
+export SKIP_MODEL_BUILD="${SKIP_MODEL_BUILD:-1}"
 # Override specific connection strings to use localhost ports mapped in docker-compose
 export POSTGRES_URL=postgres://postgres:postgres@localhost:5431/uar_test
 export REDIS_URL=redis://localhost:6378
@@ -114,9 +140,13 @@ check_prerequisites() {
 
     # Check required tools
     command -v docker >/dev/null 2>&1 || missing_tools+=("docker")
-    command -v docker-compose >/dev/null 2>&1 || missing_tools+=("docker-compose")
+    COMPOSE_CMD="$(resolve_compose_command || true)"
+    if [[ -z "$COMPOSE_CMD" ]]; then
+        missing_tools+=("docker-compose")
+    fi
     command -v cargo >/dev/null 2>&1 || missing_tools+=("cargo")
     command -v bun >/dev/null 2>&1 || missing_tools+=("bun")
+    command -v node >/dev/null 2>&1 || missing_tools+=("node")
 
     if [[ ${#missing_tools[@]} -ne 0 ]]; then
         log_error "Missing required tools: ${missing_tools[*]}"
@@ -124,10 +154,21 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check if config file exists
+    # Check if config files exist
     if [[ ! -f "$CONFIG_FILE" ]]; then
         log_error "Test configuration file not found: $CONFIG_FILE"
         exit 1
+    fi
+    if [[ ! -f "$TEST_CONFIG_FILE" ]]; then
+        log_error "Test runner configuration file not found: $TEST_CONFIG_FILE"
+        exit 1
+    fi
+
+    if [[ "$GENERATE_REPORTS" == true ]]; then
+        if ! command -v grcov >/dev/null 2>&1 && ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+            log_error "Coverage tools missing: install grcov or cargo-llvm-cov for Rust coverage"
+            exit 1
+        fi
     fi
 
     log_success "All prerequisites satisfied"
@@ -138,7 +179,11 @@ cleanup() {
     if [[ "$CLEANUP_AFTER" == true ]]; then
         log_section "Cleanup"
         log_info "Stopping and removing test containers..."
-        docker-compose -f docker-compose.test.yaml down -v --remove-orphans >/dev/null 2>&1 || true
+        if [[ -z "$COMPOSE_CMD" ]]; then
+            log_warning "Docker Compose command unavailable; skipping cleanup"
+            return 0
+        fi
+        $COMPOSE_CMD -f docker-compose.test.yaml down -v --remove-orphans >/dev/null 2>&1 || true
         log_success "Cleanup completed"
     fi
 }
@@ -151,16 +196,25 @@ start_services() {
     log_section "Starting Test Services"
 
     log_info "Starting Docker Compose services..."
-    docker-compose -f docker-compose.test.yaml up -d postgres redis surreal
+    local services=(postgres redis surreal unstructured)
+    if [[ "$USE_DOCKER_APP" == true ]]; then
+        services+=(app)
+        export USE_DOCKER_APP=true
+    else
+        export USE_DOCKER_APP=false
+    fi
+    $COMPOSE_CMD -f docker-compose.test.yaml up -d "${services[@]}"
 
     log_info "Waiting for services to be healthy..."
     local timeout=120
     local elapsed=0
 
     while [[ $elapsed -lt $timeout ]]; do
-        if docker-compose -f docker-compose.test.yaml exec -T postgres pg_isready -U postgres -d uar_test >/dev/null 2>&1 && \
-           docker-compose -f docker-compose.test.yaml exec -T redis redis-cli ping >/dev/null 2>&1 && \
-           docker-compose -f docker-compose.test.yaml exec -T surreal curl -f http://localhost:8000/health >/dev/null 2>&1; then
+        if $COMPOSE_CMD -f docker-compose.test.yaml exec -T postgres pg_isready -U postgres -d uar_test >/dev/null 2>&1 && \
+           $COMPOSE_CMD -f docker-compose.test.yaml exec -T redis redis-cli ping >/dev/null 2>&1 && \
+           $COMPOSE_CMD -f docker-compose.test.yaml exec -T surreal curl -f http://localhost:8000/health >/dev/null 2>&1 && \
+           $COMPOSE_CMD -f docker-compose.test.yaml exec -T unstructured curl -f http://localhost:8000/healthcheck >/dev/null 2>&1 && \
+           { [[ "$USE_DOCKER_APP" != true ]] || $COMPOSE_CMD -f docker-compose.test.yaml exec -T app curl -f http://localhost:3001/health >/dev/null 2>&1; }; then
             log_success "All services are healthy"
             return 0
         else
@@ -172,7 +226,7 @@ start_services() {
 
     echo ""
     log_error "Services failed to become healthy within $timeout seconds"
-    docker-compose -f docker-compose.test.yaml ps
+    $COMPOSE_CMD -f docker-compose.test.yaml ps
     exit 1
 }
 
@@ -183,14 +237,20 @@ run_smoke_tests() {
     log_info "Running connectivity and basic functionality tests..."
 
     # Test database connectivity
-    docker-compose -f docker-compose.test.yaml exec -T postgres pg_isready -U postgres -d uar_test || {
+    $COMPOSE_CMD -f docker-compose.test.yaml exec -T postgres pg_isready -U postgres -d uar_test || {
         log_error "PostgreSQL connectivity failed"
         return 1
     }
 
     # Test Redis connectivity
-    docker-compose -f docker-compose.test.yaml exec -T redis redis-cli ping || {
+    $COMPOSE_CMD -f docker-compose.test.yaml exec -T redis redis-cli ping || {
         log_error "Redis connectivity failed"
+        return 1
+    }
+
+    # Test Unstructured connectivity
+    $COMPOSE_CMD -f docker-compose.test.yaml exec -T unstructured curl -f http://localhost:8000/healthcheck >/dev/null 2>&1 || {
+        log_error "Unstructured connectivity failed"
         return 1
     }
 
@@ -212,13 +272,19 @@ run_rust_unit_tests() {
     export LLVM_PROFILE_FILE="$PROJECT_ROOT/tests/coverage/rust/unit-%p-%m.profraw"
 
     # Run unit tests
-    local test_args="--lib --bins --tests"
+    local test_args="--lib --bins"
     if [[ "$PARALLEL_TESTS" != true ]]; then
         test_args="$test_args -- --test-threads=1"
     fi
 
     if command -v cargo-llvm-cov >/dev/null 2>&1; then
-        cargo llvm-cov --workspace --html --output-dir tests/coverage/rust $test_args
+        cargo llvm-cov \
+            --workspace \
+            --html \
+            --output-dir tests/coverage/rust \
+            --lcov \
+            --output-path tests/coverage/rust/lcov.info \
+            $test_args
     else
         cargo test --workspace $test_args
     fi
@@ -240,7 +306,23 @@ run_typescript_unit_tests() {
     cd "$PROJECT_ROOT"
     bun run build
 
+    log_info "Running TypeScript unit tests..."
+    bun test web/tests \
+        --coverage \
+        --coverage-dir "tests/coverage/typescript" \
+        --coverage-reporter text \
+        --coverage-reporter lcov
+
     log_success "TypeScript unit tests completed"
+}
+
+# Run database migrations + fixtures before integration tests
+run_db_setup() {
+    log_section "Database Setup"
+
+    log_info "Running migrations and default fixtures..."
+    cargo run --bin test_db_setup -- --config "$CONFIG_FILE"
+    log_success "Database setup completed"
 }
 
 # Run integration tests
@@ -255,9 +337,10 @@ run_integration_tests() {
     export LLVM_PROFILE_FILE="$PROJECT_ROOT/tests/coverage/rust/integration-%p-%m.profraw"
 
     # Run integration tests (single-threaded for database consistency)
-    cargo test --test '*_integration' --test-threads=1
+    cargo test --tests -- --test-threads=1
 
     log_success "Integration tests completed"
+    INTEGRATION_TESTS_RAN=true
 }
 
 # Run API tests
@@ -266,13 +349,18 @@ run_api_tests() {
 
     log_info "Running API integration tests..."
 
+    if [[ "$INTEGRATION_TESTS_RAN" == true && "${FORCE_API_TESTS:-false}" != "true" ]]; then
+        log_info "API tests already covered by integration suite (set FORCE_API_TESTS=true to rerun)"
+        return 0
+    fi
+
     # Set coverage environment
     export CARGO_INCREMENTAL=0
     export RUSTFLAGS="-C instrument-coverage"
     export LLVM_PROFILE_FILE="$PROJECT_ROOT/tests/coverage/rust/api-%p-%m.profraw"
 
     # Run API tests
-    cargo test tests::api --test-threads=1
+    cargo test --test integration api_ -- --test-threads=1
 
     log_success "API tests completed"
 }
@@ -288,10 +376,13 @@ run_e2e_tests() {
 
     # Set environment for coverage
     export COVERAGE=true
+    export USE_DOCKER_APP="$USE_DOCKER_APP"
 
     # Run Playwright tests
     cd "$PROJECT_ROOT"
     npx playwright test --reporter=html,json --output-dir="tests/coverage/e2e/playwright"
+
+    node "$PROJECT_ROOT/tools/generate-e2e-coverage.mjs"
 
     log_success "E2E tests completed"
 }
@@ -372,6 +463,21 @@ EOF
     log_success "Test report generated: $report_file"
 }
 
+check_coverage_thresholds() {
+    if [[ "$GENERATE_REPORTS" != true ]]; then
+        return 0
+    fi
+
+    if [[ "${SKIP_COVERAGE_CHECK:-false}" == "true" ]]; then
+        log_warning "Skipping coverage threshold checks (SKIP_COVERAGE_CHECK=true)"
+        return 0
+    fi
+
+    log_section "Coverage Threshold Checks"
+    node "$PROJECT_ROOT/tools/check-coverage.mjs"
+    log_success "Coverage thresholds satisfied"
+}
+
 # Main execution flow
 main() {
     local start_time=$(date +%s)
@@ -395,6 +501,7 @@ main() {
             ;;
         "full"|"ci")
             run_typescript_unit_tests
+            run_db_setup
             run_integration_tests
             run_api_tests
             run_e2e_tests
@@ -404,6 +511,7 @@ main() {
     # Generate reports
     generate_coverage_reports
     generate_test_report
+    check_coverage_thresholds
 
     local end_time=$(date +%s)
     local total_time=$((end_time - start_time))

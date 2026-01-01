@@ -29,11 +29,8 @@ pub async fn save_memory_handler(
     State(state): State<AppState>,
     Json(payload): Json<SaveMemoryRequest>,
 ) -> impl IntoResponse {
-    let persistence = match &state.persistence {
-        Some(p) => p,
-        None => {
-            return (StatusCode::SERVICE_UNAVAILABLE, "Persistence not enabled").into_response();
-        }
+    let Some(persistence) = &state.persistence else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "Persistence not enabled").into_response();
     };
 
     // Generate embedding
@@ -57,7 +54,7 @@ pub async fn save_memory_handler(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Embedding failed: {}", e),
+                format!("Embedding failed: {e}"),
             )
                 .into_response();
         }
@@ -75,7 +72,7 @@ pub async fn save_memory_handler(
     if let Err(e) = persistence.save_memory(&memory).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Save failed: {}", e),
+            format!("Save failed: {e}"),
         )
             .into_response();
     }
@@ -91,11 +88,8 @@ pub async fn search_memory_handler(
     State(state): State<AppState>,
     Query(query): Query<SearchMemoryQuery>,
 ) -> impl IntoResponse {
-    let persistence = match &state.persistence {
-        Some(p) => p,
-        None => {
-            return (StatusCode::SERVICE_UNAVAILABLE, "Persistence not enabled").into_response();
-        }
+    let Some(persistence) = &state.persistence else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "Persistence not enabled").into_response();
     };
 
     // Generate embedding for query
@@ -118,7 +112,7 @@ pub async fn search_memory_handler(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Embedding failed: {}", e),
+                format!("Embedding failed: {e}"),
             )
                 .into_response();
         }
@@ -142,7 +136,7 @@ pub async fn search_memory_handler(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Search failed: {}", e),
+                format!("Search failed: {e}"),
             )
                 .into_response();
         }

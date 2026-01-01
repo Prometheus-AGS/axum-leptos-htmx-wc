@@ -62,7 +62,7 @@ impl FileProcessorFactory {
                         "Mistral configuration required".to_string(),
                     )
                 })?;
-                if !cfg.api_key.is_some() {
+                if cfg.api_key.is_none() {
                     return Err(ProcessingError::ProviderNotConfigured(
                         "Mistral API key required".to_string(),
                     ));
@@ -73,39 +73,13 @@ impl FileProcessorFactory {
                 tracing::info!("Using local file processing (text files only)");
                 Ok(Arc::new(LocalProvider::new()))
             }
-            "auto" | _ => {
-                // Try providers in order of preference
-
-                // 1. Kreuzberg (high-performance local processing)
-                if let Some(cfg) = kreuzberg {
-                    tracing::info!(
-                        "Using Kreuzberg for file processing (OCR backend: {})",
-                        cfg.ocr_backend
-                    );
-                    return Ok(Arc::new(KreuzbergProvider::new(cfg.clone())));
-                }
-
-                // 2. Unstructured.io
-                if let Some(cfg) = unstructured {
-                    let provider = UnstructuredProvider::new(cfg.clone());
-                    if provider.is_configured() {
-                        tracing::info!("Using Unstructured.io for file processing");
-                        return Ok(Arc::new(provider));
-                    }
-                }
-
-                // 3. Mistral OCR
-                if let Some(cfg) = mistral {
-                    let provider = MistralProvider::new(cfg.clone());
-                    if provider.is_configured() {
-                        tracing::info!("Using Mistral OCR for file processing");
-                        return Ok(Arc::new(provider));
-                    }
-                }
-
-                // 4. Fall back to local processing
-                tracing::info!("Using local file processing (text files only)");
-                Ok(Arc::new(LocalProvider::new()))
+            "auto" => Ok(Self::create_auto(unstructured, mistral, kreuzberg)),
+            _ => {
+                tracing::warn!(
+                    "Unknown file processing provider '{}'; falling back to auto",
+                    config.provider
+                );
+                Ok(Self::create_auto(unstructured, mistral, kreuzberg))
             }
         }
     }
@@ -134,12 +108,12 @@ impl FileProcessorFactory {
         }
 
         // For images, prefer Mistral OCR (if API key available)
-        if mime_type.starts_with("image/") {
-            if let Some(cfg) = mistral {
-                let provider = MistralProvider::new(cfg.clone());
-                if provider.is_configured() && provider.supports_mime_type(&mime_type) {
-                    return Ok(Arc::new(provider));
-                }
+        if mime_type.starts_with("image/")
+            && let Some(cfg) = mistral
+        {
+            let provider = MistralProvider::new(cfg.clone());
+            if provider.is_configured() && provider.supports_mime_type(&mime_type) {
+                return Ok(Arc::new(provider));
             }
         }
 
@@ -151,17 +125,55 @@ impl FileProcessorFactory {
                 | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 | "application/vnd.ms-excel"
                 | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ) {
-            if let Some(cfg) = unstructured {
-                let provider = UnstructuredProvider::new(cfg.clone());
-                if provider.is_configured() && provider.supports_mime_type(&mime_type) {
-                    return Ok(Arc::new(provider));
-                }
+        ) && let Some(cfg) = unstructured
+        {
+            let provider = UnstructuredProvider::new(cfg.clone());
+            if provider.is_configured() && provider.supports_mime_type(&mime_type) {
+                return Ok(Arc::new(provider));
             }
         }
 
         // Fall back to default provider selection
         Self::create(config, unstructured, mistral, kreuzberg)
+    }
+
+    fn create_auto(
+        unstructured: Option<&UnstructuredConfig>,
+        mistral: Option<&MistralConfig>,
+        kreuzberg: Option<&KreuzbergConfig>,
+    ) -> Arc<dyn FileProcessor> {
+        // Try providers in order of preference
+
+        // 1. Kreuzberg (high-performance local processing)
+        if let Some(cfg) = kreuzberg {
+            tracing::info!(
+                "Using Kreuzberg for file processing (OCR backend: {})",
+                cfg.ocr_backend
+            );
+            return Arc::new(KreuzbergProvider::new(cfg.clone()));
+        }
+
+        // 2. Unstructured.io
+        if let Some(cfg) = unstructured {
+            let provider = UnstructuredProvider::new(cfg.clone());
+            if provider.is_configured() {
+                tracing::info!("Using Unstructured.io for file processing");
+                return Arc::new(provider);
+            }
+        }
+
+        // 3. Mistral OCR
+        if let Some(cfg) = mistral {
+            let provider = MistralProvider::new(cfg.clone());
+            if provider.is_configured() {
+                tracing::info!("Using Mistral OCR for file processing");
+                return Arc::new(provider);
+            }
+        }
+
+        // 4. Fall back to local processing
+        tracing::info!("Using local file processing (text files only)");
+        Arc::new(LocalProvider::new())
     }
 }
 

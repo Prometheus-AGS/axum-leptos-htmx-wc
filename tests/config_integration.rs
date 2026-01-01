@@ -6,6 +6,7 @@ use std::fs;
 // Helper to clear environment variables that might interfere with tests
 // Helper to clear environment variables that might interfere with tests
 fn setup_env_vars() {
+    // SAFETY: Tests are serialized with `serial_test`, so process-wide env mutation is controlled.
     unsafe {
         env::set_var("UAR_TEST_MODE", "1");
         env::remove_var("UAR_SERVER__PORT");
@@ -52,6 +53,7 @@ fn test_default_config() {
 #[serial]
 fn test_env_override() {
     setup_env_vars();
+    // SAFETY: Tests are serialized with `serial_test`, so process-wide env mutation is controlled.
     unsafe {
         env::set_var("UAR__SERVER__PORT", "9090");
     }
@@ -82,6 +84,7 @@ persistence:
     fs::write(file_path, config_content).expect("Failed to write temp config");
 
     // Tell AppConfig to use this file via Env Var (mocking CLI arg indirectly)
+    // SAFETY: Tests are serialized with `serial_test`, so process-wide env mutation is controlled.
     unsafe {
         env::set_var("CONFIG_FILE", file_path);
     }

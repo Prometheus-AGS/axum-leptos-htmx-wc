@@ -225,7 +225,11 @@ generate_typescript_coverage() {
 
         # Run TypeScript tests with coverage
         export COVERAGE=true
-        bun test --coverage --reporter json > tests/coverage/typescript/test-results.json || log_warning "TypeScript tests may have failed"
+        bun test web/tests \
+            --coverage \
+            --coverage-dir "tests/coverage/typescript" \
+            --coverage-reporter text \
+            --coverage-reporter lcov || log_warning "TypeScript tests may have failed"
     fi
 
     # Generate additional coverage formats if c8 is available
@@ -248,6 +252,17 @@ generate_typescript_coverage() {
 
     log_success "TypeScript coverage report generated"
     log_info "Coverage data available in: $PROJECT_ROOT/tests/coverage/typescript/"
+}
+
+generate_e2e_coverage() {
+    log_section "Generating E2E Coverage Summary"
+
+    if [[ ! -d "$PROJECT_ROOT/tests/coverage/e2e/raw" ]]; then
+        log_warning "No Playwright coverage data found in tests/coverage/e2e/raw"
+        return 0
+    fi
+
+    node "$PROJECT_ROOT/tools/generate-e2e-coverage.mjs" || log_warning "E2E coverage summary generation failed"
 }
 
 # Generate unified report
@@ -516,6 +531,8 @@ main() {
     if [[ "$TYPESCRIPT_COVERAGE" == true ]]; then
         generate_typescript_coverage
     fi
+
+    generate_e2e_coverage
 
     if [[ "$UNIFIED_REPORT" == true ]]; then
         generate_unified_report

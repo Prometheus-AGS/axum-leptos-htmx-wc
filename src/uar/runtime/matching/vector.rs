@@ -42,11 +42,12 @@ pub mod model {
 // We define our backend. NdArray is pure rust CPU.
 // For WebGPU or other backends, this type alias can be changed or made generic.
 type B = NdArray;
+type EmbeddingCache = Vec<(String, Vec<f32>)>;
 
 pub struct VectorMatcher {
     model: Arc<Mutex<Option<model::Model<B>>>>,
     tokenizer: Arc<Mutex<Option<Tokenizer>>>,
-    embeddings: Arc<Mutex<Vec<(String, Vec<f32>)>>>,
+    embeddings: Arc<Mutex<EmbeddingCache>>,
     threshold: f32,
 }
 
@@ -105,7 +106,7 @@ impl VectorMatcher {
             // 1. Tokenize
             let encoding = tokenizer
                 .encode_batch(texts.clone(), true)
-                .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("Tokenization failed: {e}"))?;
 
             let batch_size = texts.len();
             if batch_size == 0 {
@@ -113,7 +114,11 @@ impl VectorMatcher {
             }
 
             // Find max length and pad/truncate to ensure consistent tensor shapes
-            let max_len = encoding.iter().map(|e| e.len()).max().unwrap_or(0);
+            let max_len = encoding
+                .iter()
+                .map(tokenizers::Encoding::len)
+                .max()
+                .unwrap_or(0);
             let seq_len = max_len.min(512); // Cap at reasonable max length
 
             // flatten with padding/truncation
@@ -129,9 +134,9 @@ impl VectorMatcher {
                 // Truncate or pad to seq_len
                 for i in 0..seq_len {
                     if i < ids.len() {
-                        input_ids_vec.push(ids[i] as i32);
-                        mask_vec.push(mask[i] as i32);
-                        type_ids_vec.push(type_ids[i] as i32);
+                        input_ids_vec.push(i32::try_from(ids[i]).unwrap_or_default());
+                        mask_vec.push(i32::try_from(mask[i]).unwrap_or_default());
+                        type_ids_vec.push(i32::try_from(type_ids[i]).unwrap_or_default());
                     } else {
                         // Pad with zeros (standard padding for BERT-style models)
                         input_ids_vec.push(0i32);
@@ -191,8 +196,8 @@ impl VectorMatcher {
 
     fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         let dot_product: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-        let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_a = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_b = b.iter().map(|x| x * x).sum::<f32>().sqrt();
 
         if norm_a == 0.0 || norm_b == 0.0 {
             return 0.0;
@@ -224,15 +229,13 @@ impl SkillMatcher for VectorMatcher {
 
         for (skill_id, emb) in cache.iter() {
             let score = Self::cosine_similarity(&q_emb, emb);
-            if score >= self.threshold {
-                if let Some(skill) = registry.get(skill_id) {
-                    matches.push(SkillMatch {
-                        skill_id: skill_id.clone(),
-                        score,
-                        reason: MatchReason::VectorSimilarity(score),
-                        skill: skill.clone(),
-                    });
-                }
+            if score >= self.threshold && let Some(skill) = registry.get(skill_id) {
+                matches.push(SkillMatch {
+                    skill_id: skill_id.clone(),
+                    score,
+                    reason: MatchReason::VectorSimilarity(score),
+                    skill: skill.clone(),
+                });
             }
         }
         matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());

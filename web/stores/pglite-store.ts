@@ -6,6 +6,7 @@
 
 import { PGlite } from '@electric-sql/pglite';
 import { MIGRATIONS } from './migrations';
+import { debugLog } from '../utils/logging';
 import type {
   Conversation,
   Message,
@@ -21,10 +22,24 @@ import type {
 } from '../types/database';
 import { generateUuid } from '../utils/uuid';
 
+export type PgliteStatus = {
+  status: "idle" | "initializing" | "ready" | "error";
+  error?: string;
+  migrationsApplied: number;
+  migrationsTotal: number;
+  updatedAt: number;
+};
+
 export class PGliteConversationStore {
   private db: PGlite | null = null;
   private sequenceCounter = 0;
   private initPromise: Promise<void> | null = null;
+  private status: PgliteStatus = {
+    status: "idle",
+    migrationsApplied: 0,
+    migrationsTotal: MIGRATIONS.length,
+    updatedAt: Date.now(),
+  };
 
   /**
    * Initialize PGlite database
@@ -35,7 +50,8 @@ export class PGliteConversationStore {
     }
 
     this.initPromise = (async () => {
-      console.log('[PGlite] Initializing database...');
+      this.updateStatus({ status: "initializing", error: undefined });
+      debugLog('[PGlite] Initializing database...');
       
       // Initialize PGlite with IndexedDB persistence
       // The WASM files should be served from /static/ by the Rust server
@@ -47,10 +63,19 @@ export class PGliteConversationStore {
       // Migrate from localStorage if needed
       await this.migrateFromLocalStorage();
       
-      console.log('[PGlite] Database initialized successfully');
+      this.updateStatus({ status: "ready", error: undefined });
+      debugLog('[PGlite] Database initialized successfully');
     })();
 
-    return this.initPromise;
+    try {
+      return await this.initPromise;
+    } catch (error) {
+      this.updateStatus({
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   /**
@@ -73,6 +98,7 @@ export class PGliteConversationStore {
     }
 
     // Now run migrations
+    let appliedTotal = 0;
     for (const migration of MIGRATIONS) {
       try {
         // Check if migration already applied
@@ -82,17 +108,21 @@ export class PGliteConversationStore {
         );
 
         if (result.rows.length === 0) {
-          console.log(`[PGlite] Applying migration ${migration.version}: ${migration.name}`);
+          debugLog(`[PGlite] Applying migration ${migration.version}: ${migration.name}`);
           await this.db.exec(migration.up);
-          console.log(`[PGlite] Migration ${migration.version} applied successfully`);
+          debugLog(`[PGlite] Migration ${migration.version} applied successfully`);
+          appliedTotal += 1;
         } else {
-          console.log(`[PGlite] Migration ${migration.version} already applied, skipping`);
+          debugLog(`[PGlite] Migration ${migration.version} already applied, skipping`);
+          appliedTotal += 1;
         }
       } catch (error) {
         console.error(`[PGlite] Migration ${migration.version} failed:`, error);
         throw error;
       }
     }
+
+    this.updateStatus({ migrationsApplied: appliedTotal });
   }
 
   /**
@@ -101,18 +131,18 @@ export class PGliteConversationStore {
   private async migrateFromLocalStorage(): Promise<void> {
     const migrated = localStorage.getItem('migrated_to_pglite');
     if (migrated) {
-      console.log('[PGlite] Already migrated from localStorage');
+      debugLog('[PGlite] Already migrated from localStorage');
       return;
     }
 
     const oldData = localStorage.getItem('chat_conversations');
     if (!oldData) {
       localStorage.setItem('migrated_to_pglite', 'true');
-      console.log('[PGlite] No localStorage data to migrate');
+      debugLog('[PGlite] No localStorage data to migrate');
       return;
     }
 
-    console.log('[PGlite] Migrating from localStorage...');
+    debugLog('[PGlite] Migrating from localStorage...');
     
     try {
       const conversations = JSON.parse(oldData) as Array<{
@@ -165,7 +195,7 @@ export class PGliteConversationStore {
       localStorage.removeItem('chat_conversations');
       localStorage.setItem('migrated_to_pglite', 'true');
       
-      console.log(`[PGlite] Migrated ${conversations.length} conversations from localStorage`);
+      debugLog(`[PGlite] Migrated ${conversations.length} conversations from localStorage`);
     } catch (error) {
       console.error('[PGlite] Migration from localStorage failed:', error);
       // Don't throw - allow app to continue with empty database
@@ -394,7 +424,7 @@ export class PGliteConversationStore {
       // Commit transaction
       await this.db.exec('COMMIT');
 
-      console.log('[PGlite] Saved conversation turn:', {
+      debugLog('[PGlite] Saved conversation turn:', {
         conversationId,
         thinking: turn.thinkingBlocks.length,
         reasoning: turn.reasoningBlocks.length,
@@ -522,7 +552,7 @@ export class PGliteConversationStore {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.query(`DELETE FROM conversations WHERE id = $1`, [conversationId]);
-    console.log('[PGlite] Deleted conversation:', conversationId);
+    debugLog('[PGlite] Deleted conversation:', conversationId);
   }
 
   /**
@@ -554,7 +584,27 @@ export class PGliteConversationStore {
       DELETE FROM conversations;
     `);
 
-    console.log('[PGlite] Cleared all data');
+    debugLog('[PGlite] Cleared all data');
+  }
+
+  getStatus(): PgliteStatus {
+    return { ...this.status };
+  }
+
+  private updateStatus(update: Partial<PgliteStatus>): void {
+    this.status = {
+      ...this.status,
+      ...update,
+      updatedAt: Date.now(),
+    };
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("pglite-status", {
+          detail: { ...this.status },
+        })
+      );
+    }
   }
 }
 

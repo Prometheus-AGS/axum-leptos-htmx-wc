@@ -300,7 +300,7 @@ impl PersistenceLayer for SurrealDbProvider {
         }
 
         // Query with kb_id filter
-        let kb_ids_vec: Vec<String> = kb_ids.iter().map(|s| s.to_string()).collect();
+        let kb_ids_vec: Vec<String> = kb_ids.iter().copied().map(str::to_string).collect();
         let sql = "SELECT * FROM knowledge_chunks WHERE kb_id IN $kb_ids";
         let mut res = self.db.query(sql).bind(("kb_ids", kb_ids_vec)).await?;
         let chunks: Vec<KnowledgeChunk> = res.take(0)?;
@@ -381,8 +381,8 @@ impl PersistenceLayer for SurrealDbProvider {
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let dot_product: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_a = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b = b.iter().map(|x| x * x).sum::<f32>().sqrt();
 
     if norm_a == 0.0 || norm_b == 0.0 {
         0.0

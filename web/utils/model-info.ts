@@ -4,6 +4,7 @@
  * Fetches and caches model information from models.dev API
  */
 
+import { debugLog } from "./logging";
 export interface ModelInfo {
   name: string;
   limit: {
@@ -62,7 +63,7 @@ class ModelInfoCache {
 
   private async fetchModels(): Promise<void> {
     try {
-      console.log('[model-info] Fetching model data from models.dev...');
+      debugLog('[model-info] Fetching model data from models.dev...');
       const response = await fetch(this.API_URL);
       
       if (!response.ok) {
@@ -92,7 +93,7 @@ class ModelInfoCache {
       }
 
       this.lastFetch = Date.now();
-      console.log(`[model-info] Cached ${modelCount} models from ${Object.keys(data).length} providers`);
+      debugLog(`[model-info] Cached ${modelCount} models from ${Object.keys(data).length} providers`);
     } catch (error) {
       console.error('[model-info] Failed to fetch model data:', error);
       // Don't throw - allow app to continue with estimation

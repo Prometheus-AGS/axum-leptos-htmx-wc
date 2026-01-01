@@ -15,6 +15,7 @@ pub struct SettingsType {
     pub icon_url: Option<String>,
 }
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Settings {

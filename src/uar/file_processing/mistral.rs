@@ -49,7 +49,7 @@ impl FileProcessor for MistralProvider {
             .to_string();
 
         // Build the appropriate data URL based on MIME type
-        let data_url = format!("data:{};base64,{}", mime_type, base64_data);
+        let data_url = format!("data:{mime_type};base64,{base64_data}");
 
         // Determine document type for API
         let (doc_type, doc_value) = if mime_type == "application/pdf" {
@@ -80,8 +80,7 @@ impl FileProcessor for MistralProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(ProcessingError::ProviderError(format!(
-                "Mistral OCR error ({}): {}",
-                status, error_text
+                "Mistral OCR error ({status}): {error_text}"
             )));
         }
 

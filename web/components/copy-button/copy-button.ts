@@ -16,6 +16,7 @@ export class CopyButton extends HTMLElement {
 
   private _target: string = "";
   private _text: string = "";
+  private _handleClick: ((event: Event) => void) | null = null;
 
   get target(): string {
     return this._target;
@@ -37,11 +38,15 @@ export class CopyButton extends HTMLElement {
     this._target = this.getAttribute("target") ?? "";
     this._text = this.getAttribute("text") ?? "";
     this.render();
-    this.addEventListener("click", this.handleClick.bind(this));
+    this._handleClick = this.handleClick.bind(this);
+    this.addEventListener("click", this._handleClick);
   }
 
   disconnectedCallback(): void {
-    this.removeEventListener("click", this.handleClick.bind(this));
+    if (this._handleClick) {
+      this.removeEventListener("click", this._handleClick);
+      this._handleClick = null;
+    }
   }
 
   attributeChangedCallback(

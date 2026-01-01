@@ -112,13 +112,13 @@ export class FileUpload extends HTMLElement {
     this.innerHTML = `
       <div class="file-upload-container relative">
         <!-- File preview area (shows above the input when files are attached) -->
-        <div class="file-preview-area hidden absolute bottom-full left-0 right-0 mb-2 p-3 bg-surface rounded-xl border border-outline/20 shadow-lg max-h-40 overflow-y-auto z-10">
+        <div class="file-preview-area hidden absolute bottom-full left-0 right-0 mb-2 p-3 bg-surfaceContainer rounded-xl shadow-lg max-h-40 overflow-y-auto z-10">
           <div class="file-list flex flex-wrap gap-2"></div>
         </div>
         
         <!-- Drop zone overlay (full-screen when dragging files) -->
         <div class="drop-zone-overlay hidden fixed inset-0 z-50 bg-primary/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div class="bg-surface p-8 rounded-2xl shadow-xl border-2 border-dashed border-primary">
+          <div class="bg-surfaceContainerHighest p-8 rounded-2xl shadow-xl">
             <div class="flex flex-col items-center gap-2">
               <svg class="w-12 h-12 text-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -132,7 +132,7 @@ export class FileUpload extends HTMLElement {
         </div>
         
         <!-- Upload button with attachment icon -->
-        <label class="upload-button shrink-0 h-11 w-11 md:h-12 md:w-12 rounded-xl md:rounded-2xl bg-surface hover:bg-surfaceContainer flex items-center justify-center cursor-pointer transition-all border border-outline/20 relative" title="Attach files">
+        <label class="upload-button shrink-0 h-11 w-11 md:h-12 md:w-12 rounded-xl md:rounded-2xl bg-surfaceContainer hover:bg-surfaceContainerHighest flex items-center justify-center cursor-pointer transition-all relative" title="Attach files">
           <input 
             type="file" 
             multiple 

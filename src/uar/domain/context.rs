@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ContextStrategy {
     /// Keep only the most recent messages that fit within the token budget.
+    #[default]
     SlidingWindow,
     /// Progressively summarize older messages to preserve key information.
     ProgressiveSummarization,
@@ -15,12 +16,6 @@ pub enum ContextStrategy {
     None,
 }
 
-impl Default for ContextStrategy {
-    fn default() -> Self {
-        Self::SlidingWindow
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextConfig {
     /// The strategy to use.
@@ -29,9 +24,9 @@ pub struct ContextConfig {
     /// If None, defaults to model's limit minus a safety buffer.
     pub max_tokens: Option<usize>,
     /// Threshold at which to trigger context management (0.0 - 1.0).
-    /// e.g. 0.9 means trigger when 90% of max_tokens is reached.
+    /// e.g. 0.9 means trigger when 90% of `max_tokens` is reached.
     pub trigger_threshold: f32,
-    /// For SlidingWindow: max messages to keep (optional).
+    /// For `SlidingWindow`: max messages to keep (optional).
     pub max_messages: Option<usize>,
     /// For Summarization: max tokens reserved for the summary.
     pub summary_budget: Option<usize>,
