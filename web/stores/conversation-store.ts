@@ -53,7 +53,10 @@ export class ConversationStore {
         this.conversations = new Map(parsed.map((c) => [c.id, c]));
       }
     } catch (error) {
-      console.error("[ConversationStore] Failed to load from localStorage:", error);
+      console.error(
+        "[ConversationStore] Failed to load from localStorage:",
+        error,
+      );
       this.conversations = new Map();
     }
   }
@@ -66,7 +69,10 @@ export class ConversationStore {
       const data = Array.from(this.conversations.values());
       localStorage.setItem(this.storageKey, JSON.stringify(data));
     } catch (error) {
-      console.error("[ConversationStore] Failed to save to localStorage:", error);
+      console.error(
+        "[ConversationStore] Failed to save to localStorage:",
+        error,
+      );
     }
   }
 
@@ -75,7 +81,7 @@ export class ConversationStore {
    */
   loadAll(): Conversation[] {
     return Array.from(this.conversations.values()).sort(
-      (a, b) => b.updatedAt - a.updatedAt
+      (a, b) => b.updatedAt - a.updatedAt,
     );
   }
 
@@ -112,7 +118,9 @@ export class ConversationStore {
   addMessage(conversationId: string, message: ConversationMessage): void {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
-      console.error(`[ConversationStore] Conversation ${conversationId} not found`);
+      console.error(
+        `[ConversationStore] Conversation ${conversationId} not found`,
+      );
       return;
     }
 
@@ -133,7 +141,9 @@ export class ConversationStore {
   updateTitle(conversationId: string, title: string): void {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
-      console.error(`[ConversationStore] Conversation ${conversationId} not found`);
+      console.error(
+        `[ConversationStore] Conversation ${conversationId} not found`,
+      );
       return;
     }
 
@@ -172,7 +182,9 @@ export class ConversationStore {
 
     const truncated = content.substring(0, maxLength);
     const lastSpace = truncated.lastIndexOf(" ");
-    return lastSpace > 0 ? truncated.substring(0, lastSpace) + "..." : truncated + "...";
+    return lastSpace > 0
+      ? truncated.substring(0, lastSpace) + "..."
+      : truncated + "...";
   }
 
   /**

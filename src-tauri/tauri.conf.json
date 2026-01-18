@@ -33,8 +33,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "../mcp.json"
+    "resources": ["../mcp.json"],
+    "externalBin": [
+      "binaries/mcp-server-filesystem",
+      "binaries/mcp-server-fetch"
     ]
   }
 }

@@ -23,7 +23,9 @@ const INDEX_BODY: &str = r##"
         <main id="app" class="flex-1 overflow-y-auto container mx-auto px-4 md:px-6 py-4 md:py-8 max-w-5xl">
             <div class="flex h-full md:h-[calc(100vh-12rem)]">
                 <!-- Conversation Sidebar -->
-                <conversation-sidebar></conversation-sidebar>
+                <error-boundary>
+                    <conversation-sidebar></conversation-sidebar>
+                </error-boundary>
                 
                 <!-- Main Chat Area -->
                 <div class="chat-shell flex flex-col flex-1 bg-surface md:rounded-3xl overflow-hidden md:shadow-lg" style="margin-left: 288px;">
@@ -75,7 +77,9 @@ const INDEX_BODY: &str = r##"
                     </header>
                     
                     <div class="flex-1 overflow-y-auto overflow-x-hidden">
-                        <chat-stream class="block" stream-url="/stream"></chat-stream>
+                        <error-boundary>
+                            <chat-stream class="block" stream-url="/stream"></chat-stream>
+                        </error-boundary>
                     </div>
                 
                 <div class="p-3 md:p-5 bg-surfaceContainer shrink-0">

@@ -4,7 +4,11 @@
  * Displays the result of a tool execution.
  */
 
-import { escapeHtml, formatJsonForDisplay, createUniqueId } from "../../utils/html";
+import {
+  escapeHtml,
+  formatJsonForDisplay,
+  createUniqueId,
+} from "../../utils/html";
 
 /**
  * Chat Tool Result component for displaying tool execution results.

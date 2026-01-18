@@ -4,7 +4,11 @@
  * Displays a tool call with its arguments.
  */
 
-import { escapeHtml, formatJsonForDisplay, createUniqueId } from "../../utils/html";
+import {
+  escapeHtml,
+  formatJsonForDisplay,
+  createUniqueId,
+} from "../../utils/html";
 
 /**
  * Chat Tool Call component for displaying tool invocations.
@@ -128,10 +132,10 @@ export class ChatToolCall extends HTMLElement {
     }
 
     const statusBadge = resultData
-      ? `<span class="text-xs ${resultData.success ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'} px-2 py-0.5 rounded-full">${resultData.success ? '✓ Success' : '✗ Error'}</span>`
+      ? `<span class="text-xs ${resultData.success ? "bg-success/20 text-success" : "bg-danger/20 text-danger"} px-2 py-0.5 rounded-full">${resultData.success ? "✓ Success" : "✗ Error"}</span>`
       : this._status === "complete"
-      ? '<span class="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">Complete</span>'
-      : '<span class="text-xs bg-warning/20 text-warning px-2 py-0.5 rounded-full animate-pulse">Streaming...</span>';
+        ? '<span class="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">Complete</span>'
+        : '<span class="text-xs bg-warning/20 text-warning px-2 py-0.5 rounded-full animate-pulse">Streaming...</span>';
 
     const chevronIcon = this._isExpanded
       ? '<path d="M18 15l-6-6-6 6"/>' // ChevronUp
@@ -141,7 +145,7 @@ export class ChatToolCall extends HTMLElement {
       <article class="chat-tool-call rounded-xl bg-surfaceContainer overflow-hidden" style="max-width: 800px; width: 100%;">
         <div class="tool-call-header flex items-center justify-between px-4 py-3 bg-surfaceVariant cursor-pointer hover:bg-surfaceContainerHighest transition-colors">
           <div class="flex items-center gap-2 flex-1">
-            <svg class="w-4 h-4 text-textPrimary transition-transform ${this._isExpanded ? 'rotate-0' : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="w-4 h-4 text-textPrimary transition-transform ${this._isExpanded ? "rotate-0" : ""}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               ${chevronIcon}
             </svg>
             <span class="text-primary">🔧</span>
@@ -150,7 +154,7 @@ export class ChatToolCall extends HTMLElement {
           </div>
           ${statusBadge}
         </div>
-        <div class="tool-call-content transition-all duration-300 ease-in-out ${this._isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}">
+        <div class="tool-call-content transition-all duration-300 ease-in-out ${this._isExpanded ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 overflow-hidden"}">
           <div class="p-4 space-y-4 bg-surfaceContainer">
             ${
               this._callId

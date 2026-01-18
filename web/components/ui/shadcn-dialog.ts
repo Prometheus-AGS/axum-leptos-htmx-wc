@@ -1,6 +1,6 @@
 /**
  * shadcn-dialog.ts
- * 
+ *
  * A web component implementation of the shadcn-ui Dialog pattern.
  * Supports:
  * - <shadcn-dialog> (Root)
@@ -100,36 +100,36 @@ export class ShadcnDialog extends HTMLElement {
   isOpen = false;
 
   connectedCallback() {
-    this.addEventListener('shadcn-dialog-trigger-click', this.open);
-    this.addEventListener('shadcn-dialog-close-click', this.close);
-    this.addEventListener('keydown', this.handleKeydown);
+    this.addEventListener("shadcn-dialog-trigger-click", this.open);
+    this.addEventListener("shadcn-dialog-close-click", this.close);
+    this.addEventListener("keydown", this.handleKeydown);
   }
 
   open = () => {
     this.isOpen = true;
     this.updateState();
-    this.dispatchEvent(new CustomEvent('shadcn-dialog-open'));
+    this.dispatchEvent(new CustomEvent("shadcn-dialog-open"));
   };
 
   close = () => {
     this.isOpen = false;
     this.updateState();
-    this.dispatchEvent(new CustomEvent('shadcn-dialog-close'));
+    this.dispatchEvent(new CustomEvent("shadcn-dialog-close"));
   };
 
   private updateState() {
-    const content = this.querySelector('shadcn-dialog-content');
+    const content = this.querySelector("shadcn-dialog-content");
     if (content) {
       if (this.isOpen) {
-        content.setAttribute('open', '');
+        content.setAttribute("open", "");
       } else {
-        content.removeAttribute('open');
+        content.removeAttribute("open");
       }
     }
   }
 
   private handleKeydown = (e: KeyboardEvent) => {
-    if (this.isOpen && e.key === 'Escape') {
+    if (this.isOpen && e.key === "Escape") {
       this.close();
     }
   };
@@ -140,11 +140,13 @@ export class ShadcnDialog extends HTMLElement {
 // ==========================================
 export class ShadcnDialogTrigger extends HTMLElement {
   connectedCallback() {
-    this.addEventListener('click', (e) => {
+    this.addEventListener("click", (e) => {
       e.stopPropagation(); // prevent bubbling to document
-      this.dispatchEvent(new CustomEvent('shadcn-dialog-trigger-click', { bubbles: true }));
+      this.dispatchEvent(
+        new CustomEvent("shadcn-dialog-trigger-click", { bubbles: true }),
+      );
     });
-    this.style.display = 'inline-block';
+    this.style.display = "inline-block";
   }
 }
 
@@ -155,38 +157,43 @@ export class ShadcnDialogContent extends HTMLElement {
   private _shadow: ShadowRoot;
   private _previouslyFocused: Element | null = null;
 
-  static get observedAttributes() { return ['open', 'size']; }
+  static get observedAttributes() {
+    return ["open", "size"];
+  }
 
   constructor() {
     super();
-    this._shadow = this.attachShadow({ mode: 'open' });
+    this._shadow = this.attachShadow({ mode: "open" });
   }
 
   connectedCallback() {
     this.render();
-    this._shadow.querySelector('.overlay')?.addEventListener('click', (e) => {
+    this._shadow.querySelector(".overlay")?.addEventListener("click", (e) => {
       if (e.target === e.currentTarget) {
-        this.dispatchEvent(new CustomEvent('shadcn-dialog-close-click', { bubbles: true }));
+        this.dispatchEvent(
+          new CustomEvent("shadcn-dialog-close-click", { bubbles: true }),
+        );
       }
     });
 
-    this._shadow.querySelector('.close-x')?.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('shadcn-dialog-close-click', { bubbles: true }));
+    this._shadow.querySelector(".close-x")?.addEventListener("click", () => {
+      this.dispatchEvent(
+        new CustomEvent("shadcn-dialog-close-click", { bubbles: true }),
+      );
     });
   }
 
   attributeChangedCallback(name: string, _oldValue: string, newValue: string) {
-
-    if (name === 'open') {
+    if (name === "open") {
       const isOpen = newValue !== null;
-      const overlay = this._shadow.querySelector('.overlay');
+      const overlay = this._shadow.querySelector(".overlay");
       if (overlay) {
-        overlay.setAttribute('data-state', isOpen ? 'open' : 'closed');
+        overlay.setAttribute("data-state", isOpen ? "open" : "closed");
         if (isOpen) {
-            this._previouslyFocused = document.activeElement;
-            this.trapFocus();
+          this._previouslyFocused = document.activeElement;
+          this.trapFocus();
         } else {
-            this.releaseFocus();
+          this.releaseFocus();
         }
       }
     }
@@ -195,15 +202,18 @@ export class ShadcnDialogContent extends HTMLElement {
   private trapFocus() {
     // Wait for transition/render
     requestAnimationFrame(() => {
-        // Let's just focus the first input inside the slot if we can find it, otherwise the close button.
-        // Try to focus the first logical element.
-        (this._shadow.querySelector('.close-x') as HTMLElement)?.focus();
+      // Let's just focus the first input inside the slot if we can find it, otherwise the close button.
+      // Try to focus the first logical element.
+      (this._shadow.querySelector(".close-x") as HTMLElement)?.focus();
     });
   }
 
   private releaseFocus() {
-    if (this._previouslyFocused && (this._previouslyFocused as HTMLElement).focus) {
-        (this._previouslyFocused as HTMLElement).focus();
+    if (
+      this._previouslyFocused &&
+      (this._previouslyFocused as HTMLElement).focus
+    ) {
+      (this._previouslyFocused as HTMLElement).focus();
     }
   }
 
@@ -227,10 +237,10 @@ export class ShadcnDialogContent extends HTMLElement {
 // ==========================================
 export class ShadcnDialogHeader extends HTMLElement {
   connectedCallback() {
-      this.style.display = 'grid';
-      this.style.gap = '8px';
-      this.style.marginBottom = 'var(--sp-4, 16px)';
-      this.style.textAlign = 'left';
+    this.style.display = "grid";
+    this.style.gap = "8px";
+    this.style.marginBottom = "var(--sp-4, 16px)";
+    this.style.textAlign = "left";
   }
 }
 
@@ -239,12 +249,12 @@ export class ShadcnDialogHeader extends HTMLElement {
 // ==========================================
 export class ShadcnDialogTitle extends HTMLElement {
   connectedCallback() {
-      this.style.margin = '0';
-      this.style.fontSize = '1.125rem';
-      this.style.fontWeight = '600';
-      this.style.lineHeight = '1';
-      this.style.color = 'var(--on-surface, #ececec)';
-      this.style.display = 'block';
+    this.style.margin = "0";
+    this.style.fontSize = "1.125rem";
+    this.style.fontWeight = "600";
+    this.style.lineHeight = "1";
+    this.style.color = "var(--on-surface, #ececec)";
+    this.style.display = "block";
   }
 }
 
@@ -253,11 +263,11 @@ export class ShadcnDialogTitle extends HTMLElement {
 // ==========================================
 export class ShadcnDialogDescription extends HTMLElement {
   connectedCallback() {
-      this.style.margin = '0';
-      this.style.fontSize = '0.875rem';
-      this.style.color = 'var(--on-surface-variant, #a1a1aa)';
-      this.style.lineHeight = '1.5';
-      this.style.display = 'block';
+    this.style.margin = "0";
+    this.style.fontSize = "0.875rem";
+    this.style.color = "var(--on-surface-variant, #a1a1aa)";
+    this.style.lineHeight = "1.5";
+    this.style.display = "block";
   }
 }
 
@@ -266,11 +276,11 @@ export class ShadcnDialogDescription extends HTMLElement {
 // ==========================================
 export class ShadcnDialogFooter extends HTMLElement {
   connectedCallback() {
-      this.style.display = 'flex';
-      this.style.flexDirection = 'row';
-      this.style.justifyContent = 'flex-end';
-      this.style.gap = '8px';
-      this.style.marginTop = 'var(--sp-5, 24px)';
+    this.style.display = "flex";
+    this.style.flexDirection = "row";
+    this.style.justifyContent = "flex-end";
+    this.style.gap = "8px";
+    this.style.marginTop = "var(--sp-5, 24px)";
   }
 }
 
@@ -279,22 +289,24 @@ export class ShadcnDialogFooter extends HTMLElement {
 // ==========================================
 export class ShadcnDialogClose extends HTMLElement {
   connectedCallback() {
-    this.addEventListener('click', (e) => {
+    this.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.dispatchEvent(new CustomEvent('shadcn-dialog-close-click', { bubbles: true }));
+      this.dispatchEvent(
+        new CustomEvent("shadcn-dialog-close-click", { bubbles: true }),
+      );
     });
-    this.style.display = 'inline-block';
+    this.style.display = "inline-block";
   }
 }
 
 // ==========================================
 // Registration
 // ==========================================
-customElements.define('shadcn-dialog', ShadcnDialog);
-customElements.define('shadcn-dialog-trigger', ShadcnDialogTrigger);
-customElements.define('shadcn-dialog-content', ShadcnDialogContent);
-customElements.define('shadcn-dialog-header', ShadcnDialogHeader);
-customElements.define('shadcn-dialog-title', ShadcnDialogTitle);
-customElements.define('shadcn-dialog-description', ShadcnDialogDescription);
-customElements.define('shadcn-dialog-footer', ShadcnDialogFooter);
-customElements.define('shadcn-dialog-close', ShadcnDialogClose);
+customElements.define("shadcn-dialog", ShadcnDialog);
+customElements.define("shadcn-dialog-trigger", ShadcnDialogTrigger);
+customElements.define("shadcn-dialog-content", ShadcnDialogContent);
+customElements.define("shadcn-dialog-header", ShadcnDialogHeader);
+customElements.define("shadcn-dialog-title", ShadcnDialogTitle);
+customElements.define("shadcn-dialog-description", ShadcnDialogDescription);
+customElements.define("shadcn-dialog-footer", ShadcnDialogFooter);
+customElements.define("shadcn-dialog-close", ShadcnDialogClose);

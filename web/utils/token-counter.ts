@@ -1,12 +1,12 @@
 /**
  * Token Counter Utility
- * 
+ *
  * Client-side token estimation for various models
  */
 
 /**
  * Estimate tokens for a given text using heuristic approach
- * 
+ *
  * Rough approximation:
  * - GPT models: ~4 characters per token
  * - Claude models: ~3.5 characters per token
@@ -16,15 +16,15 @@ export function estimateTokens(text: string, modelId?: string): number {
   if (!text) return 0;
 
   const charCount = text.length;
-  
+
   // Adjust ratio based on model
   let charsPerToken = 4;
-  
+
   if (modelId) {
     const lowerModel = modelId.toLowerCase();
-    if (lowerModel.includes('claude')) {
+    if (lowerModel.includes("claude")) {
       charsPerToken = 3.5;
-    } else if (lowerModel.includes('gpt')) {
+    } else if (lowerModel.includes("gpt")) {
       charsPerToken = 4;
     }
   }
@@ -40,7 +40,10 @@ export interface Message {
   content: string;
 }
 
-export function estimateConversationTokens(messages: Message[], modelId?: string): number {
+export function estimateConversationTokens(
+  messages: Message[],
+  modelId?: string,
+): number {
   let totalTokens = 0;
 
   // Add base tokens for message formatting (varies by model)
@@ -61,13 +64,16 @@ export function estimateConversationTokens(messages: Message[], modelId?: string
  * Format token count with thousands separator
  */
 export function formatTokenCount(count: number): string {
-  return count.toLocaleString('en-US');
+  return count.toLocaleString("en-US");
 }
 
 /**
  * Calculate percentage of context window used
  */
-export function calculateContextPercentage(used: number, limit: number): number {
+export function calculateContextPercentage(
+  used: number,
+  limit: number,
+): number {
   if (limit === 0) return 0;
   return Math.min(100, (used / limit) * 100);
 }
@@ -76,18 +82,18 @@ export function calculateContextPercentage(used: number, limit: number): number 
  * Get color class based on context usage percentage
  */
 export function getUsageColorClass(percentage: number): string {
-  if (percentage >= 90) return 'text-danger';
-  if (percentage >= 70) return 'text-warning';
-  return 'text-success';
+  if (percentage >= 90) return "text-danger";
+  if (percentage >= 70) return "text-warning";
+  return "text-success";
 }
 
 /**
  * Get background color class for progress bar
  */
 export function getUsageBackgroundClass(percentage: number): string {
-  if (percentage >= 90) return 'bg-danger';
-  if (percentage >= 70) return 'bg-warning';
-  return 'bg-success';
+  if (percentage >= 90) return "bg-danger";
+  if (percentage >= 70) return "bg-warning";
+  return "bg-success";
 }
 
 /**

@@ -1,6 +1,6 @@
 /**
  * Model Information Utility
- * 
+ *
  * Fetches and caches model information from models.dev API
  */
 
@@ -39,7 +39,7 @@ class ModelInfoCache {
   private cache: Map<string, ModelInfo> = new Map();
   private lastFetch: number = 0;
   private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-  private readonly API_URL = '/api/models'; // Proxy through our server to avoid CORS
+  private readonly API_URL = "/api/models"; // Proxy through our server to avoid CORS
   private fetchPromise: Promise<void> | null = null;
 
   async init(): Promise<void> {
@@ -63,39 +63,43 @@ class ModelInfoCache {
 
   private async fetchModels(): Promise<void> {
     try {
-      debugLog('[model-info] Fetching model data from models.dev...');
+      debugLog("[model-info] Fetching model data from models.dev...");
       const response = await fetch(this.API_URL);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.statusText}`);
       }
 
       const data: ModelsDevResponse = await response.json();
-      
+
       // Parse and cache all models
       let modelCount = 0;
       for (const [providerId, provider] of Object.entries(data)) {
         if (provider.models) {
           for (const [modelId, modelInfo] of Object.entries(provider.models)) {
             // Store with full model ID (provider/model)
-            const fullModelId = modelId.includes('/') ? modelId : `${providerId}/${modelId}`;
+            const fullModelId = modelId.includes("/")
+              ? modelId
+              : `${providerId}/${modelId}`;
             this.cache.set(fullModelId, modelInfo);
-            
+
             // Also store without provider prefix for convenience
-            const shortModelId = modelId.split('/').pop() || modelId;
+            const shortModelId = modelId.split("/").pop() || modelId;
             if (!this.cache.has(shortModelId)) {
               this.cache.set(shortModelId, modelInfo);
             }
-            
+
             modelCount++;
           }
         }
       }
 
       this.lastFetch = Date.now();
-      debugLog(`[model-info] Cached ${modelCount} models from ${Object.keys(data).length} providers`);
+      debugLog(
+        `[model-info] Cached ${modelCount} models from ${Object.keys(data).length} providers`,
+      );
     } catch (error) {
-      console.error('[model-info] Failed to fetch model data:', error);
+      console.error("[model-info] Failed to fetch model data:", error);
       // Don't throw - allow app to continue with estimation
     }
   }
@@ -106,7 +110,7 @@ class ModelInfoCache {
     if (info) return info;
 
     // Try without provider prefix
-    const shortId = modelId.split('/').pop();
+    const shortId = modelId.split("/").pop();
     if (shortId) {
       info = this.cache.get(shortId);
       if (info) return info;
@@ -128,7 +132,7 @@ class ModelInfoCache {
     return {
       context: 128000,
       input: 128000,
-      output: 4096
+      output: 4096,
     };
   }
 }
@@ -169,12 +173,16 @@ export function getOutputLimit(modelId: string): number {
 /**
  * Calculate estimated cost for token usage
  */
-export function estimateCost(modelId: string, inputTokens: number, outputTokens: number): number {
+export function estimateCost(
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
   const info = getModelInfo(modelId);
   if (!info?.cost) return 0;
 
   const inputCost = (inputTokens / 1_000_000) * info.cost.input;
   const outputCost = (outputTokens / 1_000_000) * info.cost.output;
-  
+
   return inputCost + outputCost;
 }

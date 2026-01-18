@@ -1,6 +1,6 @@
 /**
  * Token Counter Web Component
- * 
+ *
  * Displays token usage with progress indicator and cost estimate
  */
 
@@ -14,7 +14,14 @@ import {
 
 export class TokenCounter extends HTMLElement {
   static get observedAttributes(): string[] {
-    return ["input-tokens", "output-tokens", "context-limit", "model-id", "cost", "is-estimate"];
+    return [
+      "input-tokens",
+      "output-tokens",
+      "context-limit",
+      "model-id",
+      "cost",
+      "is-estimate",
+    ];
   }
 
   private _inputTokens: number = 0;
@@ -28,13 +35,15 @@ export class TokenCounter extends HTMLElement {
   connectedCallback(): void {
     this.updateFromAttributes();
     this.render();
-    this._handleTokenUpdate = this.handleTokenUpdate.bind(this) as EventListener;
-    window.addEventListener('token-usage-update', this._handleTokenUpdate);
+    this._handleTokenUpdate = this.handleTokenUpdate.bind(
+      this,
+    ) as EventListener;
+    window.addEventListener("token-usage-update", this._handleTokenUpdate);
   }
 
   disconnectedCallback(): void {
     if (this._handleTokenUpdate) {
-      window.removeEventListener('token-usage-update', this._handleTokenUpdate);
+      window.removeEventListener("token-usage-update", this._handleTokenUpdate);
       this._handleTokenUpdate = null;
     }
   }
@@ -46,8 +55,14 @@ export class TokenCounter extends HTMLElement {
 
   private updateFromAttributes(): void {
     this._inputTokens = parseInt(this.getAttribute("input-tokens") || "0", 10);
-    this._outputTokens = parseInt(this.getAttribute("output-tokens") || "0", 10);
-    this._contextLimit = parseInt(this.getAttribute("context-limit") || "128000", 10);
+    this._outputTokens = parseInt(
+      this.getAttribute("output-tokens") || "0",
+      10,
+    );
+    this._contextLimit = parseInt(
+      this.getAttribute("context-limit") || "128000",
+      10,
+    );
     this._modelId = this.getAttribute("model-id") || "";
     this._cost = parseFloat(this.getAttribute("cost") || "0");
     this._isEstimate = this.getAttribute("is-estimate") !== "false";
@@ -55,7 +70,10 @@ export class TokenCounter extends HTMLElement {
 
   private render(): void {
     const totalTokens = this._inputTokens + this._outputTokens;
-    const percentage = calculateContextPercentage(totalTokens, this._contextLimit);
+    const percentage = calculateContextPercentage(
+      totalTokens,
+      this._contextLimit,
+    );
     const colorClass = getUsageColorClass(percentage);
     const bgColorClass = getUsageBackgroundClass(percentage);
     const remaining = Math.max(0, this._contextLimit - totalTokens);
@@ -83,7 +101,9 @@ export class TokenCounter extends HTMLElement {
         </div>
 
         <!-- Cost (if available) -->
-        ${this._cost > 0 ? `
+        ${
+          this._cost > 0
+            ? `
           <div class="flex items-center gap-1 text-textMuted bg-surfaceContainerHighest px-2 py-0.5 rounded-full">
             <svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
@@ -92,7 +112,9 @@ export class TokenCounter extends HTMLElement {
             </svg>
             <span>${formatCost(this._cost)}</span>
           </div>
-        ` : ''}
+        `
+            : ""
+        }
 
         <!-- Tooltip (hidden by default, shown on hover) -->
         <div class="token-tooltip hidden absolute bottom-full right-0 mb-2 px-3 py-2 bg-surfaceContainerHighest rounded-lg shadow-lg text-xs whitespace-nowrap z-50">
@@ -109,12 +131,16 @@ export class TokenCounter extends HTMLElement {
               <span class="text-textMuted">Remaining:</span>
               <span class="text-textPrimary font-medium">${formatTokenCount(remaining)}</span>
             </div>
-            ${this._modelId ? `
+            ${
+              this._modelId
+                ? `
               <div class="flex justify-between gap-4 pt-1">
                 <span class="text-textMuted">Model:</span>
                 <span class="text-textPrimary font-mono text-xs">${this._modelId}</span>
               </div>
-            ` : ''}
+            `
+                : ""
+            }
           </div>
           <!-- Tooltip arrow -->
           <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
@@ -127,7 +153,7 @@ export class TokenCounter extends HTMLElement {
     // Add hover listeners for tooltip
     const container = this.querySelector(".token-counter");
     const tooltip = this.querySelector(".token-tooltip");
-    
+
     if (container && tooltip) {
       container.addEventListener("mouseenter", () => {
         tooltip.classList.remove("hidden");
@@ -169,7 +195,11 @@ export class TokenCounter extends HTMLElement {
   /**
    * Update token counts programmatically
    */
-  updateTokens(inputTokens: number, outputTokens: number, isEstimate: boolean = true): void {
+  updateTokens(
+    inputTokens: number,
+    outputTokens: number,
+    isEstimate: boolean = true,
+  ): void {
     this._inputTokens = inputTokens;
     this._outputTokens = outputTokens;
     this._isEstimate = isEstimate;

@@ -62,29 +62,29 @@ export interface MemoryUpdateEvent {
 export interface ToolCallDeltaEvent {
   type: "tool_call.delta";
   data: {
-    call_index: number;        // Match server field name
+    call_index: number; // Match server field name
     id?: string;
     name?: string;
-    arguments_delta?: string;  // Match server field name
+    arguments_delta?: string; // Match server field name
   };
 }
 
 export interface ToolCallCompleteEvent {
   type: "tool_call.complete";
   data: {
-    call_index: number;        // Match server field name
+    call_index: number; // Match server field name
     id: string;
     name: string;
-    arguments_json: string;    // Match server field name
+    arguments_json: string; // Match server field name
   };
 }
 
 export interface ToolResultEvent {
   type: "tool_result";
   data: {
-    id: string;               // Match server field name (was tool_call_id)
+    id: string; // Match server field name (was tool_call_id)
     name: string;
-    content: string;          // Match server field name (was result)
+    content: string; // Match server field name (was result)
     success: boolean;
   };
 }
@@ -124,7 +124,6 @@ export type NormalizedEvent =
   | UsageEvent
   | ErrorEvent
   | DoneEvent;
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AG-UI Events (primary protocol)

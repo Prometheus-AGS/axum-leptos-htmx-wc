@@ -72,6 +72,7 @@ export class CopyButton extends HTMLElement {
                transition-colors text-xs shadow-sm"
         aria-label="Copy to clipboard"
         title="Copy to clipboard"
+        aria-live="polite"
       >
         <svg class="copy-icon h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -82,6 +83,26 @@ export class CopyButton extends HTMLElement {
         </svg>
       </button>
     `;
+  }
+
+  private showSuccess(): void {
+    const copyIcon = this.querySelector(".copy-icon");
+    const checkIcon = this.querySelector(".check-icon");
+    const button = this.querySelector("button");
+
+    if (copyIcon && checkIcon && button) {
+      copyIcon.classList.add("hidden");
+      checkIcon.classList.remove("hidden");
+      button.classList.add("text-success");
+      button.setAttribute("aria-label", "Copied!");
+
+      setTimeout(() => {
+        copyIcon.classList.remove("hidden");
+        checkIcon.classList.add("hidden");
+        button.classList.remove("text-success");
+        button.setAttribute("aria-label", "Copy to clipboard");
+      }, 2000);
+    }
   }
 
   private async handleClick(event: Event): Promise<void> {
@@ -115,24 +136,6 @@ export class CopyButton extends HTMLElement {
       this.showSuccess();
     } else {
       this.showError();
-    }
-  }
-
-  private showSuccess(): void {
-    const copyIcon = this.querySelector(".copy-icon");
-    const checkIcon = this.querySelector(".check-icon");
-    const button = this.querySelector("button");
-
-    if (copyIcon && checkIcon && button) {
-      copyIcon.classList.add("hidden");
-      checkIcon.classList.remove("hidden");
-      button.classList.add("text-success");
-
-      setTimeout(() => {
-        copyIcon.classList.remove("hidden");
-        checkIcon.classList.add("hidden");
-        button.classList.remove("text-success");
-      }, 2000);
     }
   }
 

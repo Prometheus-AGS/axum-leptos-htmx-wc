@@ -32,6 +32,7 @@ ureq = "3.0.0"
 default = []
 model-build = ["dep:burn-import"]
 sqlx = []
+tauri = []
 
 
 [dependencies]
