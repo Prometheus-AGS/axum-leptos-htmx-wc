@@ -4,7 +4,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 ///
 /// Currently configures:
 /// - `tracing-subscriber::fmt` for structured logging.
-/// - `EnvFilter` for dynamic log levels (RUST_LOG).
+/// - `EnvFilter` for dynamic log levels (`RUST_LOG`).
 ///
 /// Future:
 /// - OpenTelemetry layer for distributed tracing.

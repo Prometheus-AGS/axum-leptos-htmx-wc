@@ -38,6 +38,11 @@ export class ChatStream extends HTMLElement {
     
   private debugMode = false;
   // private sseContainer: HTMLElement | null = null;
+  private logDebug = (...args: unknown[]) => {
+    if (this.debugMode) {
+      console.log(...args);
+    }
+  };
 
   // View state is now in TranscriptView
   private conversationId: string | null = null;
@@ -64,7 +69,7 @@ export class ChatStream extends HTMLElement {
   connectedCallback(): void {
     // 1. Setup DOM structure
     this.innerHTML = `
-      <div id="chat-transcript" class="flex flex-col h-full overflow-y-auto px-4 py-4 space-y-6"></div>
+      <div id="chat-transcript" class="chat-stream-transcript flex flex-col h-full overflow-y-auto px-4 py-4 space-y-6"></div>
       <div id="sse-listener" style="display:none;"></div>
     `;
     
@@ -89,6 +94,7 @@ export class ChatStream extends HTMLElement {
     
     // Check for debug mode active
     this.debugMode = new URLSearchParams(window.location.search).has('debug') || localStorage.getItem('debug') === 'true';
+    this.logDebug("[chat-stream] Debug logging enabled");
   }
 
   disconnectedCallback(): void {
@@ -100,8 +106,6 @@ export class ChatStream extends HTMLElement {
     
     // Clean up HTMX attributes to ensure connection closes
     // Clean up EventSource
-    this.closeStream();
-
     this.closeStream();
 
     if (this._handleConversationChanged) {
@@ -166,7 +170,7 @@ export class ChatStream extends HTMLElement {
        if (!userMessageText) return;
 
        try {
-           console.log("[chat-stream] Auto-generating title...");
+           this.logDebug("[chat-stream] Auto-generating title...");
            const response = await fetch('/api/generate-title', {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
@@ -181,9 +185,9 @@ export class ChatStream extends HTMLElement {
                    window.dispatchEvent(new CustomEvent('conversation-updated', { 
                        detail: { conversationId: this.conversationId } 
                    }));
-                   console.log("[chat-stream] Title updated:", data.title);
-               }
-           }
+           this.logDebug("[chat-stream] Title updated:", data.title);
+       }
+   }
        } catch (err) {
            console.error("[chat-stream] Failed to auto-generate title:", err);
        }
@@ -214,7 +218,7 @@ export class ChatStream extends HTMLElement {
 
     this.prepareNewStreamState();
 
-    console.log("[chat-stream] Connecting to SSE:", url);
+    this.logDebug("[chat-stream] Connecting to SSE:", url);
     this.eventSource = new EventSource(url);
 
     // List of all AG-UI event names
@@ -225,6 +229,7 @@ export class ChatStream extends HTMLElement {
       "agui.reasoning.delta",
       "agui.citation.added",
       "agui.memory.update",
+      "agui.state.patch",
       "agui.tool_call.delta",
       "agui.tool_call.complete",
       "agui.tool_result",
@@ -252,7 +257,7 @@ export class ChatStream extends HTMLElement {
     };
 
     this.eventSource.onopen = () => {
-        console.log("[chat-stream] SSE Connected");
+        this.logDebug("[chat-stream] SSE Connected");
     }
   }
 
@@ -260,7 +265,7 @@ export class ChatStream extends HTMLElement {
       if (this.eventSource) {
           this.eventSource.close();
           this.eventSource = null;
-          console.log("[chat-stream] SSE Closed");
+          this.logDebug("[chat-stream] SSE Closed");
           this.saveTurnForPersistence();
       }
   }
@@ -277,8 +282,8 @@ export class ChatStream extends HTMLElement {
    * Handle incoming SSE Message.
    */
   private handleSseMessage(type: string, rawData: string): void {
-    if (this.debugMode && type !== "agui.message.delta") {
-       console.log("[chat-stream] Received SSE:", type, rawData);
+    if (type !== "agui.message.delta") {
+       this.logDebug("[chat-stream] Received SSE:", type, rawData);
     }
 
     // Manual parsing

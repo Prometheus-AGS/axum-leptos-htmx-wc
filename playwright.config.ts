@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const useDockerApp = process.env.USE_DOCKER_APP === 'true';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -27,10 +29,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'cargo run',
-    url: 'http://127.0.0.1:3001',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  webServer: useDockerApp
+    ? undefined
+    : {
+        command: 'cargo run',
+        url: 'http://127.0.0.1:3001',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000,
+      },
 });

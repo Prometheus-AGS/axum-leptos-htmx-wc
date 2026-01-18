@@ -106,17 +106,12 @@ pub struct KnowledgeDocument {
 }
 
 /// Status of document processing.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum DocumentStatus {
+    #[default]
     Pending,
     Processing,
     Indexed,
     Failed { error: String },
-}
-
-impl Default for DocumentStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
 }

@@ -12,6 +12,12 @@ impl TagMatcher {
     }
 }
 
+impl Default for TagMatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl SkillMatcher for TagMatcher {
     async fn match_skills(&self, query: &str, registry: &SkillRegistry) -> Result<Vec<SkillMatch>> {

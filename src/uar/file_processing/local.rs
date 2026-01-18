@@ -30,6 +30,7 @@ impl LocalProvider {
     }
 
     /// Check if the provider is configured (always true for local).
+    #[allow(clippy::unused_self)]
     pub fn is_configured(&self) -> bool {
         true
     }
@@ -45,8 +46,7 @@ impl FileProcessor for LocalProvider {
         // Check if we support this type
         if !self.supports_mime_type(&mime_type) {
             return Err(ProcessingError::UnsupportedType(format!(
-                "Local provider cannot process {}: use an external provider (Unstructured.io or Mistral OCR)",
-                mime_type
+                "Local provider cannot process {mime_type}: use an external provider (Unstructured.io or Mistral OCR)"
             )));
         }
 
@@ -64,7 +64,7 @@ impl FileProcessor for LocalProvider {
 
         Ok(ProcessingResult {
             content,
-            mime_type: mime_type.to_string(),
+            mime_type,
             metadata: None,
             images: vec![],
         })

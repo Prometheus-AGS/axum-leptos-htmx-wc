@@ -10,11 +10,28 @@ use axum_leptos_htmx_wc::uar::{
     },
     runtime::manager::RunManager,
 };
+use axum_leptos_htmx_wc::uar::domain::skills::{Skill, SkillConstraints, SkillTriggers};
 use dotenvy::dotenv;
 use serde_json::json;
 use serial_test::serial;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+fn llm_tests_enabled() -> bool {
+    matches!(
+        std::env::var("RUN_LLM_TESTS").as_deref(),
+        Ok("1" | "true" | "TRUE" | "yes" | "YES")
+    )
+}
+
+fn require_llm_tests(test_name: &str) -> bool {
+    if llm_tests_enabled() {
+        return true;
+    }
+
+    eprintln!("Skipping {test_name}: set RUN_LLM_TESTS=1 to enable");
+    false
+}
 
 // Helper to construct a REAL Orchestrator from environment
 async fn setup_real_env() -> (Arc<RunManager>, Arc<SessionStore>) {
@@ -47,7 +64,7 @@ async fn setup_real_env() -> (Arc<RunManager>, Arc<SessionStore>) {
             settings,
             mcp,
             sessions.clone(),
-            skills.clone(),
+            Arc::clone(&skills),
             vector_matcher,
             None,
         )
@@ -99,7 +116,7 @@ async fn setup_real_env_with_tools() -> (
             settings,
             mcp,
             sessions.clone(),
-            skills.clone(),
+            Arc::clone(&skills),
             vector_matcher,
             None,
         )
@@ -192,6 +209,10 @@ fn test_m1_serialize_events() {
 #[tokio::test]
 #[serial]
 async fn test_m2_run_lifecycle() {
+    if !require_llm_tests("test_m2_run_lifecycle") {
+        return;
+    }
+
     let (run_manager, sessions) = setup_real_env().await;
 
     // Create a new session
@@ -208,7 +229,7 @@ async fn test_m2_run_lifecycle() {
         )
         .await;
 
-    println!("Started Run ID: {}", run_id);
+    println!("Started Run ID: {run_id}");
 
     // Subscribe to the run stream
     let mut rx = run_manager
@@ -221,8 +242,8 @@ async fn test_m2_run_lifecycle() {
     let mut received_done = false;
 
     while let Ok(evt) = rx.recv().await {
-        println!("Received Event: {:?}", evt);
-        match evt {
+        println!("Received Event: {evt:?}");
+        match evt.event {
             NormalizedEvent::ChatDelta { text_delta, .. } => {
                 if text_delta.contains("Hello") {
                     received_hello = true;
@@ -233,7 +254,7 @@ async fn test_m2_run_lifecycle() {
                 break;
             }
             NormalizedEvent::Error { message, .. } => {
-                panic!("Received error from LLM: {}", message);
+                panic!("Received error from LLM: {message}");
             }
             _ => {}
         }
@@ -256,6 +277,10 @@ async fn test_m2_run_lifecycle() {
 #[tokio::test]
 #[serial]
 async fn test_m3_api_flow() {
+    if !require_llm_tests("test_m3_api_flow") {
+        return;
+    }
+
     // This test simulates the API layer logic: Start -> Stream -> Done
     let (run_manager, sessions) = setup_real_env().await;
 
@@ -280,7 +305,7 @@ async fn test_m3_api_flow() {
     let mut content_buffer = String::new();
 
     while let Ok(evt) = rx.recv().await {
-        match evt {
+        match evt.event {
             NormalizedEvent::ChatDelta { text_delta, .. } => {
                 content_buffer.push_str(&text_delta);
             }
@@ -289,12 +314,16 @@ async fn test_m3_api_flow() {
         }
     }
 
-    assert!(content_buffer.contains("4"), "LLM should answer 4");
+    assert!(content_buffer.contains('4'), "LLM should answer 4");
 }
 
 #[tokio::test]
 #[serial]
 async fn test_m4_tool_execution() {
+    if !require_llm_tests("test_m4_tool_execution") {
+        return;
+    }
+
     // This test verifies the full tool execution loop mapping.
     // We use a dummy "mirror" tool inside McpRegistry.
 
@@ -353,18 +382,18 @@ async fn test_m4_tool_execution() {
 
     loop {
         tokio::select! {
-            _ = &mut timeout => break,
+            () = &mut timeout => break,
             Ok(event) = rx.recv() => {
-                match event {
+                match event.event {
                     NormalizedEvent::RunStart { .. } => received_start = true,
                     NormalizedEvent::ToolStart { tool, .. } => {
-                        println!("Tool Start: {}", tool);
+                        println!("Tool Start: {tool}");
                         if tool.contains("mirror") {
                             received_tool_start = true;
                         }
                     }
                     NormalizedEvent::ToolEnd { ok, output, .. } => {
-                        println!("Tool End: OK={} Output={:?}", ok, output);
+                        println!("Tool End: OK={ok} Output={output:?}");
                         if ok {
                             received_tool_end = true;
                         }
@@ -388,7 +417,9 @@ async fn test_m4_tool_execution() {
 #[tokio::test]
 #[serial]
 async fn test_m6_skills_execution() {
-    use axum_leptos_htmx_wc::uar::domain::skills::{Skill, SkillConstraints, SkillTriggers};
+    if !require_llm_tests("test_m6_skills_execution") {
+        return;
+    }
 
     // 1. Setup Environment
     let (run_manager, sessions, skills) = setup_real_env_with_tools().await;
@@ -421,8 +452,8 @@ async fn test_m6_skills_execution() {
     // 3. Define Agent
     let artifact_json = json!({
         "id": "agent-skills-test",
-        "created": 1234567890,
-        "updated": 1234567890,
+        "created": 1_234_567_890,
+        "updated": 1_234_567_890,
         "name": "Skills Test Agent",
         "version": "1.0",
         "kind": "agent",
@@ -491,18 +522,18 @@ async fn test_m6_skills_execution() {
 
     loop {
         tokio::select! {
-            _ = &mut timeout => break,
+            () = &mut timeout => break,
             Ok(event) = rx.recv() => {
-                match event {
+                match event.event {
                     NormalizedEvent::RunStart { .. } => received_start = true,
                     NormalizedEvent::ToolStart { tool, .. } => {
-                        println!("Tool Start: {}", tool);
+                        println!("Tool Start: {tool}");
                         if tool.contains("mirror") {
                             received_tool_start = true;
                         }
                     }
                     NormalizedEvent::ToolEnd { ok, output, .. } => {
-                        println!("Tool End: {}", output);
+                        println!("Tool End: {output}");
                         if ok && output.to_string().contains("SKILL_WORKED") {
                             received_tool_end = true;
                         }
@@ -546,8 +577,7 @@ async fn test_verify_legacy_mcp_tools() {
         Ok(m) => Arc::new(m),
         Err(e) => {
             println!(
-                "Skipping test: Failed to load mcp.json (possibly missing npx or network?): {:?}",
-                e
+                "Skipping test: Failed to load mcp.json (possibly missing npx or network?): {e:?}"
             );
             return;
         }
@@ -567,7 +597,7 @@ async fn test_verify_legacy_mcp_tools() {
     let time_tool = tools.iter().find(|(name, _)| name.starts_with("time__"));
 
     if let Some((name, _)) = time_tool {
-        println!("Found time tool: {}", name);
+        println!("Found time tool: {name}");
 
         // 3. Try to Execute it directly via Registry (bypass full Orchestrator loop for this specific check)
         // We just want to ensure the MCP setup "we had before" is functional in this codebase.
@@ -576,15 +606,14 @@ async fn test_verify_legacy_mcp_tools() {
 
         match mcp.call_namespaced_tool(name, args).await {
             Ok(res) => {
-                println!("Time tool execution result: {:?}", res);
+                println!("Time tool execution result: {res:?}");
                 // Basic validation: result should probably be a string or object containing time info
             }
             Err(e) => {
                 // If it fails due to missing args, that is also a sign of "functionality" (i.e. we reached the tool).
                 // But ideally it succeeds.
                 println!(
-                    "Executed legacy time tool '{}' but got error (which implies connectivity): {:?}",
-                    name, e
+                    "Executed legacy time tool '{name}' but got error (which implies connectivity): {e:?}"
                 );
             }
         }
@@ -598,6 +627,10 @@ async fn test_verify_legacy_mcp_tools() {
 #[tokio::test]
 #[serial]
 async fn test_verify_filesystem_skills() {
+    if !require_llm_tests("test_verify_filesystem_skills") {
+        return;
+    }
+
     let _ = dotenv();
     let (_, _, skills) = setup_real_env_with_tools().await;
 
@@ -680,7 +713,7 @@ You are a database expert.
     .await
     .unwrap();
 
-    println!("Vector matches: {:?}", matches);
+    println!("Vector matches: {matches:?}");
 
     // Depending on the embedding quality (bg-small), this should match.
     // We differentiate from Tag match which would fail.
@@ -694,7 +727,7 @@ You are a database expert.
     .await
     .unwrap();
 
-    println!("Tag matches: {:?}", tag_matches);
+    println!("Tag matches: {tag_matches:?}");
     assert!(
         tag_matches.is_empty(),
         "Tag matcher should NOT match implicit query"

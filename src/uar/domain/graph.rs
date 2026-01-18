@@ -1,4 +1,4 @@
-//! GraphRAG Domain Models
+//! `GraphRAG` Domain Models
 //!
 //! Entity, relationship, community, and citation structures for
 //! knowledge graph-enhanced retrieval.
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 // =============================================================================
 
 /// Types of entities that can be extracted from documents.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityType {
     /// A person or individual
@@ -22,6 +22,7 @@ pub enum EntityType {
     /// An event or occurrence
     Event,
     /// A technical or abstract concept
+    #[default]
     Concept,
     /// A product, technology, or artifact
     Product,
@@ -33,17 +34,12 @@ pub enum EntityType {
     Custom(String),
 }
 
-impl Default for EntityType {
-    fn default() -> Self {
-        Self::Concept
-    }
-}
-
 // =============================================================================
 // Entity
 // =============================================================================
 
 /// An entity extracted from document content.
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entity {
     /// Unique identifier
@@ -75,7 +71,7 @@ pub struct Relationship {
     pub source_id: String,
     /// Target entity ID
     pub target_id: String,
-    /// Relationship type (e.g., "works_at", "mentions", "depends_on")
+    /// Relationship type (e.g., "`works_at`", "mentions", "`depends_on`")
     pub relation_type: String,
     /// Confidence/weight of the relationship (0.0 - 1.0)
     pub weight: f32,
@@ -134,7 +130,7 @@ pub struct Citation {
 // =============================================================================
 
 /// Full context assembled for RAG query processing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RAGContext {
     /// Retrieved chunks
     pub chunks: Vec<crate::uar::domain::knowledge::KnowledgeChunk>,
@@ -148,36 +144,15 @@ pub struct RAGContext {
     pub community_summaries: Vec<String>,
 }
 
-impl Default for RAGContext {
-    fn default() -> Self {
-        Self {
-            chunks: Vec::new(),
-            citations: Vec::new(),
-            entities: Vec::new(),
-            relationships: Vec::new(),
-            community_summaries: Vec::new(),
-        }
-    }
-}
-
 // =============================================================================
 // Extraction Result
 // =============================================================================
 
 /// Result of entity/relationship extraction from a chunk.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExtractionResult {
     /// Extracted entities
     pub entities: Vec<Entity>,
     /// Extracted relationships
     pub relationships: Vec<Relationship>,
-}
-
-impl Default for ExtractionResult {
-    fn default() -> Self {
-        Self {
-            entities: Vec::new(),
-            relationships: Vec::new(),
-        }
-    }
 }

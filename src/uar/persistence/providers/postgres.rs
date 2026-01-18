@@ -41,13 +41,13 @@ impl PersistenceLayer for PostgresProvider {
         let data = serde_json::to_value(session)?;
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO sessions (id, data, created_at, updated_at)
             VALUES ($1, $2, NOW(), NOW())
             ON CONFLICT (id) DO UPDATE SET
                 data = EXCLUDED.data,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(id)
         .bind(data)
@@ -77,7 +77,7 @@ impl PersistenceLayer for PostgresProvider {
         let definition = serde_json::to_value(skill)?;
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO skills (skill_id, name, description, definition, embedding, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             ON CONFLICT (skill_id) DO UPDATE SET
@@ -86,7 +86,7 @@ impl PersistenceLayer for PostgresProvider {
                 definition = EXCLUDED.definition,
                 embedding = EXCLUDED.embedding,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(&skill.skill_id)
         .bind(&skill.title)
@@ -100,15 +100,16 @@ impl PersistenceLayer for PostgresProvider {
 
     async fn search_skills(&self, query_vec: &[f32], limit: usize) -> Result<Vec<SkillMatch>> {
         let embedding_vector = Vector::from(query_vec.to_vec());
-        let limit_i64 = limit as i64;
+        let limit_i64 = i64::try_from(limit)
+            .map_err(|err| anyhow::anyhow!("limit exceeds i64: {err}"))?;
 
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT definition, 1 - (embedding <=> $1) as score
             FROM skills
             ORDER BY embedding <=> $1
             LIMIT $2
-            "#,
+            ",
         )
         .bind(embedding_vector) // bind $1
         .bind(limit_i64)
@@ -136,7 +137,7 @@ impl PersistenceLayer for PostgresProvider {
         let config = serde_json::to_value(&kb.config)?;
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO knowledge_bases (id, name, description, config, created_at, updated_at)
             VALUES ($1, $2, $3, $4, NOW(), NOW())
             ON CONFLICT (id) DO UPDATE SET
@@ -144,7 +145,7 @@ impl PersistenceLayer for PostgresProvider {
                 description = EXCLUDED.description,
                 config = EXCLUDED.config,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(&kb.id)
         .bind(&kb.name)
@@ -160,14 +161,14 @@ impl PersistenceLayer for PostgresProvider {
         let metadata = serde_json::to_value(&chunk.metadata)?;
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO knowledge_chunks (id, kb_id, content, metadata, embedding, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 content = EXCLUDED.content,
                 metadata = EXCLUDED.metadata,
                 embedding = EXCLUDED.embedding
-            "#,
+            ",
         )
         .bind(chunk.id)
         .bind(&chunk.kb_id)
@@ -186,17 +187,18 @@ impl PersistenceLayer for PostgresProvider {
         min_score: f32,
     ) -> Result<Vec<KnowledgeMatch>> {
         let embedding_vector = Vector::from(query_vec.to_vec());
-        let limit_i64 = limit as i64;
-        let min_score_f64 = min_score as f64;
+        let limit_i64 = i64::try_from(limit)
+            .map_err(|err| anyhow::anyhow!("limit exceeds i64: {err}"))?;
+        let min_score_f64 = f64::from(min_score);
 
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT id, kb_id, content, metadata, created_at, 1 - (embedding <=> $1) as score
             FROM knowledge_chunks
             WHERE 1 - (embedding <=> $1) >= $3
             ORDER BY embedding <=> $1
             LIMIT $2
-            "#,
+            ",
         )
         .bind(embedding_vector) // $1
         .bind(limit_i64) // $2
@@ -249,7 +251,7 @@ impl PersistenceLayer for PostgresProvider {
         let definition = serde_json::to_value(agent)?;
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO agents (id, name, version, definition, created_at, updated_at)
             VALUES ($1, $2, $3, $4, NOW(), NOW())
             ON CONFLICT (id) DO UPDATE SET
@@ -257,7 +259,7 @@ impl PersistenceLayer for PostgresProvider {
                 version = EXCLUDED.version,
                 definition = EXCLUDED.definition,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(&agent.id)
         .bind(&agent.metadata.title) // Use title as name? Or name field? Artifact has no top-level name?
@@ -327,7 +329,7 @@ impl PersistenceLayer for PostgresProvider {
         let embedding_vector = Vector::from(memory.embedding.clone());
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO memories (id, agent_id, content, tags, embedding, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
             ON CONFLICT (id) DO UPDATE SET
@@ -335,7 +337,7 @@ impl PersistenceLayer for PostgresProvider {
                 content = EXCLUDED.content,
                 tags = EXCLUDED.tags,
                 embedding = EXCLUDED.embedding
-            "#,
+            ",
         )
         .bind(&memory.id)
         .bind(&memory.agent_id)
@@ -355,21 +357,22 @@ impl PersistenceLayer for PostgresProvider {
         min_score: f32,
     ) -> Result<Vec<crate::uar::domain::memory::MemoryMatch>> {
         let embedding_vector = Vector::from(query_vec.to_vec());
-        let limit_i64 = limit as i64;
-        let min_score_f64 = min_score as f64;
+        let limit_i64 = i64::try_from(limit)
+            .map_err(|err| anyhow::anyhow!("limit exceeds i64: {err}"))?;
+        let min_score_f64 = f64::from(min_score);
 
         // Condition: (agent_id = $1 OR agent_id IS NULL)
         // If $1 is NULL, it matches Global only.
         // If $1 is 'A', it matches 'A' and Global.
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT id, agent_id, content, tags, created_at, 1 - (embedding <=> $2) as score
             FROM memories
             WHERE (agent_id = $1 OR agent_id IS NULL)
               AND 1 - (embedding <=> $2) >= $3
             ORDER BY embedding <=> $2
             LIMIT $4
-            "#,
+            ",
         )
         .bind(agent_id) // $1
         .bind(embedding_vector) // $2
@@ -525,18 +528,19 @@ impl PersistenceLayer for PostgresProvider {
         }
 
         let embedding_vector = Vector::from(query_vec.to_vec());
-        let limit_i64 = limit as i64;
-        let min_score_f64 = min_score as f64;
-        let kb_ids_vec: Vec<String> = kb_ids.iter().map(|s| s.to_string()).collect();
+        let limit_i64 = i64::try_from(limit)
+            .map_err(|err| anyhow::anyhow!("limit exceeds i64: {err}"))?;
+        let min_score_f64 = f64::from(min_score);
+        let kb_ids_vec: Vec<String> = kb_ids.iter().copied().map(str::to_string).collect();
 
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT id, kb_id, document_id, content, metadata, created_at, 1 - (embedding <=> $1) as score
             FROM knowledge_chunks
             WHERE kb_id = ANY($4) AND 1 - (embedding <=> $1) >= $3
             ORDER BY embedding <=> $1
             LIMIT $2
-            "#,
+            ",
         )
         .bind(embedding_vector)
         .bind(limit_i64)
@@ -591,7 +595,7 @@ impl PersistenceLayer for PostgresProvider {
         };
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO knowledge_documents (id, kb_id, filename, file_path, mime_type, chunk_count, status, error_message, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
             ON CONFLICT (id) DO UPDATE SET
@@ -602,14 +606,17 @@ impl PersistenceLayer for PostgresProvider {
                 status = EXCLUDED.status,
                 error_message = EXCLUDED.error_message,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(&doc.id)
         .bind(&doc.kb_id)
         .bind(&doc.filename)
         .bind(&doc.file_path)
         .bind(&doc.mime_type)
-        .bind(doc.chunk_count as i32)
+        .bind(
+            i32::try_from(doc.chunk_count)
+                .map_err(|err| anyhow::anyhow!("chunk_count exceeds i32: {err}"))?,
+        )
         .bind(status_str)
         .bind(error_msg)
         .execute(&self.pool)
@@ -652,7 +659,9 @@ impl PersistenceLayer for PostgresProvider {
                 filename,
                 file_path,
                 mime_type: Some(mime_type),
-                chunk_count: chunk_count as usize,
+                chunk_count: usize::try_from(chunk_count).map_err(|err| {
+                    anyhow::anyhow!("chunk_count must be non-negative: {err}")
+                })?,
                 status,
                 created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
                 updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
@@ -698,7 +707,9 @@ impl PersistenceLayer for PostgresProvider {
                 filename,
                 file_path,
                 mime_type: Some(mime_type),
-                chunk_count: chunk_count as usize,
+                chunk_count: usize::try_from(chunk_count).map_err(|err| {
+                    anyhow::anyhow!("chunk_count must be non-negative: {err}")
+                })?,
                 status,
                 created_at: created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
                 updated_at: updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),

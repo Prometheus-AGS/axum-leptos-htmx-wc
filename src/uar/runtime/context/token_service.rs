@@ -5,7 +5,7 @@ use tiktoken_rs::cl100k_base;
 pub struct TokenService;
 
 impl TokenService {
-    /// Estimate tokens for a string using cl100k_base (GPT-4/3.5 standard).
+    /// Estimate tokens for a string using `cl100k_base` (GPT-4/3.5 standard).
     pub fn estimate_string(content: &str) -> usize {
         // Fallback to cl100k_base if model generic
         let bpe = cl100k_base().unwrap();
@@ -13,7 +13,7 @@ impl TokenService {
     }
 
     /// Estimate tokens for a list of messages.
-    /// This follows OpenAI's chat format rules roughly (overhead per message).
+    /// This follows `OpenAI`'s chat format rules roughly (overhead per message).
     pub fn estimate_messages(messages: &[Message]) -> usize {
         let bpe = cl100k_base().unwrap();
         let mut num_tokens = 0;

@@ -237,12 +237,52 @@ knowledge_bases:
   #       strategy: "semantic"
   #       semantic_threshold: 0.75
   #
-  #   code-examples:
-  #     name: "code-examples"
-  #     description: "Code samples and snippets"
-  #     embedding_provider: "fastembed"
-  #     embedding_model: "BAAI/bge-small-en-v1.5"
-  #     file_processor: "kreuzberg"
-  #     chunking:
-  #       strategy: "token"
-  #       chunk_size: 256
+#   code-examples:
+#     name: "code-examples"
+#     description: "Code samples and snippets"
+#     embedding_provider: "fastembed"
+#     embedding_model: "BAAI/bge-small-en-v1.5"
+#     file_processor: "kreuzberg"
+#     chunking:
+#       strategy: "token"
+#       chunk_size: 256
+
+# =============================================================================
+# INTENT CLASSIFICATION (Skill Matching)
+# =============================================================================
+
+intent_classifier:
+  # Classification backend to use for skill matching.
+  # Options:
+  #   - "rules": Keyword/tag matching only (fast, high precision, low recall)
+  #   - "tfidf": TF-IDF based matching (pure Rust, no external deps, good balance)
+  #   - "hybrid": Rules first, then TF-IDF for remaining (recommended)
+  #   - "wasm": WASM component for custom classifiers (future)
+  # Default: "tfidf"
+  # Env: UAR_INTENT_CLASSIFIER__BACKEND
+  backend: "tfidf"
+
+  # Number of top skill candidates to consider.
+  # Higher values increase recall but may reduce precision.
+  # Default: 5
+  # Env: UAR_INTENT_CLASSIFIER__TOPK
+  topk: 5
+
+  # Minimum score threshold to accept a classification.
+  # Skills below this threshold may trigger fallback/clarification.
+  # Range: 0.0 to 1.0
+  # Default: 0.5
+  # Env: UAR_INTENT_CLASSIFIER__ACCEPT_THRESHOLD
+  accept_threshold: 0.5
+
+  # Minimum margin between top-1 and top-2 scores for confident selection.
+  # If margin is too small, the query may be ambiguous.
+  # Range: 0.0 to 1.0
+  # Default: 0.05
+  # Env: UAR_INTENT_CLASSIFIER__MARGIN_THRESHOLD
+  margin_threshold: 0.05
+
+  # Path to WASM classifier component (only used when backend = "wasm").
+  # The component must implement the intent:classifier WIT interface.
+  # Env: UAR_INTENT_CLASSIFIER__WASM_COMPONENT_PATH
+  # wasm_component_path: "/path/to/classifier.wasm"

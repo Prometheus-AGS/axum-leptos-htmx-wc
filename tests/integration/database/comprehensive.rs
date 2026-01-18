@@ -1,9 +1,11 @@
+#![allow(dead_code, clippy::pedantic)]
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error};
+use tracing::info;
 
 /// Comprehensive database certification suite
 #[derive(Debug, Clone)]
@@ -274,7 +276,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test PostgreSQL database operations
-    async fn test_postgres_operations(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_postgres_operations(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         // Connection test
@@ -302,7 +304,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test PostgreSQL connection
-    async fn test_postgres_connection(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_postgres_connection(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
         let connection_start = Instant::now();
 
@@ -571,7 +573,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test PostgreSQL performance operations
-    async fn test_postgres_performance(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_postgres_performance(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         // Index performance test
@@ -697,7 +699,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test SurrealDB database operations
-    async fn test_surreal_operations(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_surreal_operations(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         // Connection test
@@ -719,7 +721,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test SurrealDB connection
-    async fn test_surreal_connection(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_surreal_connection(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
 
         // Simulate SurrealDB connection
@@ -880,7 +882,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test Redis database operations
-    async fn test_redis_operations(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_redis_operations(&self) -> Result<Vec<DatabaseTestResult>, Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
 
         // Connection test
@@ -905,7 +907,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test Redis connection
-    async fn test_redis_connection(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_redis_connection(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
 
         // Simulate Redis connection and PING
@@ -1108,7 +1110,7 @@ impl DatabaseCertificationSuite {
     }
 
     /// Test Redis performance
-    async fn test_redis_performance(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn test_redis_performance(&self) -> Result<DatabaseTestResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = Instant::now();
 
         // Simulate high-throughput operations

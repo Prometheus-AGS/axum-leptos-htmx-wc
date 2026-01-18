@@ -12,7 +12,8 @@
       "Bash(cargo test:*)",
       "Bash(npx playwright test)",
       "mcp__mcp-filesystem__directory_tree",
-      "mcp__mcp-filesystem__read_file_lines"
+      "mcp__mcp-filesystem__read_file_lines",
+      "Bash(cat:*)"
     ]
   }
 }

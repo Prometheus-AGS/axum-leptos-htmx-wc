@@ -26,6 +26,7 @@ impl ContextManager {
             .config
             .max_tokens
             .unwrap_or(model_token_limit.saturating_sub(1000));
+        #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
         let threshold = (effective_max as f32 * self.config.trigger_threshold) as usize;
 
         if current_tokens <= threshold {
@@ -128,9 +129,9 @@ impl ContextManager {
         let mut budget = token_budget;
 
         // Keep all system messages
-        let mut msg_iter = messages.iter().enumerate();
+        let msg_iter = messages.iter().enumerate();
 
-        while let Some((_idx, msg)) = msg_iter.next() {
+        for (_idx, msg) in msg_iter {
             if msg.role == MessageRole::System {
                 let t = TokenService::estimate_string(msg.content.as_text().unwrap_or("")) + 3;
                 if t < budget {
@@ -230,7 +231,7 @@ mod tests {
         let mut messages = Vec::new();
         messages.push(make_msg("System Prompt", MessageRole::System)); // ~4 tokens
         for i in 0..10 {
-            messages.push(make_msg(&format!("Message {}", i), MessageRole::User)); // ~4 tokens each
+            messages.push(make_msg(&format!("Message {i}"), MessageRole::User)); // ~4 tokens each
         }
         // Total ~ 4 + 40 = 44 tokens roughly.
         // Wait, "Message X" is small.
@@ -241,7 +242,7 @@ mod tests {
         // If max_tokens=100, threshold=50.
         // If we duplicate messages to exceed 50.
         for i in 10..50 {
-            messages.push(make_msg(&format!("Message {}", i), MessageRole::User));
+            messages.push(make_msg(&format!("Message {i}"), MessageRole::User));
         }
         // Now we have 50 user messages + 1 system.
 
@@ -259,7 +260,7 @@ mod tests {
         // Ensure we are under budget (100 tokens + buffer logic?)
         // apply() uses effective_max = config.max_tokens (100).
         let final_tokens = TokenService::estimate_messages(&optimized);
-        assert!(final_tokens <= 100, "Tokens {} > 100", final_tokens);
+        assert!(final_tokens <= 100, "Tokens {final_tokens} > 100");
     }
 
     #[tokio::test]

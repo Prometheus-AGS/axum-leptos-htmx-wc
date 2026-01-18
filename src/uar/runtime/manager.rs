@@ -4,21 +4,71 @@ use crate::session::SessionStore;
 use crate::uar::domain::{
     artifact::AgentArtifact,
     context::ContextConfig,
-    events::NormalizedEvent,
+    events::{NormalizedEvent, StatePatchOp},
     runs::{Run, RunStatus},
 };
 use crate::uar::runtime::context::manager::ContextManager;
+use crate::uar::runtime::matching::{ClassifierConfig, IntentClassifier, create_classifier};
 use crate::uar::runtime::skills::SkillRegistry;
 use futures::StreamExt;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{RwLock, broadcast};
-use uuid::Uuid;
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Write,
+    sync::Arc,
+};
+use tokio::sync::{Mutex, RwLock, broadcast};
 use tracing::instrument;
+use uuid::Uuid;
+
+const EVENT_HISTORY_LIMIT: usize = 512;
 
 #[derive(Clone, Debug)]
+pub struct StreamEvent {
+    pub id: u64,
+    pub event: NormalizedEvent,
+}
+
+#[derive(Debug)]
+struct EventHistory {
+    next_id: u64,
+    buffer: VecDeque<StreamEvent>,
+}
+
+#[derive(Debug)]
+struct RunStreamState {
+    run: Run,
+    sender: broadcast::Sender<StreamEvent>,
+    history: Arc<Mutex<EventHistory>>,
+}
+
+#[derive(Clone, Debug)]
+struct RunEventEmitter {
+    sender: broadcast::Sender<StreamEvent>,
+    history: Arc<Mutex<EventHistory>>,
+}
+
+impl RunEventEmitter {
+    async fn emit(&self, event: NormalizedEvent) {
+        let mut history = self.history.lock().await;
+        let id = history.next_id;
+        history.next_id = history.next_id.saturating_add(1);
+
+        let stream_event = StreamEvent { id, event };
+        history.buffer.push_back(stream_event.clone());
+        if history.buffer.len() > EVENT_HISTORY_LIMIT {
+            history.buffer.pop_front();
+        }
+
+        let _ = self.sender.send(stream_event);
+    }
+}
+
+type ActiveRunMap = HashMap<String, RunStreamState>;
+
+#[derive(Clone)]
 pub struct RunManager {
     // Map run_id -> (Run metadata, broadcast sender)
-    active_runs: Arc<RwLock<HashMap<String, (Run, broadcast::Sender<NormalizedEvent>)>>>,
+    active_runs: Arc<RwLock<ActiveRunMap>>,
     settings: LlmSettings,
     global_mcp: Arc<McpRegistry>,
     sessions: SessionStore,
@@ -26,8 +76,22 @@ pub struct RunManager {
     vector_matcher: Arc<crate::uar::runtime::matching::VectorMatcher>,
     tag_matcher: Arc<crate::uar::runtime::matching::TagMatcher>,
     context_manager: Arc<ContextManager>,
+    /// Intent classifier for skill matching
+    intent_classifier: Arc<dyn IntentClassifier>,
+    /// Classifier configuration
+    classifier_config: ClassifierConfig,
     // Persistence layer (optional)
     pub persistence: Option<Arc<dyn crate::uar::persistence::PersistenceLayer>>,
+}
+
+impl std::fmt::Debug for RunManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunManager")
+            .field("active_runs_count", &"<locked>")
+            .field("settings", &self.settings)
+            .field("classifier_config", &self.classifier_config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl RunManager {
@@ -39,6 +103,28 @@ impl RunManager {
         vector_matcher: Arc<crate::uar::runtime::matching::VectorMatcher>,
         persistence: Option<Arc<dyn crate::uar::persistence::PersistenceLayer>>,
     ) -> Self {
+        Self::with_classifier_config(
+            settings,
+            global_mcp,
+            sessions,
+            skills,
+            vector_matcher,
+            persistence,
+            ClassifierConfig::default(),
+        )
+        .await
+    }
+
+    /// Creates a new RunManager with a custom classifier configuration.
+    pub async fn with_classifier_config(
+        settings: LlmSettings,
+        global_mcp: Arc<McpRegistry>,
+        sessions: SessionStore,
+        skills: Arc<RwLock<SkillRegistry>>,
+        vector_matcher: Arc<crate::uar::runtime::matching::VectorMatcher>,
+        persistence: Option<Arc<dyn crate::uar::persistence::PersistenceLayer>>,
+        classifier_config: ClassifierConfig,
+    ) -> Self {
         // Initialize vector matcher if not already (caller should ideally do this)
         if let Err(e) = vector_matcher.initialize().await {
             tracing::error!("Failed to initialize VectorMatcher: {:?}", e);
@@ -46,6 +132,25 @@ impl RunManager {
 
         let tag_matcher = Arc::new(crate::uar::runtime::matching::TagMatcher::new());
         let context_manager = Arc::new(ContextManager::new(ContextConfig::default()));
+
+        // Create intent classifier based on config
+        let intent_classifier: Arc<dyn IntentClassifier> =
+            Arc::from(create_classifier(&classifier_config));
+
+        // Build the classifier index from existing skills
+        {
+            let skills_registry = skills.read().await;
+            if let Err(e) = intent_classifier.rebuild_index(&skills_registry).await {
+                tracing::error!("Failed to build intent classifier index: {:?}", e);
+            }
+        }
+
+        tracing::info!(
+            backend = ?classifier_config.backend,
+            topk = classifier_config.topk,
+            accept_threshold = classifier_config.accept_threshold,
+            "Intent classifier initialized"
+        );
 
         Self {
             active_runs: Arc::new(RwLock::new(HashMap::new())),
@@ -56,6 +161,8 @@ impl RunManager {
             vector_matcher,
             tag_matcher,
             context_manager,
+            intent_classifier,
+            classifier_config,
             persistence,
         }
     }
@@ -79,7 +186,15 @@ impl RunManager {
         let run_id = Uuid::new_v4().to_string();
         tracing::Span::current().record("run_id", &run_id);
         tracing::info!("Starting new run");
-        let (tx, _) = broadcast::channel(100); // Buffer size 100
+        let (tx, _) = broadcast::channel(256); // Buffer size 256
+        let history = Arc::new(Mutex::new(EventHistory {
+            next_id: 1,
+            buffer: VecDeque::with_capacity(EVENT_HISTORY_LIMIT),
+        }));
+        let emitter = RunEventEmitter {
+            sender: tx.clone(),
+            history: Arc::clone(&history),
+        };
 
         // 1. Resolve Session
         let session = if let Some(id) = session_id {
@@ -102,7 +217,14 @@ impl RunManager {
 
         {
             let mut runs = self.active_runs.write().await;
-            runs.insert(run_id.clone(), (run, tx.clone()));
+            runs.insert(
+                run_id.clone(),
+                RunStreamState {
+                    run,
+                    sender: tx.clone(),
+                    history: Arc::clone(&history),
+                },
+            );
         }
 
         // 3. Prepare Messages
@@ -111,94 +233,136 @@ impl RunManager {
         let mut system_prompt = artifact.prompt.system.clone();
 
         // RAG Retrieval - scoped to agent's configured knowledge bases
-        if artifact.memory.kb.enabled {
-            if let Some(db) = &self.persistence {
-                match self.vector_matcher.embed_batch(vec![input.clone()]).await {
-                    Ok(embeddings) => {
-                        if let Some(query_vec) = embeddings.first() {
-                            // Get agent's configured KBs (or use all if empty)
-                            let kb_names = &artifact.memory.kb.knowledge_bases;
-                            
-                            let search_result = if kb_names.is_empty() {
-                                // No specific KBs configured - search all
+        if artifact.memory.kb.enabled && let Some(db) = &self.persistence {
+            match self.vector_matcher.embed_batch(vec![input.clone()]).await {
+                Ok(embeddings) => {
+                    if let Some(query_vec) = embeddings.first() {
+                        // Get agent's configured KBs (or use all if empty)
+                        let kb_names = &artifact.memory.kb.knowledge_bases;
+
+                        let search_result = if kb_names.is_empty() {
+                            // No specific KBs configured - search all
+                            db.search_knowledge(query_vec, 3, 0.7).await
+                        } else {
+                            // Resolve KB names to IDs and search scoped
+                            let mut kb_ids = Vec::new();
+                            for name in kb_names {
+                                if let Ok(Some(kb)) = db.get_knowledge_base_by_name(name).await {
+                                    kb_ids.push(kb.id);
+                                } else {
+                                    tracing::warn!("Knowledge base not found: {}", name);
+                                }
+                            }
+
+                            if kb_ids.is_empty() {
+                                // All configured KBs were not found - fallback to all
+                                tracing::warn!("No configured knowledge bases found, searching all");
                                 db.search_knowledge(query_vec, 3, 0.7).await
                             } else {
-                                // Resolve KB names to IDs and search scoped
-                                let mut kb_ids = Vec::new();
-                                for name in kb_names {
-                                    if let Ok(Some(kb)) = db.get_knowledge_base_by_name(name).await {
-                                        kb_ids.push(kb.id);
-                                    } else {
-                                        tracing::warn!("Knowledge base not found: {}", name);
-                                    }
-                                }
-                                
-                                if kb_ids.is_empty() {
-                                    // All configured KBs were not found - fallback to all
-                                    tracing::warn!("No configured knowledge bases found, searching all");
-                                    db.search_knowledge(query_vec, 3, 0.7).await
-                                } else {
-                                    let kb_id_refs: Vec<&str> = kb_ids.iter().map(|s| s.as_str()).collect();
-                                    db.search_knowledge_scoped(&kb_id_refs, query_vec, 3, 0.7).await
-                                }
-                            };
-                            
-                            match search_result {
-                                Ok(matches) => {
-                                    if !matches.is_empty() {
-                                        system_prompt.push_str("\n\n[RELEVANT KNOWLEDGE]\n");
-                                        for m in matches {
-                                            system_prompt.push_str(&format!("- {}\n", m.chunk.content));
-                                        }
-                                    }
-                                }
-                                Err(e) => tracing::error!("RAG search failed: {:?}", e),
+                                let kb_id_refs: Vec<&str> =
+                                    kb_ids.iter().map(String::as_str).collect();
+                                db.search_knowledge_scoped(&kb_id_refs, query_vec, 3, 0.7).await
                             }
+                        };
+
+                        match search_result {
+                            Ok(matches) => {
+                                if !matches.is_empty() {
+                                    system_prompt.push_str("\n\n[RELEVANT KNOWLEDGE]\n");
+                                    for m in matches {
+                                        let _ = writeln!(system_prompt, "- {}", m.chunk.content);
+                                    }
+                                }
+                            }
+                            Err(e) => tracing::error!("RAG search failed: {:?}", e),
                         }
                     }
-                    Err(e) => tracing::error!("RAG embedding failed: {:?}", e),
+                }
+                Err(e) => tracing::error!("RAG embedding failed: {:?}", e),
+            }
+        }
+
+        // SKILL INJECTION: Intent Classification Pipeline
+        let skills_registry = self.skills.read().await;
+
+        // Use the configured intent classifier
+        let classification_result = self
+            .intent_classifier
+            .classify(&input, &[], &skills_registry)
+            .await;
+
+        let matched_skills: Vec<_> = match classification_result {
+            Ok(result) => {
+                // Log classification scores for debugging/tuning
+                tracing::debug!(
+                    scores = ?result.scores.iter().map(|s| (&s.label, s.score)).collect::<Vec<_>>(),
+                    out_of_scope = result.out_of_scope,
+                    "Intent classification complete"
+                );
+
+                // Apply thresholds from config
+                if result.should_accept(
+                    self.classifier_config.accept_threshold,
+                    self.classifier_config.margin_threshold,
+                ) {
+                    // Return skills that have associated skill data
+                    result
+                        .scores
+                        .into_iter()
+                        .filter_map(|score| score.skill)
+                        .collect()
+                } else if result.out_of_scope {
+                    tracing::debug!("Query appears out-of-scope, no skills matched");
+                    Vec::new()
+                } else {
+                    // Below threshold but not out-of-scope - still include top matches
+                    // but log a warning for potential tuning
+                    tracing::debug!(
+                        top_score = ?result.scores.first().map(|s| s.score),
+                        threshold = self.classifier_config.accept_threshold,
+                        "Classification below threshold, including top matches anyway"
+                    );
+                    result
+                        .scores
+                        .into_iter()
+                        .filter_map(|score| score.skill)
+                        .collect()
                 }
             }
-        }
+            Err(e) => {
+                tracing::error!("Intent classification failed: {:?}", e);
+                // Fallback to legacy tag+vector matching
+                let mut fallback_skills = HashMap::new();
 
-        // SKILL INJECTION: Composite Matcher (Tag -> Vector -> LLM Selection in future)
-        let skills_registry = self.skills.read().await;
-        // Ensure skills are indexed for vector matching
-        // Ideal optimization: Index on separate background task or when skills loaded.
-        // For now, we index if needed on query (handled internally by VectorMatcher, but cache validity depends on it).
-        // Since we share the matcher, we should be careful.
-        // VectorMatcher::match_skills calls index_skills if cache empty.
+                if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
+                    self.tag_matcher.as_ref(),
+                    &input,
+                    &skills_registry,
+                )
+                .await
+                {
+                    for m in matches {
+                        fallback_skills.insert(m.skill_id.clone(), m.skill);
+                    }
+                }
 
-        let mut matched_skills = HashMap::new();
+                if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
+                    self.vector_matcher.as_ref(),
+                    &input,
+                    &skills_registry,
+                )
+                .await
+                {
+                    for m in matches {
+                        fallback_skills.entry(m.skill_id.clone()).or_insert(m.skill);
+                    }
+                }
 
-        // 1. Tag Matching (High Confidence)
-        if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
-            self.tag_matcher.as_ref(),
-            &input,
-            &skills_registry,
-        )
-        .await
-        {
-            for m in matches {
-                matched_skills.insert(m.skill_id.clone(), m.skill);
+                fallback_skills.into_values().collect()
             }
-        }
+        };
 
-        // 2. Vector Matching (Medium Confidence)
-        if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
-            self.vector_matcher.as_ref(),
-            &input,
-            &skills_registry,
-        )
-        .await
-        {
-            for m in matches {
-                // Don't overwrite explicit tag matches if they exist, but here we just dedup by ID
-                matched_skills.entry(m.skill_id.clone()).or_insert(m.skill);
-            }
-        }
-
-        let sorted_skills: Vec<_> = matched_skills.values().collect();
+        let sorted_skills: Vec<_> = matched_skills.iter().collect();
         // Collect registries to merge (starting with global)
         let mut registries_to_merge = Vec::new();
 
@@ -214,7 +378,7 @@ impl RunManager {
                 match McpRegistry::from_config(config).await {
                     Ok(reg) => registries_to_merge.push(reg),
                     Err(e) => {
-                        tracing::error!("Failed to init tools for skill {}: {:?}", skill.title, e)
+                        tracing::error!("Failed to init tools for skill {}: {:?}", skill.title, e);
                     }
                 }
             }
@@ -230,10 +394,10 @@ impl RunManager {
 
         // Context Management
         let (optimized_messages, context_action) =
-            self.context_manager.apply(messages, 128000).await;
+            self.context_manager.apply(messages, 128_000).await;
         let messages = optimized_messages;
         if let Some(act) = context_action {
-            let _ = tx.send(NormalizedEvent::ContextAction(act));
+            emitter.emit(NormalizedEvent::ContextAction(act)).await;
         }
 
         // Spawn async execution task
@@ -252,18 +416,37 @@ impl RunManager {
 
         let execute_run_id = run_id.clone();
         let execute_agent_id = artifact.id.clone();
-        let tx_clone = tx.clone();
+        let emitter = emitter.clone();
         let execution_session = session.clone();
 
         tokio::spawn(async move {
             // 1. Run Start
-            let _ = tx_clone.send(NormalizedEvent::RunStart {
+            emitter
+                .emit(NormalizedEvent::RunStart {
                 run_id: execute_run_id.clone(),
                 agent_id: execute_agent_id,
-            });
+            })
+            .await;
+
+            emitter
+                .emit(NormalizedEvent::StatePatch {
+                    run_id: execute_run_id.clone(),
+                    patch: vec![StatePatchOp {
+                        op: "replace".to_string(),
+                        path: "/run".to_string(),
+                        value: Some(serde_json::json!({
+                            "run_id": execute_run_id.clone(),
+                            "conversation_id": execution_session.id(),
+                            "status": "running"
+                        })),
+                    }],
+                })
+                .await;
 
             let mut accumulated_content = String::new();
             let mut accumulated_tool_calls: Vec<crate::llm::ToolCall> = Vec::new();
+            let mut tool_call_indices: HashMap<String, usize> = HashMap::new();
+            let mut tool_call_names: HashMap<String, String> = HashMap::new();
 
             // 2. Execute Orchestrator
             match orchestrator.chat_with_history(messages).await {
@@ -292,14 +475,19 @@ impl RunManager {
                                 })
                             }
                             crate::normalized::NormalizedEvent::ToolCallDelta {
-                                call_index: _,
+                                call_index,
                                 id,
-                                name: _,
+                                name,
                                 arguments_delta,
                             } => {
                                 if let (Some(tid), Some(delta)) = (id, arguments_delta) {
+                                    tool_call_indices.insert(tid.clone(), call_index);
+                                    if let Some(tool_name) = name {
+                                        tool_call_names.insert(tid.clone(), tool_name);
+                                    }
                                     Some(NormalizedEvent::ToolDelta {
                                         run_id: execute_run_id.clone(),
+                                        call_index,
                                         tool_call_id: tid,
                                         delta: serde_json::Value::String(delta),
                                     })
@@ -308,11 +496,13 @@ impl RunManager {
                                 }
                             }
                             crate::normalized::NormalizedEvent::ToolCallComplete {
-                                call_index: _,
+                                call_index,
                                 id,
                                 name,
                                 arguments_json,
                             } => {
+                                tool_call_indices.insert(id.clone(), call_index);
+                                tool_call_names.insert(id.clone(), name.clone());
                                 accumulated_tool_calls.push(crate::llm::ToolCall {
                                     id: id.clone(),
                                     call_type: "function".to_string(),
@@ -324,6 +514,7 @@ impl RunManager {
 
                                 Some(NormalizedEvent::ToolStart {
                                     run_id: execute_run_id.clone(),
+                                    call_index,
                                     tool_call_id: id,
                                     tool: name,
                                     input: serde_json::from_str(&arguments_json)
@@ -352,10 +543,17 @@ impl RunManager {
                                 }
 
                                 execution_session.add_tool_result(id.clone(), content.clone());
+                                let call_index = tool_call_indices.get(&id).copied().unwrap_or(0);
+                                let tool = tool_call_names
+                                    .get(&id)
+                                    .cloned()
+                                    .unwrap_or_else(|| "tool".to_string());
 
                                 Some(NormalizedEvent::ToolEnd {
                                     run_id: execute_run_id.clone(),
+                                    call_index,
                                     tool_call_id: id,
+                                    tool,
                                     output: serde_json::from_str(&content)
                                         .unwrap_or(serde_json::Value::String(content)),
                                     ok: success,
@@ -372,16 +570,18 @@ impl RunManager {
                         };
 
                         if let Some(evt) = uar_event {
-                            let _ = tx_clone.send(evt);
+                            emitter.emit(evt).await;
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = tx_clone.send(NormalizedEvent::Error {
+                    emitter
+                        .emit(NormalizedEvent::Error {
                         run_id: execute_run_id.clone(),
                         message: e.to_string(),
                         code: String::new(),
-                    });
+                    })
+                    .await;
                 }
             }
 
@@ -389,21 +589,40 @@ impl RunManager {
                 execution_session.add_assistant_message(accumulated_content);
             }
 
-            let _ = tx_clone.send(NormalizedEvent::RunDone {
+            emitter
+                .emit(NormalizedEvent::RunDone {
                 run_id: execute_run_id,
-            });
+            })
+            .await;
         });
 
         run_id
     }
 
-    pub async fn subscribe(&self, run_id: &str) -> Option<broadcast::Receiver<NormalizedEvent>> {
+    pub async fn subscribe(&self, run_id: &str) -> Option<broadcast::Receiver<StreamEvent>> {
         let runs = self.active_runs.read().await;
-        runs.get(run_id).map(|(_, tx)| tx.subscribe())
+        runs.get(run_id).map(|state| state.sender.subscribe())
+    }
+
+    pub async fn history_since(
+        &self,
+        run_id: &str,
+        last_event_id: Option<u64>,
+    ) -> Option<Vec<StreamEvent>> {
+        let runs = self.active_runs.read().await;
+        let state = runs.get(run_id)?;
+        let history = state.history.lock().await;
+        let events = history
+            .buffer
+            .iter()
+            .filter(|event| last_event_id.is_none_or(|id| event.id > id))
+            .cloned()
+            .collect();
+        Some(events)
     }
 
     pub async fn get_run(&self, run_id: &str) -> Option<Run> {
         let runs = self.active_runs.read().await;
-        runs.get(run_id).map(|(run, _)| run.clone())
+        runs.get(run_id).map(|state| state.run.clone())
     }
 }

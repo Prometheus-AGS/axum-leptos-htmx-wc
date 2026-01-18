@@ -52,9 +52,9 @@ export class ChatMermaid extends HTMLElement {
 
     // Initial render with loading state
     this.innerHTML = `
-      <div class="chat-mermaid relative rounded-xl overflow-hidden border border-panelBorder">
-        <div class="flex items-center justify-between px-3 py-2 bg-panel border-b border-panelBorder">
-          <span class="text-xs text-textMuted bg-panel px-2 py-0.5 rounded">mermaid</span>
+      <div class="chat-mermaid relative rounded-xl overflow-hidden bg-surfaceContainer">
+        <div class="flex items-center justify-between px-3 py-2 bg-surfaceVariant">
+          <span class="text-xs text-textMuted bg-surfaceContainerHighest px-2 py-0.5 rounded">mermaid</span>
           <div class="flex items-center gap-2">
             <button 
               type="button"
@@ -67,10 +67,10 @@ export class ChatMermaid extends HTMLElement {
             <copy-button target="${diagramId}-source"></copy-button>
           </div>
         </div>
-        <div id="${diagramId}" class="mermaid-diagram bg-background p-4 flex items-center justify-center min-h-[100px]">
+        <div id="${diagramId}" class="mermaid-diagram bg-surface p-4 flex items-center justify-center min-h-[100px]">
           <span class="text-textMuted">Loading diagram...</span>
         </div>
-        <details id="${diagramId}-source-container" class="border-t border-panelBorder">
+        <details id="${diagramId}-source-container">
           <summary class="sr-only">Diagram source</summary>
           <pre id="${diagramId}-source" class="bg-codeBg p-3 text-xs overflow-x-auto"><code>${escapeHtml(this._code)}</code></pre>
         </details>

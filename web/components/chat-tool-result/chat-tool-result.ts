@@ -91,21 +91,23 @@ export class ChatToolResult extends HTMLElement {
   private render(): void {
     const formattedContent = formatJsonForDisplay(this._content);
     const codeId = createUniqueId("tool-result-code");
-    const statusClass = this._success ? "border-success/50" : "border-danger/50";
+    const statusPillClass = this._success
+      ? "bg-successContainer text-success"
+      : "bg-dangerContainer text-danger";
     const statusIcon = this._success ? "✅" : "❌";
     const statusLabel = this._success ? "Success" : "Failed";
 
     this.innerHTML = `
-      <article class="chat-tool-result rounded-xl border ${statusClass} bg-panel/50 overflow-hidden">
-        <div class="flex items-center justify-between px-4 py-2 border-b border-panelBorder bg-panel/50">
+      <article class="chat-tool-result rounded-xl bg-surfaceContainer overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-2 bg-surfaceVariant text-textPrimary">
           <div class="flex items-center gap-2">
             <span>${statusIcon}</span>
             <span class="font-medium text-sm">Tool Result</span>
-            <code class="text-xs bg-codeBg px-2 py-0.5 rounded">${escapeHtml(this._name)}</code>
+            <code class="text-xs bg-surfaceContainerHighest px-2 py-0.5 rounded">${escapeHtml(this._name)}</code>
           </div>
-          <span class="text-xs text-textMuted">${statusLabel}</span>
+          <span class="text-xs ${statusPillClass} px-2 py-0.5 rounded-full">${statusLabel}</span>
         </div>
-        <div class="p-4">
+        <div class="p-4 bg-surfaceContainer">
           <div class="relative">
             <pre id="${codeId}" class="bg-codeBg rounded-lg p-3 text-xs overflow-x-auto max-h-64"><code class="language-json">${escapeHtml(formattedContent)}</code></pre>
             <copy-button target="${codeId}" class="absolute top-2 right-2"></copy-button>

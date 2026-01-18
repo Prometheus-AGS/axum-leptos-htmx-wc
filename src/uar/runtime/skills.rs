@@ -89,7 +89,7 @@ impl SkillRegistry {
                         let new_servers: HashMap<_, _> = cfg
                             .mcp_servers
                             .drain()
-                            .map(|(k, v)| (format!("{}__{}", skill_id, k), v))
+                            .map(|(k, v)| (format!("{skill_id}__{k}"), v))
                             .collect();
                         cfg.mcp_servers = new_servers;
                         mcp_config = Some(cfg);
@@ -143,10 +143,10 @@ impl SkillRegistry {
             let text = format!("{}: {}", skill.title, skill.description);
             match vm.embed_batch(vec![text]).await {
                 Ok(embeddings) => {
-                    if let Some(emb) = embeddings.first() {
-                        if let Err(e) = db.save_skill(&skill, emb).await {
-                            error!("Failed to persist skill {}: {:?}", skill.skill_id, e);
-                        }
+                    if let Some(emb) = embeddings.first()
+                        && let Err(e) = db.save_skill(&skill, emb).await
+                    {
+                        error!("Failed to persist skill {}: {:?}", skill.skill_id, e);
                     }
                 }
                 Err(e) => {

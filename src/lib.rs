@@ -34,6 +34,7 @@ pub mod mcp;
 pub mod normalized;
 pub mod server;
 pub mod session;
+pub mod ui;
 pub mod uar;
 
 use crate::config::AppConfig;

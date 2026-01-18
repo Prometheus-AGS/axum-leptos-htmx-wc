@@ -7,6 +7,7 @@
 // Third-party library initialization
 import mermaid from "mermaid";
 import { initializeMarkdown } from "./utils/markdown";
+import { debugLog } from "./utils/logging";
 
 // Web Components
 import { ChatStream } from "./components/chat-stream/chat-stream";
@@ -18,6 +19,7 @@ import { ChatMermaid } from "./components/chat-mermaid/chat-mermaid";
 import { CopyButton } from "./components/copy-button/copy-button";
 import { ThemeSwitcher } from "./components/theme-switcher/theme-switcher";
 import { TokenCounter } from "./components/token-counter/token-counter";
+import "./components/storage-health/storage-health";
 import { ConversationSidebar } from "./components/conversation-sidebar/conversation-sidebar";
 import { SessionRestoreDialog } from "./components/session-restore-dialog/session-restore-dialog";
 import { FileUpload } from "./components/file-upload/file-upload";
@@ -49,14 +51,14 @@ initializeMarkdown();
 
 // Initialize PGlite database
 async function initializeDatabase(): Promise<void> {
-  console.log("[app] Initializing PGlite database...");
+  debugLog("[app] Initializing PGlite database...");
   
   // Show loading indicator
   showLoadingIndicator("Initializing database...");
   
   try {
     await pgliteStore.init();
-    console.log("[app] PGlite database initialized successfully");
+    debugLog("[app] PGlite database initialized successfully");
   } catch (error) {
     console.error("[app] Failed to initialize PGlite:", error);
     showLoadingIndicator("Database initialization failed. Please refresh the page.", true);
@@ -69,10 +71,10 @@ async function initializeDatabase(): Promise<void> {
 
 // Initialize model information cache
 async function initializeModelInfo(): Promise<void> {
-  console.log("[app] Initializing model information cache...");
+  debugLog("[app] Initializing model information cache...");
   try {
     await modelInfoCache.init();
-    console.log("[app] Model information cache initialized");
+    debugLog("[app] Model information cache initialized");
   } catch (error) {
     console.error("[app] Failed to initialize model info cache:", error);
     // Don't throw - allow app to continue with estimation
@@ -177,13 +179,13 @@ async function initializeAlpineStore(): Promise<void> {
           }));
         }
         
-        console.log("[chat-store] Initialized with PGlite");
+        debugLog("[chat-store] Initialized with PGlite");
       },
       
       // Set session ID
       setSessionId(sessionId: string): void {
         this.sessionId = sessionId;
-        console.log("[chat-store] Session ID set:", sessionId);
+        debugLog("[chat-store] Session ID set:", sessionId);
       },
       
       // Update token usage
@@ -196,7 +198,7 @@ async function initializeAlpineStore(): Promise<void> {
           isEstimate,
           cost,
         };
-        console.log("[chat-store] Token usage updated:", this.tokenUsage);
+        debugLog("[chat-store] Token usage updated:", this.tokenUsage);
       },
       
       // Get the PGlite store instance
@@ -252,18 +254,18 @@ async function initialize(): Promise<void> {
   try {
     if (typeof window.Alpine.store === 'function') {
       // Alpine is already initialized
-      console.log("[app] Alpine.js already initialized");
+      debugLog("[app] Alpine.js already initialized");
     } else {
       // Start Alpine
       window.Alpine.start();
-      console.log("[app] Alpine.js started");
+      debugLog("[app] Alpine.js started");
     }
   } catch (e) {
     // Alpine not loaded yet or error
     console.warn("[app] Alpine.js initialization check failed:", e);
   }
   
-  console.log("[app] Application initialized");
+  debugLog("[app] Application initialized");
 }
 
 // Start initialization

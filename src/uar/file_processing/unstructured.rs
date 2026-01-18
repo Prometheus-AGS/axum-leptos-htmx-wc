@@ -72,8 +72,7 @@ impl FileProcessor for UnstructuredProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(ProcessingError::ProviderError(format!(
-                "Unstructured API error ({}): {}",
-                status, error_text
+                "Unstructured API error ({status}): {error_text}"
             )));
         }
 

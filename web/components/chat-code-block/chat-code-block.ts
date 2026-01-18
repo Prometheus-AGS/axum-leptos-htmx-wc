@@ -65,12 +65,12 @@ export class ChatCodeBlock extends HTMLElement {
       : escapeHtml(this._code);
 
     const languageBadge = this._language
-      ? `<span class="text-xs text-textMuted bg-panel px-2 py-0.5 rounded">${escapeHtml(this._language)}</span>`
+      ? `<span class="text-xs text-textMuted bg-surfaceContainerHighest px-2 py-0.5 rounded">${escapeHtml(this._language)}</span>`
       : "";
 
     this.innerHTML = `
-      <div class="chat-code-block relative rounded-xl overflow-hidden border border-panelBorder">
-        <div class="flex items-center justify-between px-3 py-2 bg-panel border-b border-panelBorder">
+      <div class="chat-code-block relative rounded-xl overflow-hidden bg-surfaceContainer">
+        <div class="flex items-center justify-between px-3 py-2 bg-surfaceVariant">
           ${languageBadge}
           <copy-button target="${codeId}"></copy-button>
         </div>

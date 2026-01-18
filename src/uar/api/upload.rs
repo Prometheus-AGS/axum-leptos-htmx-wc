@@ -88,26 +88,25 @@ pub async fn upload_handler(
         (
             StatusCode::BAD_REQUEST,
             Json(UploadError {
-                error: format!("Failed to read multipart field: {}", e),
+                error: format!("Failed to read multipart field: {e}"),
                 code: "MULTIPART_ERROR".to_string(),
             }),
         )
     })? {
         // Check file count limit
         if file_count >= MAX_FILES {
-            errors.push(format!("Maximum file count ({}) exceeded", MAX_FILES));
+            errors.push(format!("Maximum file count ({MAX_FILES}) exceeded"));
             break;
         }
 
         let filename = field
             .file_name()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("file_{}", uuid::Uuid::new_v4()));
+            .map_or_else(|| format!("file_{}", uuid::Uuid::new_v4()), ToString::to_string);
 
-        let content_type = field
-            .content_type()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "application/octet-stream".to_string());
+        let content_type = field.content_type().map_or_else(
+            || "application/octet-stream".to_string(),
+            ToString::to_string,
+        );
 
         // Validate MIME type
         let is_allowed = ALLOWED_MIME_PREFIXES
@@ -116,8 +115,7 @@ pub async fn upload_handler(
 
         if !is_allowed {
             errors.push(format!(
-                "File '{}' has unsupported type: {}",
-                filename, content_type
+                "File '{filename}' has unsupported type: {content_type}"
             ));
             continue;
         }
@@ -127,7 +125,7 @@ pub async fn upload_handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(UploadError {
-                    error: format!("Failed to read file '{}': {}", filename, e),
+                    error: format!("Failed to read file '{filename}': {e}"),
                     code: "READ_ERROR".to_string(),
                 }),
             )
@@ -136,21 +134,20 @@ pub async fn upload_handler(
         let size = data.len();
 
         // Check individual file size
+        let max_file_mb = MAX_FILE_SIZE / (1024 * 1024);
         if size > MAX_FILE_SIZE {
+            let size_mb = size / (1024 * 1024);
             errors.push(format!(
-                "File '{}' exceeds max size ({}MB > {}MB)",
-                filename,
-                size / (1024 * 1024),
-                MAX_FILE_SIZE / (1024 * 1024)
+                "File '{filename}' exceeds max size ({size_mb}MB > {max_file_mb}MB)"
             ));
             continue;
         }
 
         // Check total size
         if total_size + size > MAX_TOTAL_SIZE {
+            let max_total_mb = MAX_TOTAL_SIZE / (1024 * 1024);
             errors.push(format!(
-                "Total upload size would exceed limit ({}MB)",
-                MAX_TOTAL_SIZE / (1024 * 1024)
+                "Total upload size would exceed limit ({max_total_mb}MB)"
             ));
             break;
         }
@@ -165,20 +162,18 @@ pub async fn upload_handler(
         let (data_url, text_content) = if is_image {
             // For images, create a base64 data URL
             let base64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
-            let data_url = format!("data:{};base64,{}", content_type, base64);
+            let data_url = format!("data:{content_type};base64,{base64}");
             (Some(data_url), None)
         } else if content_type.starts_with("text/")
             || content_type == "application/json"
             || content_type == "application/xml"
         {
             // For text files, extract the content
-            match String::from_utf8(data.to_vec()) {
-                Ok(text) => (None, Some(text)),
-                Err(_) => {
-                    errors.push(format!("File '{}' is not valid UTF-8 text", filename));
-                    continue;
-                }
-            }
+            let Ok(text) = String::from_utf8(data.to_vec()) else {
+                errors.push(format!("File '{filename}' is not valid UTF-8 text"));
+                continue;
+            };
+            (None, Some(text))
         } else {
             // For binary files (PDFs, Word docs, etc.), we'd need to use file processing
             // For now, just store the file reference

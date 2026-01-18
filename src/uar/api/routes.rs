@@ -1,11 +1,12 @@
 use crate::uar::{
     api::sse::build_sse_response,
-    domain::{artifact::AgentArtifact, events::NormalizedEvent},
+    domain::artifact::AgentArtifact,
     runtime::manager::RunManager,
 };
 use axum::{
     Json, Router,
     extract::{Path, State},
+    http::HeaderMap,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -42,21 +43,36 @@ async fn create_run(
         .await;
     Json(CreateRunResponse {
         run_id: run_id.clone(),
-        stream_url: format!("/api/uar/runs/{}/stream", run_id),
+        stream_url: format!("/api/uar/runs/{run_id}/stream"),
     })
 }
 
 async fn stream_run(
     State(manager): State<Arc<RunManager>>,
     Path(run_id): Path<String>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    let rx = match manager.subscribe(&run_id).await {
-        Some(rx) => rx,
-        None => return axum::http::StatusCode::NOT_FOUND.into_response(),
+    let Some(rx) = manager.subscribe(&run_id).await else {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
     };
 
+    let last_event_id = headers
+        .get("last-event-id")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+
+    let replay = manager
+        .history_since(&run_id, last_event_id)
+        .await
+        .unwrap_or_default();
+    let replay_max_id = replay.last().map_or(0, |event| event.id);
+
     // Convert Broadcast Receiver to Stream
-    let stream = BroadcastStream::new(rx).filter_map(|res: Result<NormalizedEvent, _>| res.ok());
+    let live_stream = BroadcastStream::new(rx)
+        .filter_map(Result::ok)
+        .filter(move |event| event.id > replay_max_id);
+
+    let stream = tokio_stream::iter(replay).chain(live_stream);
 
     build_sse_response(stream).into_response()
 }

@@ -6,7 +6,7 @@
 //! - Scoped vector search
 //! - Agent-scoped RAG retrieval
 //!
-//! Requires: DATABASE_URL environment variable pointing to a Postgres instance with pgvector.
+//! Requires: `DATABASE_URL` environment variable pointing to a Postgres instance with pgvector.
 
 use axum_leptos_htmx_wc::uar::{
     defaults::ensure_default_knowledge_base,
@@ -38,14 +38,12 @@ async fn setup_persistence() -> Option<Arc<dyn PersistenceLayer>> {
 /// Create a test knowledge base with a random name.
 fn create_test_kb(suffix: &str) -> KnowledgeBase {
     let now = chrono::Utc::now().to_rfc3339();
+    let suffix_id = Uuid::new_v4().to_string();
+    let suffix_short = &suffix_id[..8];
     KnowledgeBase {
         id: Uuid::new_v4().to_string(),
-        name: format!(
-            "test-kb-{}-{}",
-            suffix,
-            Uuid::new_v4().to_string()[..8].to_string()
-        ),
-        description: Some(format!("Test knowledge base for {}", suffix)),
+        name: format!("test-kb-{suffix}-{suffix_short}"),
+        description: Some(format!("Test knowledge base for {suffix}")),
         config: KbConfig::default(),
         created_at: now.clone(),
         updated_at: now,
@@ -59,7 +57,7 @@ fn create_test_document(kb_id: &str, filename: &str) -> KnowledgeDocument {
         id: Uuid::new_v4().to_string(),
         kb_id: kb_id.to_string(),
         filename: filename.to_string(),
-        file_path: Some(format!("/data/test/{}", filename)),
+        file_path: Some(format!("/data/test/{filename}")),
         mime_type: Some("text/plain".to_string()),
         chunk_count: 0,
         status: DocumentStatus::Pending,
@@ -84,6 +82,10 @@ fn create_test_chunk(
         embedding,
         created_at: chrono::Utc::now().to_rfc3339(),
     }
+}
+
+fn make_embedding(pattern: &[f32]) -> Vec<f32> {
+    pattern.iter().cycle().take(384).copied().collect()
 }
 
 // =============================================================================
@@ -545,11 +547,6 @@ async fn test_chunk_storage_and_global_search() {
         .expect("Failed to save KB");
 
     // Create chunks with different embeddings
-    // Helper to create repeating pattern embedding
-    fn make_embedding(pattern: &[f32]) -> Vec<f32> {
-        pattern.iter().cycle().take(384).copied().collect()
-    }
-
     let chunks = vec![
         create_test_chunk(
             &kb.id,

@@ -21,7 +21,7 @@ export class SettingsSidebar extends HTMLElement {
   render() {
       this.className = "flex flex-col h-full bg-surfaceVariant/30";
       this.innerHTML = `
-          <div class="p-4 border-b border-panelBorder flex items-center justify-between">
+          <div class="p-4 bg-surfaceContainerHighest flex items-center justify-between">
             <span class="font-semibold text-sm">Settings</span>
           </div>
           <div id="types-list" class="flex-1 overflow-y-auto py-2 space-y-0.5"></div>

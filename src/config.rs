@@ -1,4 +1,5 @@
 use crate::llm::{LlmProtocol, LlmSettings, Provider};
+use crate::uar::runtime::matching::ClassifierConfig;
 use clap::Parser;
 use config::{Config, Environment};
 use serde::Deserialize;
@@ -51,6 +52,9 @@ pub struct AppConfig {
     pub vision: VisionConfig,
     #[serde(default)]
     pub knowledge_bases: KnowledgeBasesConfig,
+    /// Intent classifier configuration for skill matching
+    #[serde(default)]
+    pub intent_classifier: ClassifierConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -167,6 +171,7 @@ impl Default for MistralConfig {
 
 /// Kreuzberg local file processing configuration.
 /// Kreuzberg is a high-performance document intelligence framework with a Rust core.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct KreuzbergConfig {
     /// Enable OCR for scanned documents and images
@@ -411,15 +416,15 @@ impl AppConfig {
 
         // 4. Manual Environment Overrides
         // ...
-        if let Ok(val) = env::var("UAR_RESILIENCE__RATE_LIMIT_ENABLED") {
-            if let Ok(bool_val) = val.parse::<bool>() {
-                builder = builder.set_override("resilience.rate_limit_enabled", bool_val)?;
-            }
+        if let Ok(val) = env::var("UAR_RESILIENCE__RATE_LIMIT_ENABLED")
+            && let Ok(bool_val) = val.parse::<bool>()
+        {
+            builder = builder.set_override("resilience.rate_limit_enabled", bool_val)?;
         }
-        if let Ok(val) = env::var("UAR_RESILIENCE__TIMEOUT_DISABLED") {
-            if let Ok(bool_val) = val.parse::<bool>() {
-                builder = builder.set_override("resilience.timeout_disabled", bool_val)?;
-            }
+        if let Ok(val) = env::var("UAR_RESILIENCE__TIMEOUT_DISABLED")
+            && let Ok(bool_val) = val.parse::<bool>()
+        {
+            builder = builder.set_override("resilience.timeout_disabled", bool_val)?;
         }
         if let Ok(val) = env::var("UAR_PERSISTENCE__PROVIDER") {
             // ...
@@ -459,13 +464,13 @@ impl AppConfig {
 
 pub fn load_llm_settings() -> Result<LlmSettings, String> {
     let base_url = std::env::var("LLM_BASE_URL")
-        .map_err(|_| "Missing required env var: LLM_BASE_URL".to_string())?;
+        .map_err(|err| format!("Missing required env var: LLM_BASE_URL: {err}"))?;
     if base_url.trim().is_empty() {
         return Err("LLM_BASE_URL cannot be empty".to_string());
     }
 
     let model = std::env::var("LLM_MODEL")
-        .map_err(|_| "Missing required env var: LLM_MODEL".to_string())?;
+        .map_err(|err| format!("Missing required env var: LLM_MODEL: {err}"))?;
     if model.trim().is_empty() {
         return Err("LLM_MODEL cannot be empty".to_string());
     }
@@ -492,15 +497,15 @@ pub fn load_llm_settings() -> Result<LlmSettings, String> {
     let api_version = std::env::var("AZURE_API_VERSION").ok();
 
     // Update provider with Azure deployment info if provided
-    if let Provider::AzureOpenAI { .. } = &provider {
-        if let Some(deployment) = &deployment_name {
-            provider = Provider::AzureOpenAI {
-                deployment_name: deployment.clone(),
-                api_version: api_version
-                    .clone()
-                    .unwrap_or_else(|| "2024-08-01-preview".to_string()),
-            };
-        }
+    if let Provider::AzureOpenAI { .. } = &provider
+        && let Some(deployment) = &deployment_name
+    {
+        provider = Provider::AzureOpenAI {
+            deployment_name: deployment.clone(),
+            api_version: api_version
+                .clone()
+                .unwrap_or_else(|| "2024-08-01-preview".to_string()),
+        };
     }
 
     // Load optional parallel tool calls setting

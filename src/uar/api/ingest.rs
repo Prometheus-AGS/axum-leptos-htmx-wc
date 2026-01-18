@@ -40,7 +40,7 @@ pub async fn ingest_handler(
             // Ingest using service
             if let Some(ingest_service) = &state.ingest_service {
                 match ingest_service.ingest_file(&temp_path, kb_id).await {
-                    Ok(_) => {
+                    Ok(()) => {
                         uploaded_files.push(file_name);
                     }
                     Err(e) => {

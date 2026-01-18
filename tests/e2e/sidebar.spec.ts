@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('sidebar history and session switching', async ({ page }) => {
   // 1. Setup

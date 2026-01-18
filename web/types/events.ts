@@ -167,7 +167,8 @@ export interface AgUiCitationAddedEvent {
   kind: "citation";
   phase: "added";
   request_id: string;
-  citation: Citation;
+  citation?: Citation;
+  citations?: Citation[];
 }
 
 export interface AgUiMemoryUpdateEvent {
@@ -177,6 +178,17 @@ export interface AgUiMemoryUpdateEvent {
   key: string;
   value: string;
   operation: "set" | "append" | "delete";
+}
+
+export interface AgUiStatePatchEvent {
+  kind: "state";
+  phase: "patch";
+  request_id: string;
+  patch: {
+    op: string;
+    path: string;
+    value?: unknown;
+  }[];
 }
 
 export interface AgUiToolCallDeltaEvent {
@@ -204,6 +216,7 @@ export interface AgUiToolCallCompleteEvent {
 export interface AgUiToolResultEvent {
   kind: "tool_result";
   request_id: string;
+  call_index?: number;
   id: string;
   name: string;
   content: string;
@@ -237,6 +250,7 @@ export type AgUiEvent =
   | AgUiReasoningDeltaEvent
   | AgUiCitationAddedEvent
   | AgUiMemoryUpdateEvent
+  | AgUiStatePatchEvent
   | AgUiToolCallDeltaEvent
   | AgUiToolCallCompleteEvent
   | AgUiToolResultEvent

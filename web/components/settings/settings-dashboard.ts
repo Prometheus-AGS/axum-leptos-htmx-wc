@@ -26,7 +26,7 @@ export class SettingsDashboard extends HTMLElement {
       
       // Sidebar Container (Pane 1)
       const sidebarContainer = document.createElement('div');
-      sidebarContainer.className = "w-64 border-r border-panelBorder flex flex-col";
+      sidebarContainer.className = "w-64 bg-surfaceContainer flex flex-col";
       sidebarContainer.appendChild(this.sidebar);
       this.appendChild(sidebarContainer);
 

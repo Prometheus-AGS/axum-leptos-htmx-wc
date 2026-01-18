@@ -13,13 +13,15 @@ pub fn to_ag_ui(event: &NormalizedEvent) -> Value {
             tool_call_id,
             tool,
             input,
+            call_index,
         } => json!({
             "type": "tool.call",
             "id": run_id,
             "payload": {
                 "call_id": tool_call_id,
                 "tool": tool,
-                "args": input
+                "args": input,
+                "call_index": call_index
             }
         }),
         NormalizedEvent::Artifact { run_id, artifact } => json!({

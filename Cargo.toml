@@ -117,6 +117,9 @@ num_cpus = "1.16"
 # Graph algorithms for community detection (Leiden)
 petgraph = "0.8"
 
+# Leptos SSR (minimal templating)
+leptos = { version = "0.6.15", features = ["ssr"] }
+
 
 
 # Lints (M-STATIC-VERIFICATION)

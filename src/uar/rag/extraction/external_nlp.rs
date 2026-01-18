@@ -1,7 +1,7 @@
 //! External NLP Service Client
 //!
-//! REST client for connecting to external NLP services (SpaCy, Stanza, etc.)
-//! following the defined OpenAPI specification.
+//! REST client for connecting to external NLP services (`SpaCy`, `Stanza`, etc.)
+//! following the defined `OpenAPI` specification.
 
 use super::{ExtractionConfig, RelationshipExtractor};
 use crate::uar::domain::{
@@ -87,7 +87,7 @@ impl ExternalNlpExtractor {
     /// Create a new external NLP extractor.
     ///
     /// # Arguments
-    /// * `base_url` - Base URL of the NLP service (e.g., "http://localhost:8080")
+    /// * `base_url` - Base URL of the NLP service (e.g., "<http://localhost:8080>")
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             client: Client::new(),
@@ -105,7 +105,7 @@ impl ExternalNlpExtractor {
         }
     }
 
-    /// Convert NLP entity label to EntityType.
+    /// Convert NLP entity label to `EntityType`.
     fn parse_entity_type(label: &str) -> EntityType {
         match label.to_uppercase().as_str() {
             "PERSON" | "PER" => EntityType::Person,
@@ -140,7 +140,7 @@ impl RelationshipExtractor for ExternalNlpExtractor {
             .json(&request)
             .send()
             .await
-            .map_err(|e| anyhow!("Failed to connect to NLP service: {}", e))?;
+            .map_err(|e| anyhow!("Failed to connect to NLP service: {e}"))?;
 
         if !response.status().is_success() {
             return Err(anyhow!("NLP service returned error: {}", response.status()));
@@ -149,7 +149,7 @@ impl RelationshipExtractor for ExternalNlpExtractor {
         let extract_response: ExtractResponse = response
             .json()
             .await
-            .map_err(|e| anyhow!("Failed to parse NLP response: {}", e))?;
+            .map_err(|e| anyhow!("Failed to parse NLP response: {e}"))?;
 
         // Convert to domain types
         let now = chrono::Utc::now().to_rfc3339();

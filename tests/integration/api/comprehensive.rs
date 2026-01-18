@@ -1,12 +1,11 @@
+#![allow(dead_code, clippy::pedantic)]
+
 use axum::http::StatusCode;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
-use tower::util::ServiceExt;
-use uuid::Uuid;
 
-use crate::testing::entities::test_environment::TestEnvironment;
 
 /// Comprehensive API endpoint testing for certification
 pub struct ApiCertificationSuite {
@@ -663,10 +662,9 @@ impl ApiCertificationSuite {
         }
 
         // Add authentication header
-        if test.requires_auth {
-            if let Some(token) = &self.auth_token {
-                request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
-            }
+        if test.requires_auth && let Some(token) = &self.auth_token {
+            request_builder =
+                request_builder.header("Authorization", format!("Bearer {}", token));
         }
 
         // Add body if present
@@ -829,15 +827,16 @@ impl ApiCertificationSuite {
     }
 
     /// Navigate JSON path to find nested field
-    fn navigate_json_path(&self, json: &Value, path: &[&str]) -> Option<&Value> {
-        path.iter().fold(Some(json), |current, &key| {
-            current?.get(key)
-        })
+    fn navigate_json_path<'a>(&self, json: &'a Value, path: &[&str]) -> Option<&'a Value> {
+        path.iter().try_fold(json, |current, &key| current.get(key))
     }
 }
 
 /// Execute API certification tests for the given environment
-pub async fn execute_api_test(test_id: &str, environment_id: &str) -> Result<crate::tests::certification::CertificationResult, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn execute_api_test(
+    test_id: &str,
+    _environment_id: &str,
+) -> Result<crate::certification::CertificationResult, Box<dyn std::error::Error + Send + Sync>> {
     let base_url = match std::env::var("TEST_BASE_URL") {
         Ok(url) => url,
         Err(_) => "http://localhost:3001".to_string(),
@@ -860,7 +859,7 @@ pub async fn execute_api_test(test_id: &str, environment_id: &str) -> Result<cra
             response_body: None,
         });
 
-    Ok(crate::tests::certification::CertificationResult {
+    Ok(crate::certification::CertificationResult {
         test_id: test_id.to_string(),
         success: test_result.success,
         duration: test_result.response_time,

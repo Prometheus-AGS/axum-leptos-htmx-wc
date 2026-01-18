@@ -1,4 +1,7 @@
-use super::types::*;
+use super::types::{
+    ChatCompletionChunk, ChatCompletionChunkChoice, ChatCompletionChunkDelta,
+    ChatCompletionRequest, ModelCard, ModelList,
+};
 use crate::AppState;
 use crate::uar::security::claims::UserContext;
 use crate::uar::{defaults, domain::events::NormalizedEvent};
@@ -93,15 +96,12 @@ pub async fn chat_completions(
         .await;
 
     // Subscribe to events
-    let mut rx = match run_manager.subscribe(&run_id).await {
-        Some(rx) => rx,
-        None => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to subscribe to run",
-            )
-                .into_response();
-        }
+    let Some(mut rx) = run_manager.subscribe(&run_id).await else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to subscribe to run",
+        )
+            .into_response();
     };
 
     // Convert to SSE stream
@@ -118,7 +118,7 @@ pub async fn chat_completions(
                 index: 0,
                 delta: ChatCompletionChunkDelta {
                     role: Some("assistant".to_string()),
-                    content: Some("".to_string()),
+                    content: Some(String::new()),
                 },
                 finish_reason: None,
             }],
@@ -126,7 +126,7 @@ pub async fn chat_completions(
         yield Ok::<_, std::convert::Infallible>(Event::default().json_data(initial_chunk).unwrap());
 
         while let Ok(event) = rx.recv().await {
-            match event {
+            match event.event {
                 NormalizedEvent::ChatDelta { text_delta, .. } => {
                     let chunk = ChatCompletionChunk {
                         id: id.clone(),

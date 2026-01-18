@@ -147,7 +147,7 @@ impl Orchestrator {
 
         // Log initial message history
         for (idx, msg) in messages.iter().enumerate() {
-            let content_preview = msg.content.as_text().map(|s| s.len()).unwrap_or(0);
+            let content_preview = msg.content.as_text().map_or(0, str::len);
             tracing::debug!(
                 request_id = %request_id,
                 message_index = idx,
