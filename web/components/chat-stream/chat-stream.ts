@@ -5,22 +5,24 @@
  * manages view with TranscriptView, and persists all events to PGlite database.
  */
 
-import type { AgUiEvent } from "../../types/events";
-import { parseAgUiEvent } from "../../types/events";
-import { renderMarkdown } from "../../utils/markdown";
-import { createUniqueId } from "../../utils/html";
-import { generateUuid } from "../../utils/uuid";
 import { pgliteStore } from "../../stores/pglite-store";
 import type { ConversationTurn, Message } from "../../types/database";
+import { parseAgUiEvent, type AgUiEvent } from "../../types/events";
+import { createUniqueId } from "../../utils/html";
+import { debugLog } from "../../utils/logging";
+import { renderMarkdown } from "../../utils/markdown";
+import { generateUuid } from "../../utils/uuid";
 import type { AttachedFile } from "../file-upload/file-upload";
-
-import { TranscriptView } from "./transcript-view";
 import { StreamController } from "./stream-controller";
+import { TranscriptView } from "./transcript-view";
 
 // Extend Window interface for Alpine
 declare global {
   interface Window {
-    Alpine: any;
+    Alpine: {
+      store: (name: string, value?: unknown) => unknown;
+      start: () => void;
+    };
   }
 }
 
@@ -31,16 +33,16 @@ export class ChatStream extends HTMLElement {
   // Logic & View
   private view: TranscriptView | null = null;
   private controller: StreamController | null = null;
-  
+
   // Bound Event Handlers for proper cleanup
   private _handleConversationChanged: EventListener | null = null;
   private _handleStreamCompleted: EventListener | null = null;
-    
+
   private debugMode = false;
   // private sseContainer: HTMLElement | null = null;
   private logDebug = (...args: unknown[]) => {
     if (this.debugMode) {
-      console.log(...args);
+      debugLog(...args);
     }
   };
 
@@ -48,7 +50,7 @@ export class ChatStream extends HTMLElement {
   private conversationId: string | null = null;
   private currentTurn: ConversationTurn = this.createEmptyTurn();
   private sequenceOrder = 0;
-  
+
   // Persistence Accumulators
   private accumulatedText = "";
   private accumulatedThinking = "";
@@ -69,10 +71,10 @@ export class ChatStream extends HTMLElement {
   connectedCallback(): void {
     // 1. Setup DOM structure
     this.innerHTML = `
-      <div id="chat-transcript" class="chat-stream-transcript flex flex-col h-full overflow-y-auto px-4 py-4 space-y-6"></div>
-      <div id="sse-listener" style="display:none;"></div>
+      <div id="chat-transcript" class="chat-stream-transcript flex flex-col h-full overflow-y-auto px-4 py-4 space-y-6" role="log" aria-live="polite" aria-label="Chat transcript"></div>
+      <div id="sse-listener" style="display:none;" aria-hidden="true"></div>
     `;
-    
+
     const transcriptEl = this.querySelector("#chat-transcript") as HTMLElement;
     // this.sseContainer = this.querySelector("#sse-listener") as HTMLElement;
 
@@ -84,37 +86,52 @@ export class ChatStream extends HTMLElement {
     // No longer using HTMX for SSE - managed natively by EventSource in startStream
     // WE KEEP sseContainer for backwards compat with any CSS or structure relying on it,
     // but we don't attach listeners.
-    
+
     // 4. Other Listeners
-    this._handleConversationChanged = this.handleConversationChanged.bind(this) as unknown as EventListener;
-    this._handleStreamCompleted = this.handleStreamCompleted.bind(this) as unknown as EventListener;
-    
-    window.addEventListener('conversation-changed', this._handleConversationChanged);
-    window.addEventListener('stream-completed', this._handleStreamCompleted);
-    
+    this._handleConversationChanged = this.handleConversationChanged.bind(
+      this,
+    ) as unknown as EventListener;
+    this._handleStreamCompleted = this.handleStreamCompleted.bind(
+      this,
+    ) as unknown as EventListener;
+
+    window.addEventListener(
+      "conversation-changed",
+      this._handleConversationChanged,
+    );
+    window.addEventListener("stream-completed", this._handleStreamCompleted);
+
     // Check for debug mode active
-    this.debugMode = new URLSearchParams(window.location.search).has('debug') || localStorage.getItem('debug') === 'true';
+    this.debugMode =
+      new URLSearchParams(window.location.search).has("debug") ||
+      localStorage.getItem("debug") === "true";
     this.logDebug("[chat-stream] Debug logging enabled");
   }
 
   disconnectedCallback(): void {
     if (this.controller) this.controller.reset();
     if (this.view) {
-        this.view.reset();
-        this.view.destroy();
+      this.view.reset();
+      this.view.destroy();
     }
-    
+
     // Clean up HTMX attributes to ensure connection closes
     // Clean up EventSource
     this.closeStream();
 
     if (this._handleConversationChanged) {
-        window.removeEventListener('conversation-changed', this._handleConversationChanged);
-        this._handleConversationChanged = null;
+      window.removeEventListener(
+        "conversation-changed",
+        this._handleConversationChanged,
+      );
+      this._handleConversationChanged = null;
     }
     if (this._handleStreamCompleted) {
-        window.removeEventListener('stream-completed', this._handleStreamCompleted);
-        this._handleStreamCompleted = null;
+      window.removeEventListener(
+        "stream-completed",
+        this._handleStreamCompleted,
+      );
+      this._handleStreamCompleted = null;
     }
   }
 
@@ -131,67 +148,81 @@ export class ChatStream extends HTMLElement {
   }
 
   private eventSource: EventSource | null = null;
-  
+
   /**
    * Handle stream completion to trigger auto-naming
    */
   private async handleStreamCompleted(_e: CustomEvent) {
-       if (!this.conversationId) return;
+    if (!this.conversationId) return;
 
-       // Check if we need to auto-name (only for new/untitled conversations)
-       const conv = await pgliteStore.getConversation(this.conversationId);
-       if (!conv || (conv.title !== "New Conversation" && conv.title !== "Untitled")) {
-           return;
-       }
-       
-       // Only auto-name if we have a user message
-       let userMessageText = "";
-       let assistantMessageText = "";
+    // Check if we need to auto-name (only for new/untitled conversations)
+    const conv = await pgliteStore.getConversation(this.conversationId);
+    if (
+      !conv ||
+      (conv.title !== "New Conversation" && conv.title !== "Untitled")
+    ) {
+      return;
+    }
 
-       if (this.currentTurn.userMessage) {
-           userMessageText = this.currentTurn.userMessage.content;
-           if (this.currentTurn.assistantMessage) {
-               assistantMessageText = this.currentTurn.assistantMessage.content;
-           }
-       } else {
-           // Fallback to fetching history if currentTurn is empty (e.g. reload)
-           const history = await pgliteStore.loadConversation(this.conversationId);
-           const firstUserMsg = history.items.find(item => item.type === 'message' && item.data.role === 'user');
-           const firstAssistantMsg = history.items.find(item => item.type === 'message' && item.data.role === 'assistant');
-           
-           if (firstUserMsg && firstUserMsg.type === 'message') {
-               userMessageText = firstUserMsg.data.content;
-           }
-           if (firstAssistantMsg && firstAssistantMsg.type === 'message') {
-               assistantMessageText = firstAssistantMsg.data.content;
-           }
-       }
-       
-       if (!userMessageText) return;
+    // Only auto-name if we have a user message
+    let userMessageText = "";
+    let assistantMessageText = "";
 
-       try {
-           this.logDebug("[chat-stream] Auto-generating title...");
-           const response = await fetch('/api/generate-title', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ message: userMessageText, assistant_message: assistantMessageText })
-           });
-           
-           if (response.ok) {
-               const data = await response.json();
-               if (data.title) {
-                   await pgliteStore.updateTitle(this.conversationId, data.title);
-                   // Dispatch event to update sidebar
-                   window.dispatchEvent(new CustomEvent('conversation-updated', { 
-                       detail: { conversationId: this.conversationId } 
-                   }));
-           this.logDebug("[chat-stream] Title updated:", data.title);
-       }
-   }
-       } catch (err) {
-           console.error("[chat-stream] Failed to auto-generate title:", err);
-       }
+    if (this.currentTurn.userMessage) {
+      userMessageText = this.currentTurn.userMessage.content;
+      if (this.currentTurn.assistantMessage) {
+        assistantMessageText = this.currentTurn.assistantMessage.content;
+      }
+    } else {
+      // Fallback to fetching history if currentTurn is empty (e.g. reload)
+      const history = await pgliteStore.loadConversation(this.conversationId);
+      const firstUserMsg = history.items.find(
+        (item) => item.type === "message" && item.data.role === "user",
+      );
+      const firstAssistantMsg = history.items.find(
+        (item) => item.type === "message" && item.data.role === "assistant",
+      );
+
+      if (firstUserMsg && firstUserMsg.type === "message") {
+        userMessageText = firstUserMsg.data.content;
+      }
+      if (firstAssistantMsg && firstAssistantMsg.type === "message") {
+        assistantMessageText = firstAssistantMsg.data.content;
+      }
+    }
+
+    if (!userMessageText) return;
+
+    try {
+      this.logDebug("[chat-stream] Auto-generating title...");
+      const response = await fetch("/api/generate-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessageText,
+          assistant_message: assistantMessageText,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.title) {
+          await pgliteStore.updateTitle(this.conversationId, data.title);
+          // Dispatch event to update sidebar
+          window.dispatchEvent(
+            new CustomEvent("conversation-updated", {
+              detail: { conversationId: this.conversationId },
+            }),
+          );
+          this.logDebug("[chat-stream] Title updated:", data.title);
+        }
+      }
+    } catch (err) {
+      console.error("[chat-stream] Failed to auto-generate title:", err);
+    }
   }
+
+  private lastEventId: string | null = null;
 
   /**
    * Start the SSE stream using native EventSource.
@@ -206,7 +237,10 @@ export class ChatStream extends HTMLElement {
 
     if (responseJson) {
       try {
-        const response = JSON.parse(responseJson) as { session_id?: string; stream_url?: string };
+        const response = JSON.parse(responseJson) as {
+          session_id?: string;
+          stream_url?: string;
+        };
         if (response.stream_url) {
           url = response.stream_url;
           this.setAttribute("stream-url", url);
@@ -219,6 +253,20 @@ export class ChatStream extends HTMLElement {
     this.prepareNewStreamState();
 
     this.logDebug("[chat-stream] Connecting to SSE:", url);
+
+    // If we have a lastEventId, append it to the URL for manual reconnection replay
+    if (this.lastEventId) {
+      const urlObj = new URL(url, window.location.origin);
+      urlObj.searchParams.set("last_event_id", this.lastEventId);
+      url = urlObj.toString();
+      this.logDebug(
+        "[chat-stream] Reconnecting with last_event_id:",
+        this.lastEventId,
+      );
+    }
+
+    // EventSource doesn't support custom headers easily, but it supports Last-Event-ID
+    // natively if the server sends it and the browser reconnects.
     this.eventSource = new EventSource(url);
 
     // List of all AG-UI event names
@@ -235,47 +283,54 @@ export class ChatStream extends HTMLElement {
       "agui.tool_result",
       "agui.usage",
       "agui.error",
-      "agui.done"
+      "agui.done",
     ];
 
     // Add listeners for all event types
-    eventTypes.forEach(type => {
+    eventTypes.forEach((type) => {
       this.eventSource?.addEventListener(type, (e: MessageEvent) => {
+        if (e.lastEventId) {
+          this.lastEventId = e.lastEventId;
+          this.logDebug(
+            "[chat-stream] Last-Event-ID updated:",
+            this.lastEventId,
+          );
+        }
         this.handleSseMessage(type, e.data);
       });
     });
 
     // Handle generic errors
     this.eventSource.onerror = (e) => {
-        console.error("[chat-stream] SSE Error:", e);
-        this.view?.upsertItem({
-            id: createUniqueId(),
-            kind: "error",
-            content: "Connection interrupted."
-        });
-        this.closeStream();
+      console.error("[chat-stream] SSE Error:", e);
+      this.view?.upsertItem({
+        id: createUniqueId(),
+        kind: "error",
+        content: "Connection interrupted.",
+      });
+      this.closeStream();
     };
 
     this.eventSource.onopen = () => {
-        this.logDebug("[chat-stream] SSE Connected");
-    }
+      this.logDebug("[chat-stream] SSE Connected");
+    };
   }
 
   private closeStream() {
-      if (this.eventSource) {
-          this.eventSource.close();
-          this.eventSource = null;
-          this.logDebug("[chat-stream] SSE Closed");
-          this.saveTurnForPersistence();
-      }
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+      this.logDebug("[chat-stream] SSE Closed");
+      this.saveTurnForPersistence();
+    }
   }
 
   private prepareNewStreamState() {
-     this.controller?.reset();
-     this.accumulatedText = "";
-     this.accumulatedThinking = "";
-     this.accumulatedReasoning = "";
-     this.currentTurn = this.createEmptyTurn();
+    this.controller?.reset();
+    this.accumulatedText = "";
+    this.accumulatedThinking = "";
+    this.accumulatedReasoning = "";
+    this.currentTurn = this.createEmptyTurn();
   }
 
   /**
@@ -283,20 +338,20 @@ export class ChatStream extends HTMLElement {
    */
   private handleSseMessage(type: string, rawData: string): void {
     if (type !== "agui.message.delta") {
-       this.logDebug("[chat-stream] Received SSE:", type, rawData);
+      this.logDebug("[chat-stream] Received SSE:", type, rawData);
     }
 
     // Manual parsing
     let agUiEvent: AgUiEvent | null = null;
     try {
-        agUiEvent = parseAgUiEvent(rawData);
+      agUiEvent = parseAgUiEvent(rawData);
     } catch (e) {
-        console.error("[chat-stream] Failed to parse SSE data:", e);
+      console.error("[chat-stream] Failed to parse SSE data:", e);
     }
 
     if (!agUiEvent) {
-        console.warn("[chat-stream] Dropping unknown/unparsable event:", type);
-        return;
+      console.warn("[chat-stream] Dropping unknown/unparsable event:", type);
+      return;
     }
 
     // 1. Pass to Controller for View Updates
@@ -306,7 +361,7 @@ export class ChatStream extends HTMLElement {
     this.accumulateForPersistence(agUiEvent);
 
     if (agUiEvent.kind === "done") {
-        this.closeStream();
+      this.closeStream();
     }
   }
 
@@ -318,112 +373,117 @@ export class ChatStream extends HTMLElement {
     switch (event.kind) {
       case "message":
         if (event.phase === "delta") {
-            this.accumulatedText += event.delta.text;
+          this.accumulatedText += event.delta.text;
         }
         break;
       case "thinking":
         if (event.phase === "delta") {
-            this.accumulatedThinking += event.delta.text;
+          this.accumulatedThinking += event.delta.text;
         }
         break;
       case "reasoning":
         if (event.phase === "delta") {
-            this.accumulatedReasoning += event.delta.text;
+          this.accumulatedReasoning += event.delta.text;
         }
         break;
       case "tool_call":
         if (event.phase === "complete" && this.conversationId) {
-             this.currentTurn.toolCalls.push({
-                id: event.id,
-                conversation_id: this.conversationId,
-                message_id: "",
-                call_index: event.call_index,
-                tool_name: event.name,
-                arguments: JSON.parse(event.arguments_json || "{}"),
-                status: "complete",
-                created_at: new Date().toISOString(),
-                sequence_order: this.sequenceOrder++
-             });
+          this.currentTurn.toolCalls.push({
+            id: event.id,
+            conversation_id: this.conversationId,
+            message_id: "",
+            call_index: event.call_index,
+            tool_name: event.name,
+            arguments: JSON.parse(event.arguments_json || "{}"),
+            status: "complete",
+            created_at: new Date().toISOString(),
+            sequence_order: this.sequenceOrder++,
+          });
         }
         break;
       case "tool_result":
         if (this.conversationId) {
-             this.currentTurn.toolResults.push({
-                id: generateUuid(),
-                conversation_id: this.conversationId,
-                tool_call_id: event.id,
-                tool_name: event.name,
-                content: event.content,
-                success: event.success,
-                created_at: new Date().toISOString(),
-                sequence_order: this.sequenceOrder++
-             });
+          this.currentTurn.toolResults.push({
+            id: generateUuid(),
+            conversation_id: this.conversationId,
+            tool_call_id: event.id,
+            tool_name: event.name,
+            content: event.content,
+            success: event.success,
+            created_at: new Date().toISOString(),
+            sequence_order: this.sequenceOrder++,
+          });
         }
         break;
       case "citation":
+        if (event.citation) {
           this.currentTurn.citations.push({
-              id: generateUuid(),
-              conversation_id: this.conversationId || "",
-              message_id: this.currentTurn.assistantMessage?.id || null,
-              url: event.citation.url,
-              title: event.citation.title || null,
-              snippet: event.citation.snippet || null,
-              citation_index: event.citation.index,
-              created_at: new Date().toISOString(),
-              sequence_order: this.sequenceOrder++
+            id: generateUuid(),
+            conversation_id: this.conversationId || "",
+            message_id: this.currentTurn.assistantMessage?.id || null,
+            url: event.citation.url,
+            title: event.citation.title || null,
+            snippet: event.citation.snippet || null,
+            citation_index: event.citation.index,
+            created_at: new Date().toISOString(),
+            sequence_order: this.sequenceOrder++,
           });
-          break;
+        }
+        break;
     }
   }
 
   private async saveTurnForPersistence() {
-     if (!this.conversationId) return;
+    if (!this.conversationId) return;
 
-     // 1. Create Assistant Message Object if not already created
-     if (this.accumulatedText && !this.currentTurn.assistantMessage) {
-        const message: Message = {
-            id: generateUuid(),
-            conversation_id: this.conversationId,
-            role: "assistant",
-            content: this.accumulatedText,
-            created_at: new Date().toISOString(),
-            sequence_order: this.sequenceOrder++,
-            metadata: {}
-        };
-        this.currentTurn.assistantMessage = message;
-     } else if (this.currentTurn.assistantMessage) {
-        // Update content if it was streaming
-        this.currentTurn.assistantMessage.content = this.accumulatedText;
-     }
-     
-     // 2. Add accumulated thinking/reasoning if present
-     if (this.accumulatedThinking) {
-         this.currentTurn.thinkingBlocks.push({
-             id: generateUuid(),
-             conversation_id: this.conversationId,
-             message_id: this.currentTurn.assistantMessage?.id || null,
-             content: this.accumulatedThinking,
-             is_complete: true,
-             created_at: new Date().toISOString(),
-             sequence_order: this.sequenceOrder++
-         });
-     }
+    // 1. Create Assistant Message Object if not already created
+    if (this.accumulatedText && !this.currentTurn.assistantMessage) {
+      const message: Message = {
+        id: generateUuid(),
+        conversation_id: this.conversationId,
+        role: "assistant",
+        content: this.accumulatedText,
+        created_at: new Date().toISOString(),
+        sequence_order: this.sequenceOrder++,
+        metadata: {},
+      };
+      this.currentTurn.assistantMessage = message;
+    } else if (this.currentTurn.assistantMessage) {
+      // Update content if it was streaming
+      this.currentTurn.assistantMessage.content = this.accumulatedText;
+    }
 
-     if (this.accumulatedReasoning) {
-         this.currentTurn.reasoningBlocks.push({
-             id: generateUuid(),
-             conversation_id: this.conversationId,
-             message_id: this.currentTurn.assistantMessage?.id || null,
-             content: this.accumulatedReasoning,
-             is_complete: true,
-             created_at: new Date().toISOString(),
-             sequence_order: this.sequenceOrder++
-         });
-     }
+    // 2. Add accumulated thinking/reasoning if present
+    if (this.accumulatedThinking) {
+      this.currentTurn.thinkingBlocks.push({
+        id: generateUuid(),
+        conversation_id: this.conversationId,
+        message_id: this.currentTurn.assistantMessage?.id || null,
+        content: this.accumulatedThinking,
+        is_complete: true,
+        created_at: new Date().toISOString(),
+        sequence_order: this.sequenceOrder++,
+      });
+    }
 
-     // 3. Save the entire turn (User + Assistant + Tools + Thinking)
-     // The store handles upserts, so re-saving userMessage is safe.
-     await pgliteStore.saveConversationTurn(this.conversationId, this.currentTurn);
+    if (this.accumulatedReasoning) {
+      this.currentTurn.reasoningBlocks.push({
+        id: generateUuid(),
+        conversation_id: this.conversationId,
+        message_id: this.currentTurn.assistantMessage?.id || null,
+        content: this.accumulatedReasoning,
+        is_complete: true,
+        created_at: new Date().toISOString(),
+        sequence_order: this.sequenceOrder++,
+      });
+    }
+
+    // 3. Save the entire turn (User + Assistant + Tools + Thinking)
+    // The store handles upserts, so re-saving userMessage is safe.
+    await pgliteStore.saveConversationTurn(
+      this.conversationId,
+      this.currentTurn,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -436,29 +496,37 @@ export class ChatStream extends HTMLElement {
     if (!this.conversationId) {
       const conv = await pgliteStore.createConversation();
       this.conversationId = conv.id;
-      window.dispatchEvent(new CustomEvent('conversation-created', { detail: { conversationId: conv.id } }));
+      window.dispatchEvent(
+        new CustomEvent("conversation-created", {
+          detail: { conversationId: conv.id },
+        }),
+      );
     }
 
     // Build the display content with file attachments
-    let displayHtml = '';
-    
+    let displayHtml = "";
+
     // Render image previews if any
     if (files && files.length > 0) {
-      const imageFiles = files.filter(f => f.file.type.startsWith('image/'));
-      const documentFiles = files.filter(f => !f.file.type.startsWith('image/'));
-      
+      const imageFiles = files.filter((f) => f.file.type.startsWith("image/"));
+      const documentFiles = files.filter(
+        (f) => !f.file.type.startsWith("image/"),
+      );
+
       if (imageFiles.length > 0) {
-        displayHtml += '<div class="attached-images flex flex-wrap gap-2 mb-3">';
+        displayHtml +=
+          '<div class="attached-images flex flex-wrap gap-2 mb-3">';
         for (const file of imageFiles) {
           if (file.preview) {
             displayHtml += `<img src="${file.preview}" class="w-24 h-24 rounded-lg object-cover" alt="${file.file.name}" />`;
           }
         }
-        displayHtml += '</div>';
+        displayHtml += "</div>";
       }
-      
+
       if (documentFiles.length > 0) {
-        displayHtml += '<div class="attached-documents flex flex-wrap gap-2 mb-3">';
+        displayHtml +=
+          '<div class="attached-documents flex flex-wrap gap-2 mb-3">';
         for (const file of documentFiles) {
           displayHtml += `
             <div class="document-attachment flex items-center gap-2 px-3 py-2 bg-surfaceContainer rounded-lg text-sm">
@@ -469,10 +537,10 @@ export class ChatStream extends HTMLElement {
             </div>
           `;
         }
-        displayHtml += '</div>';
+        displayHtml += "</div>";
       }
     }
-    
+
     // Add the text content
     if (content.trim()) {
       displayHtml += renderMarkdown(content.trim());
@@ -485,20 +553,23 @@ export class ChatStream extends HTMLElement {
       content: content.trim(),
       created_at: new Date().toISOString(),
       sequence_order: this.sequenceOrder++,
-      metadata: files && files.length > 0 ? { 
-        fileCount: files.length,
-        hasImages: files.some(f => f.file.type.startsWith('image/'))
-      } : {}
+      metadata:
+        files && files.length > 0
+          ? {
+              fileCount: files.length,
+              hasImages: files.some((f) => f.file.type.startsWith("image/")),
+            }
+          : {},
     };
 
     // Render immediately with attachments
     this.view?.upsertItem({
-        id: message.id,
-        kind: "message",
-        role: "user",
-        html: displayHtml
+      id: message.id,
+      kind: "message",
+      role: "user",
+      html: displayHtml,
     });
-    
+
     // Persist
     await pgliteStore.addMessage(message);
     this.currentTurn.userMessage = message;
@@ -509,55 +580,59 @@ export class ChatStream extends HTMLElement {
       const history = await pgliteStore.loadConversation(id);
       this.conversationId = id;
       this.view?.reset();
-      
+
       // Render history
       for (const item of history.items) {
-         switch (item.type) {
-             case 'message':
-                if (item.data.role === 'error') {
-                    this.view?.upsertItem({
-                        id: item.data.id || createUniqueId(),
-                        kind: "error",
-                        content: item.data.content
-                    });
-                } else {
-                    this.view?.upsertItem({
-                        id: item.data.id || createUniqueId(),
-                        kind: "message",
-                        role: item.data.role as "user" | "assistant" | "tool",
-                        content: item.data.content,
-                        html: renderMarkdown(item.data.content)
-                    });
-                }
-                break;
-             case 'tool_call':
-                 this.view?.upsertItem({
-                     id: item.data.id || `tool-${createUniqueId()}`,
-                     kind: "tool_call",
-                     name: item.data.tool_name,
-                     args: JSON.stringify(item.data.arguments, null, 2),
-                     isComplete: true
-                 });
-                 break;
-              // citations, thinking, etc. can be added here
-         }
+        switch (item.type) {
+          case "message":
+            if (item.data.role === "error") {
+              this.view?.upsertItem({
+                id: item.data.id || createUniqueId(),
+                kind: "error",
+                content: item.data.content,
+              });
+            } else {
+              this.view?.upsertItem({
+                id: item.data.id || createUniqueId(),
+                kind: "message",
+                role: item.data.role as "user" | "assistant" | "tool",
+                content: item.data.content,
+                html: renderMarkdown(item.data.content),
+              });
+            }
+            break;
+          case "tool_call":
+            this.view?.upsertItem({
+              id: item.data.id || `tool-${createUniqueId()}`,
+              kind: "tool_call",
+              name: item.data.tool_name,
+              args: JSON.stringify(item.data.arguments, null, 2),
+              isComplete: true,
+            });
+            break;
+          // citations, thinking, etc. can be added here
+        }
       }
     } catch (e) {
-        console.error("[chat-stream] Failed to load conversation", e);
+      console.error("[chat-stream] Failed to load conversation", e);
     }
   }
-  
+
   async createNewConversation(): Promise<void> {
-       const conv = await pgliteStore.createConversation("New Conversation");
-       this.conversationId = conv.id;
-       this.view?.reset();
-       window.dispatchEvent(new CustomEvent('conversation-updated', { detail: { conversationId: conv.id } }));
+    const conv = await pgliteStore.createConversation("New Conversation");
+    this.conversationId = conv.id;
+    this.view?.reset();
+    window.dispatchEvent(
+      new CustomEvent("conversation-updated", {
+        detail: { conversationId: conv.id },
+      }),
+    );
   }
 
   private handleConversationChanged(e: CustomEvent) {
-      if (e.detail.conversationId) {
-          this.loadConversation(e.detail.conversationId);
-      }
+    if (e.detail.conversationId) {
+      this.loadConversation(e.detail.conversationId);
+    }
   }
 
   private createEmptyTurn(): ConversationTurn {
@@ -568,9 +643,11 @@ export class ChatStream extends HTMLElement {
       reasoningBlocks: [],
       toolCalls: [],
       toolResults: [],
-      citations: []
+      citations: [],
     };
   }
 }
 
-customElements.define("chat-stream", ChatStream);
+if (!customElements.get("chat-stream")) {
+  customElements.define("chat-stream", ChatStream);
+}

@@ -70,15 +70,15 @@ services:
 
   surreal:
     image: surrealdb/surrealdb:latest
-    command: start --log warn --user root --pass root memory
+    command: start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
     ports:
       - "8001:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 5s
-      timeout: 3s
+      test: ["CMD-SHELL", "surreal sql --conn http://localhost:8000 --user root --pass root --ns test --db test --pretty 'SELECT 1;' || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     networks:
       - uar-test-net
     deploy:

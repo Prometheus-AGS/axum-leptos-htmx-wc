@@ -33,9 +33,17 @@ services:
   surreal:
     image: surrealdb/surrealdb:latest
     restart: always
-    command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} file://data/surreal.db
+    ports:
+      - "${SURREAL_PORT:-8000}:8000"
+    command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} --bind 0.0.0.0:8000 file://data/surreal.db
     volumes:
       - surreal_data_prod:/data
+    healthcheck:
+      test: ["CMD-SHELL", "surreal sql --conn http://localhost:8000 --user ${SURREAL_USER} --pass ${SURREAL_PASS} --ns test --db test --pretty 'SELECT 1;' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - uar-prod-net
 

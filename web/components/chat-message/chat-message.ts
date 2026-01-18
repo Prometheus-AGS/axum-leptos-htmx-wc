@@ -5,8 +5,8 @@
  */
 
 import type { ChatRole } from "../../types/chat";
+import { createUniqueId, escapeHtml } from "../../utils/html";
 import { renderMarkdown } from "../../utils/markdown";
-import { escapeHtml, createUniqueId } from "../../utils/html";
 
 /**
  * Chat Message component for displaying individual messages.
@@ -110,19 +110,19 @@ export class ChatMessage extends HTMLElement {
       this._role === "error"
         ? `<p class="text-danger">${escapeHtml(this._content)}</p>`
         : renderMarkdown(this._content);
-    
+
     const contentId = createUniqueId("message-content");
 
     this.innerHTML = `
-      <article class="chat-message rounded-xl p-4 ${config.classes} relative group">
+      <article class="chat-message rounded-xl p-4 ${config.classes} relative group" aria-label="${config.label} message">
         <div class="flex items-center gap-2 text-xs text-textMuted mb-2">
-          <span>${config.icon}</span>
+          <span aria-hidden="true">${config.icon}</span>
           <span class="font-medium">${config.label}</span>
         </div>
         <div id="${contentId}" class="prose prose-invert prose-sm max-w-none" data-raw-content="${escapeHtml(this._content)}">
           ${html}
         </div>
-        <copy-button target="${contentId}" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"></copy-button>
+        <copy-button target="${contentId}" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" aria-label="Copy message content"></copy-button>
       </article>
     `;
   }

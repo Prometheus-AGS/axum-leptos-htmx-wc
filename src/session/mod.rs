@@ -8,6 +8,8 @@
 //!
 //! - [`Session`]: Represents a single conversation session
 //! - [`SessionStore`]: Thread-safe store for all active sessions
+//! - [`EncryptedSession`]: Encrypted wrapper for secure communications
+//! - [`EncryptedSessionStore`]: Store managing encrypted sessions
 //!
 //! # Example
 //!
@@ -22,8 +24,17 @@
 //! assert_eq!(messages.len(), 1);
 //! ```
 
+mod encrypted;
 mod thread;
 
 #[allow(unused_imports)]
 pub use thread::Session;
 pub use thread::SessionStore;
+
+// Encrypted session types (optional feature)
+pub use encrypted::{
+    EncryptedSession, EncryptedSessionStore, WebRTCEncryptedSession,
+    // Re-export encryption types for convenience
+    ConversationId, ConversationManager, DeviceId, EncryptionConfig, EncryptionType,
+    StrongholdKeyManager, StreamingSession, UserId,
+};

@@ -34,3 +34,13 @@ pub struct ToolResult {
     pub content: serde_json::Value,
     pub is_error: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolExecutionMetadata {
+    pub tool_name: String,
+    pub duration_ms: u128,
+    pub input_size_bytes: usize,
+    pub output_size_bytes: usize,
+    pub success: bool,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}

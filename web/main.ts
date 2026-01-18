@@ -6,27 +6,27 @@
 
 // Third-party library initialization
 import mermaid from "mermaid";
-import { initializeMarkdown } from "./utils/markdown";
-import { debugLog } from "./utils/logging";
 
-// Web Components
-import { ChatStream } from "./components/chat-stream/chat-stream";
-import { ChatMessage } from "./components/chat-message/chat-message";
-import { ChatToolCall } from "./components/chat-tool-call/chat-tool-call";
-import { ChatToolResult } from "./components/chat-tool-result/chat-tool-result";
 import { ChatCodeBlock } from "./components/chat-code-block/chat-code-block";
 import { ChatMermaid } from "./components/chat-mermaid/chat-mermaid";
+import { ChatMessage } from "./components/chat-message/chat-message";
+// Web Components
+import { ChatStream } from "./components/chat-stream/chat-stream";
+import { ChatToolCall } from "./components/chat-tool-call/chat-tool-call";
+import { ChatToolResult } from "./components/chat-tool-result/chat-tool-result";
+import { ConversationSidebar } from "./components/conversation-sidebar/conversation-sidebar";
 import { CopyButton } from "./components/copy-button/copy-button";
+import { FileUpload } from "./components/file-upload/file-upload";
+import { SessionRestoreDialog } from "./components/session-restore-dialog/session-restore-dialog";
+import "./components/storage-health/storage-health";
 import { ThemeSwitcher } from "./components/theme-switcher/theme-switcher";
 import { TokenCounter } from "./components/token-counter/token-counter";
-import "./components/storage-health/storage-health";
-import { ConversationSidebar } from "./components/conversation-sidebar/conversation-sidebar";
-import { SessionRestoreDialog } from "./components/session-restore-dialog/session-restore-dialog";
-import { FileUpload } from "./components/file-upload/file-upload";
-
+import { ErrorBoundary } from "./components/ui/error-boundary";
 // PGlite Store
-import { pgliteStore } from "./stores/pglite-store";
 
+import { pgliteStore } from "./stores/pglite-store";
+import { debugLog } from "./utils/logging";
+import { initializeMarkdown } from "./utils/markdown";
 // Model Info Cache
 import { modelInfoCache } from "./utils/model-info";
 
@@ -41,7 +41,10 @@ mermaid.initialize({
 declare global {
   interface Window {
     mermaid: typeof mermaid;
-    Alpine: any;
+    Alpine: {
+      store: (name: string, value?: unknown) => unknown;
+      start: () => void;
+    };
   }
 }
 window.mermaid = mermaid;
@@ -52,16 +55,19 @@ initializeMarkdown();
 // Initialize PGlite database
 async function initializeDatabase(): Promise<void> {
   debugLog("[app] Initializing PGlite database...");
-  
+
   // Show loading indicator
   showLoadingIndicator("Initializing database...");
-  
+
   try {
     await pgliteStore.init();
     debugLog("[app] PGlite database initialized successfully");
   } catch (error) {
     console.error("[app] Failed to initialize PGlite:", error);
-    showLoadingIndicator("Database initialization failed. Please refresh the page.", true);
+    showLoadingIndicator(
+      "Database initialization failed. Please refresh the page.",
+      true,
+    );
     throw error;
   } finally {
     // Hide loading indicator after a short delay to prevent flashing
@@ -84,29 +90,34 @@ async function initializeModelInfo(): Promise<void> {
 // Show loading indicator
 function showLoadingIndicator(message: string, isError = false): void {
   let indicator = document.getElementById("app-loading-indicator");
-  
+
   if (!indicator) {
     indicator = document.createElement("div");
     indicator.id = "app-loading-indicator";
-    indicator.className = "fixed inset-0 z-50 flex items-center justify-center bg-background";
+    indicator.className =
+      "fixed inset-0 z-50 flex items-center justify-center bg-background";
     document.body.appendChild(indicator);
   }
-  
+
   indicator.innerHTML = `
     <div class="flex flex-col items-center gap-4 p-8">
-      ${isError ? `
+      ${
+        isError
+          ? `
         <svg class="w-12 h-12 text-danger" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-      ` : `
+      `
+          : `
         <svg class="w-12 h-12 text-primary animate-spin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
         </svg>
-      `}
-      <p class="text-lg font-medium ${isError ? 'text-danger' : 'text-textPrimary'}">${message}</p>
-      ${!isError ? '<p class="text-sm text-textMuted">This may take a moment on first load</p>' : ''}
+      `
+      }
+      <p class="text-lg font-medium ${isError ? "text-danger" : "text-textPrimary"}">${message}</p>
+      ${!isError ? '<p class="text-sm text-textMuted">This may take a moment on first load</p>' : ""}
     </div>
   `;
 }
@@ -126,7 +137,7 @@ async function initializeAlpineStore(): Promise<void> {
   document.addEventListener("alpine:init", async () => {
     // Ensure PGlite is initialized
     await pgliteStore.init();
-    
+
     // Define store type
     interface ChatStore {
       activeConversationId: string | null;
@@ -142,19 +153,26 @@ async function initializeAlpineStore(): Promise<void> {
       };
       init(this: ChatStore): Promise<void>;
       setSessionId(this: ChatStore, sessionId: string): void;
-      updateTokenUsage(this: ChatStore, input: number, output: number, limit: number, isEstimate?: boolean, cost?: number): void;
+      updateTokenUsage(
+        this: ChatStore,
+        input: number,
+        output: number,
+        limit: number,
+        isEstimate?: boolean,
+        cost?: number,
+      ): void;
       getStore(): typeof pgliteStore;
     }
-    
+
     // Define store with proper typing
     const chatStore: ChatStore = {
       // Active conversation
       activeConversationId: null,
       sessionId: null,
-      
+
       // Connection status
       status: "idle",
-      
+
       // Token usage tracking
       tokenUsage: {
         input: 0,
@@ -164,7 +182,7 @@ async function initializeAlpineStore(): Promise<void> {
         isEstimate: true,
         cost: 0,
       },
-      
+
       // Initialize store
       async init() {
         // Load most recent conversation
@@ -172,24 +190,32 @@ async function initializeAlpineStore(): Promise<void> {
         if (conversations.length > 0 && conversations[0]) {
           const conversationId = conversations[0].id;
           this.activeConversationId = conversationId;
-          
+
           // Notify chat-stream to load this conversation
-          window.dispatchEvent(new CustomEvent('conversation-changed', {
-            detail: { conversationId }
-          }));
+          window.dispatchEvent(
+            new CustomEvent("conversation-changed", {
+              detail: { conversationId },
+            }),
+          );
         }
-        
+
         debugLog("[chat-store] Initialized with PGlite");
       },
-      
+
       // Set session ID
       setSessionId(sessionId: string): void {
         this.sessionId = sessionId;
         debugLog("[chat-store] Session ID set:", sessionId);
       },
-      
+
       // Update token usage
-      updateTokenUsage(input: number, output: number, limit: number, isEstimate: boolean = true, cost: number = 0): void {
+      updateTokenUsage(
+        input: number,
+        output: number,
+        limit: number,
+        isEstimate: boolean = true,
+        cost: number = 0,
+      ): void {
         this.tokenUsage = {
           input,
           output,
@@ -200,13 +226,13 @@ async function initializeAlpineStore(): Promise<void> {
         };
         debugLog("[chat-store] Token usage updated:", this.tokenUsage);
       },
-      
+
       // Get the PGlite store instance
       getStore() {
         return pgliteStore;
       },
     };
-    
+
     window.Alpine.store("chat", chatStore);
   });
 }
@@ -227,8 +253,9 @@ function registerComponents(): void {
     { name: "conversation-sidebar", component: ConversationSidebar },
     { name: "session-restore-dialog", component: SessionRestoreDialog },
     { name: "file-upload", component: FileUpload },
+    { name: "error-boundary", component: ErrorBoundary },
   ];
-  
+
   for (const { name, component } of components) {
     if (!customElements.get(name)) {
       customElements.define(name, component);
@@ -238,33 +265,48 @@ function registerComponents(): void {
 
 // Initialize everything
 async function initialize(): Promise<void> {
+  // Register Service Worker
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("/static/sw.js")
+        .then((registration) => {
+          debugLog("[app] ServiceWorker registered:", registration.scope);
+        })
+        .catch((error) => {
+          console.error("[app] ServiceWorker registration failed:", error);
+        });
+    });
+  }
+
   // Initialize database FIRST before anything else
   await initializeDatabase();
-  
+
   // Initialize model info cache (in parallel, non-blocking)
   await initializeModelInfo();
-  
+
   // Register components after database is ready
   registerComponents();
-  
+
   // Initialize Alpine store
   await initializeAlpineStore();
-  
+
   // Start Alpine.js (check if already initialized)
   try {
-    if (typeof window.Alpine.store === 'function') {
+    const alpine = window.Alpine;
+    if (typeof alpine?.store === "function") {
       // Alpine is already initialized
       debugLog("[app] Alpine.js already initialized");
-    } else {
+    } else if (alpine) {
       // Start Alpine
-      window.Alpine.start();
+      alpine.start();
       debugLog("[app] Alpine.js started");
     }
   } catch (e) {
     // Alpine not loaded yet or error
     console.warn("[app] Alpine.js initialization check failed:", e);
   }
-  
+
   debugLog("[app] Application initialized");
 }
 

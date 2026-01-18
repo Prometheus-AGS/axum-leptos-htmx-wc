@@ -2,8 +2,10 @@
  * Markdown rendering utilities.
  */
 
+import hljs from "highlight.js";
 import { marked } from "marked";
-import { sanitizeHtml, escapeHtml } from "./html";
+
+import { escapeHtml, sanitizeHtml } from "./html";
 
 // Singleton for initialization state
 let isInitialized = false;
@@ -26,22 +28,30 @@ renderer.code = ({ text, lang }: { text: string; lang?: string }): string => {
 };
 
 // Override image rendering to support video
-renderer.image = ({ href, title, text }: { href: string; title: string | null; text: string }): string => {
+renderer.image = ({
+  href,
+  title,
+  text,
+}: {
+  href: string;
+  title: string | null;
+  text: string;
+}): string => {
   if (!href) return "";
 
-  const fileExt = href.split('.').pop()?.toLowerCase();
+  const fileExt = href.split(".").pop()?.toLowerCase();
   const isVideo = ["mp4", "webm", "ogg", "mov"].includes(fileExt || "");
 
   if (isVideo) {
     return `
-      <video controls class="max-w-full rounded-lg my-2" title="${title || text || ''}">
-        <source src="${href}" type="video/${fileExt === 'mov' ? 'mp4' : fileExt}">
+      <video controls class="max-w-full rounded-lg my-2" title="${title || text || ""}">
+        <source src="${href}" type="video/${fileExt === "mov" ? "mp4" : fileExt}">
         Your browser does not support the video tag.
       </video>
     `;
   }
 
-  return `<img src="${href}" alt="${text}" title="${title || ''}" class="max-w-full rounded-lg my-2">`;
+  return `<img src="${href}" alt="${text}" title="${title || ""}" class="max-w-full rounded-lg my-2">`;
 };
 
 /**
@@ -101,7 +111,6 @@ export function isProbablyMermaid(code: string): boolean {
  * Highlight code without wrapping in pre/code tags.
  * (Preserved for compatibility, though largely superseded by ChatCodeBlock)
  */
-import hljs from "highlight.js";
 export function highlightCode(code: string, language: string): string {
   if (language && hljs.getLanguage(language)) {
     return hljs.highlight(code, { language }).value;

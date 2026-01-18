@@ -5,7 +5,9 @@ const DEBUG_ENABLED = (() => {
 
   try {
     const params = new URLSearchParams(window.location.search);
-    return params.has("debug") || window.localStorage.getItem("debug") === "true";
+    return (
+      params.has("debug") || window.localStorage.getItem("debug") === "true"
+    );
   } catch {
     return false;
   }
@@ -15,6 +17,7 @@ export const isDebugEnabled = (): boolean => DEBUG_ENABLED;
 
 export const debugLog = (...args: unknown[]): void => {
   if (DEBUG_ENABLED) {
+    // eslint-disable-next-line no-console
     console.log(...args);
   }
 };

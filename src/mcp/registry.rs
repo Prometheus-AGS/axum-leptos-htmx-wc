@@ -317,13 +317,39 @@ impl McpRegistry {
 
         // 3. Call tool
         let args_obj = arguments.as_object().cloned();
+        let input_size = serde_json::to_string(&arguments).map(|s| s.len()).unwrap_or(0);
+        let start = std::time::Instant::now();
         let res = service
             .call_tool(CallToolRequestParam {
                 name: raw_tool_name.clone().into(),
                 arguments: args_obj,
             })
-            .await
-            .with_context(|| format!("tools/call failed for {server_name}::{raw_tool_name}"))?;
+            .await;
+        let duration = start.elapsed();
+        let success = res.is_ok();
+
+        let output_size = if let Ok(ref r) = res {
+            serde_json::to_string(r).map(|s| s.len()).unwrap_or(0)
+        } else {
+            0
+        };
+
+        tracing::info!(
+            target: "mcp.tool.execution",
+            tool = %namespaced_tool,
+            duration_ms = %duration.as_millis(),
+            input_size_bytes = %input_size,
+            output_size_bytes = %output_size,
+            success = %success,
+            "MCP tool executed"
+        );
+
+        // Optional: Emit metrics if the metrics crate is used
+        metrics::counter!("mcp_tool_calls_total", "tool" => namespaced_tool.to_string(), "success" => success.to_string()).increment(1);
+        #[allow(clippy::cast_precision_loss)]
+        metrics::histogram!("mcp_tool_duration_ms", "tool" => namespaced_tool.to_string()).record(duration.as_millis() as f64);
+
+        let res = res.with_context(|| format!("tools/call failed for {server_name}::{raw_tool_name}"))?;
 
         // 4. Return content (simplified)
         Ok(serde_json::to_value(res)?)

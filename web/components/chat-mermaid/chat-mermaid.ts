@@ -79,7 +79,9 @@ export class ChatMermaid extends HTMLElement {
 
     // Bind toggle button
     const toggleBtn = this.querySelector('[data-action="toggle-source"]');
-    const sourceContainer = this.querySelector(`#${diagramId}-source-container`);
+    const sourceContainer = this.querySelector(
+      `#${diagramId}-source-container`,
+    );
 
     if (toggleBtn && sourceContainer) {
       toggleBtn.addEventListener("click", () => {

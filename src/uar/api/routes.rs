@@ -5,7 +5,7 @@ use crate::uar::{
 };
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     response::IntoResponse,
     routing::{get, post},
@@ -34,6 +34,11 @@ struct CreateRunResponse {
     stream_url: String,
 }
 
+#[derive(Deserialize)]
+struct StreamParams {
+    last_event_id: Option<u64>,
+}
+
 async fn create_run(
     State(manager): State<Arc<RunManager>>,
     Json(req): Json<CreateRunRequest>,
@@ -50,16 +55,19 @@ async fn create_run(
 async fn stream_run(
     State(manager): State<Arc<RunManager>>,
     Path(run_id): Path<String>,
+    Query(params): Query<StreamParams>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let Some(rx) = manager.subscribe(&run_id).await else {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     };
 
-    let last_event_id = headers
-        .get("last-event-id")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok());
+    let last_event_id = params.last_event_id.or_else(|| {
+        headers
+            .get("last-event-id")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok())
+    });
 
     let replay = manager
         .history_since(&run_id, last_event_id)

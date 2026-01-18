@@ -89,7 +89,7 @@ export class FileUpload extends HTMLElement {
   attributeChangedCallback(
     _name: string,
     oldValue: string | null,
-    newValue: string | null
+    newValue: string | null,
   ): void {
     if (oldValue === newValue) return;
     this.parseAttributes();
@@ -105,7 +105,9 @@ export class FileUpload extends HTMLElement {
     if (maxFileSize) this.config.maxFileSize = parseInt(maxFileSize, 10);
     if (maxTotalSize) this.config.maxTotalSize = parseInt(maxTotalSize, 10);
     if (allowedTypes)
-      this.config.allowedMimeTypes = allowedTypes.split(",").map((t) => t.trim());
+      this.config.allowedMimeTypes = allowedTypes
+        .split(",")
+        .map((t) => t.trim());
   }
 
   private render(): void {
@@ -132,17 +134,18 @@ export class FileUpload extends HTMLElement {
         </div>
         
         <!-- Upload button with attachment icon -->
-        <label class="upload-button shrink-0 h-11 w-11 md:h-12 md:w-12 rounded-xl md:rounded-2xl bg-surfaceContainer hover:bg-surfaceContainerHighest flex items-center justify-center cursor-pointer transition-all relative" title="Attach files">
+        <label class="upload-button shrink-0 h-11 w-11 md:h-12 md:w-12 rounded-xl md:rounded-2xl bg-surfaceContainer hover:bg-surfaceContainerHighest flex items-center justify-center cursor-pointer transition-all relative" title="Attach files" aria-label="Attach files">
           <input 
             type="file" 
             multiple 
             accept="image/*,.pdf,.doc,.docx,.txt,.md,.xlsx,.pptx,.csv,.json,.xml,.html,.css,.js,.ts,.py,.rs,.go,.java,.c,.cpp,.h,.hpp" 
             class="hidden" 
+            aria-label="Select files to upload"
           />
-          <svg class="h-5 w-5 text-textSecondary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="h-5 w-5 text-textSecondary" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
-          <span class="file-count-badge hidden absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center font-medium"></span>
+          <span class="file-count-badge hidden absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center font-medium" aria-live="polite"></span>
         </label>
       </div>
     `;
@@ -233,14 +236,14 @@ export class FileUpload extends HTMLElement {
   private handleFiles(files: File[]): void {
     let currentTotalSize = this.attachedFiles.reduce(
       (sum, f) => sum + f.file.size,
-      0
+      0,
     );
 
     for (const file of files) {
       // Check file count limit
       if (this.attachedFiles.length >= this.config.maxFilesPerPrompt) {
         console.warn(
-          `[file-upload] Max files limit (${this.config.maxFilesPerPrompt}) reached`
+          `[file-upload] Max files limit (${this.config.maxFilesPerPrompt}) reached`,
         );
         break;
       }
@@ -248,7 +251,7 @@ export class FileUpload extends HTMLElement {
       // Check individual file size
       if (file.size > this.config.maxFileSize) {
         console.warn(
-          `[file-upload] File "${file.name}" exceeds max size (${this.formatSize(file.size)} > ${this.formatSize(this.config.maxFileSize)})`
+          `[file-upload] File "${file.name}" exceeds max size (${this.formatSize(file.size)} > ${this.formatSize(this.config.maxFileSize)})`,
         );
         continue;
       }
@@ -256,7 +259,7 @@ export class FileUpload extends HTMLElement {
       // Check total size
       if (currentTotalSize + file.size > this.config.maxTotalSize) {
         console.warn(
-          `[file-upload] Total size would exceed limit (${this.formatSize(this.config.maxTotalSize)})`
+          `[file-upload] Total size would exceed limit (${this.formatSize(this.config.maxTotalSize)})`,
         );
         break;
       }
@@ -265,11 +268,11 @@ export class FileUpload extends HTMLElement {
       if (
         this.config.allowedMimeTypes.length > 0 &&
         !this.config.allowedMimeTypes.some((allowed) =>
-          file.type.match(new RegExp(allowed.replace("*", ".*")))
+          file.type.match(new RegExp(allowed.replace("*", ".*"))),
         )
       ) {
         console.warn(
-          `[file-upload] File "${file.name}" has unsupported type: ${file.type}`
+          `[file-upload] File "${file.name}" has unsupported type: ${file.type}`,
         );
         continue;
       }
@@ -343,7 +346,7 @@ export class FileUpload extends HTMLElement {
           </svg>
         </button>
       </div>
-    `
+    `,
       )
       .join("");
 
@@ -381,11 +384,7 @@ export class FileUpload extends HTMLElement {
     }
 
     // Word documents
-    if (
-      mimeType.includes("word") ||
-      ext === "doc" ||
-      ext === "docx"
-    ) {
+    if (mimeType.includes("word") || ext === "doc" || ext === "docx") {
       return `<svg class="w-5 h-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
     }
 
@@ -407,7 +406,9 @@ export class FileUpload extends HTMLElement {
       mimeType.includes("xml") ||
       mimeType.includes("html") ||
       mimeType.includes("css") ||
-      ["js", "ts", "py", "rs", "go", "java", "c", "cpp", "h", "hpp"].includes(ext)
+      ["js", "ts", "py", "rs", "go", "java", "c", "cpp", "h", "hpp"].includes(
+        ext,
+      )
     ) {
       return `<svg class="w-5 h-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
     }
@@ -449,7 +450,7 @@ export class FileUpload extends HTMLElement {
         detail: { files: [...this.attachedFiles] },
         bubbles: true,
         composed: true,
-      })
+      }),
     );
   }
 

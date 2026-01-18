@@ -1,4 +1,5 @@
-import { pgliteStore, type PgliteStatus } from "../../stores/pglite-store";
+import type { PgliteStatus } from "../../stores/pglite-store";
+import { pgliteStore } from "../../stores/pglite-store";
 
 type StorageEstimate = {
   usage?: number;
@@ -78,7 +79,9 @@ export class StorageHealth extends HTMLElement {
     const migrationsTotal = this.status.migrationsTotal;
     const migrationsApplied = this.status.migrationsApplied;
     const migrationLabel =
-      migrationsTotal > 0 ? `Migrations ${migrationsApplied}/${migrationsTotal}` : "";
+      migrationsTotal > 0
+        ? `Migrations ${migrationsApplied}/${migrationsTotal}`
+        : "";
 
     const usageLabel =
       usage !== undefined && quota !== undefined
@@ -107,6 +110,15 @@ export class StorageHealth extends HTMLElement {
 
     if (ratio !== null && ratio >= 0.9) {
       return {
+        label: "Storage Critical",
+        containerClass: "bg-dangerContainer text-danger",
+        dotClass: "bg-danger animate-pulse",
+        detail: [usageLabel, migrationLabel].filter(Boolean).join(" • "),
+      };
+    }
+
+    if (ratio !== null && ratio >= 0.8) {
+      return {
         label: "Storage Low",
         containerClass: "bg-warningContainer text-warning",
         dotClass: "bg-warning",
@@ -133,10 +145,12 @@ export class StorageHealth extends HTMLElement {
 
     this.setAttribute("title", status.detail);
     this.setAttribute("aria-label", status.detail || status.label);
+    this.setAttribute("role", "status");
+    this.setAttribute("aria-live", "polite");
 
     this.innerHTML = `
       <div class="flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-medium ${status.containerClass}">
-        <span class="h-2 w-2 rounded-full ${status.dotClass}"></span>
+        <span class="h-2 w-2 rounded-full ${status.dotClass}" aria-hidden="true"></span>
         <span>${status.label}</span>
         <span class="text-[10px] text-textMuted">${usageText}</span>
       </div>

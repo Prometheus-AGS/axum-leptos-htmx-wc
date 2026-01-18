@@ -1,6 +1,6 @@
 /**
  * PGlite Database Migrations
- * 
+ *
  * Schema for storing conversations with full event persistence including
  * thinking blocks, reasoning blocks, tool calls, tool results, and citations.
  */
@@ -8,7 +8,7 @@
 export const MIGRATIONS = [
   {
     version: 1,
-    name: 'initial_schema',
+    name: "initial_schema",
     up: `
       -- Core conversations table
       CREATE TABLE IF NOT EXISTS conversations (

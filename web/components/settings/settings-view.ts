@@ -1,74 +1,88 @@
-import { renderMarkdown } from "../../utils/markdown";
-import { createUniqueId } from "../../utils/html";
 import { debugLog } from "../../utils/logging";
 
+interface SchemaProperty {
+  type: string;
+  enum?: string[];
+  title?: string;
+  minimum?: number;
+  maximum?: number;
+}
+
+interface SchemaSection {
+  type: string;
+  properties: Record<string, SchemaProperty>;
+}
+
 export class SettingsView extends HTMLElement {
-  private _schema: any = null;
-  private _data: any = null;
+  private _schema: Record<string, SchemaSection> | null = null;
+  private _data: Record<string, Record<string, unknown>> | null = null;
 
   connectedCallback() {
-      this.loadSettings();
+    void this.loadSettings();
   }
 
   async loadSettings() {
-      // Fetch schema types (simulated for now, would be /api/settings/types)
-      // and data
-      this.renderLoading();
-      
-      try {
-          // Mock fetching for UI dev
-          this._schema = {
-              "llm": {
-                  "type": "object",
-                  "properties": {
-                      "provider": { 
-                          "type": "string", 
-                          "enum": ["openai", "anthropic", "google"],
-                          "title": "Default Provider"
-                      },
-                      "model": { 
-                          "type": "string",
-                          "title": "Default Model" 
-                      },
-                      "temperature": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 2,
-                          "title": "Temperature"
-                      }
-                  }
-              }
-          };
-          
-          this._data = {
-              "llm": {
-                  "provider": "openai",
-                  "model": "gpt-4o",
-                  "temperature": 0.7
-              }
-          };
-          
-          this.renderForm();
-      } catch (e) {
-          this.renderError(e);
-      }
+    // Fetch schema types (simulated for now, would be /api/settings/types)
+    // and data
+    this.renderLoading();
+
+    try {
+      // Mock fetching for UI dev
+      this._schema = {
+        llm: {
+          type: "object",
+          properties: {
+            provider: {
+              type: "string",
+              enum: ["openai", "anthropic", "google"],
+              title: "Default Provider",
+            },
+            model: {
+              type: "string",
+              title: "Default Model",
+            },
+            temperature: {
+              type: "number",
+              minimum: 0,
+              maximum: 2,
+              title: "Temperature",
+            },
+          },
+        },
+      };
+
+      this._data = {
+        llm: {
+          provider: "openai",
+          model: "gpt-4o",
+          temperature: 0.7,
+        },
+      };
+
+      this.renderForm();
+    } catch (e) {
+      this.renderError(e);
+    }
   }
 
   renderLoading() {
-      this.innerHTML = `<div class="p-8 text-center text-textMuted animate-pulse">Loading settings...</div>`;
+    this.innerHTML = `<div class="p-8 text-center text-textMuted animate-pulse">Loading settings...</div>`;
   }
 
-  renderError(e: any) {
-      this.innerHTML = `<div class="p-8 text-center text-danger">Failed to load settings: ${e.message}</div>`;
+  renderError(e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    this.innerHTML = `<div class="p-8 text-center text-danger">Failed to load settings: ${message}</div>`;
   }
 
   renderForm() {
-      // Simple schema-to-form generator
-      const sections = Object.keys(this._schema).map(key => {
-          const sectionSchema = this._schema[key];
-          const sectionData = this._data[key] || {};
-          
-          return `
+    if (!this._schema || !this._data) return;
+
+    // Simple schema-to-form generator
+    const sections = Object.entries(this._schema)
+      .map(([key, sectionSchema]) => {
+        const sectionData = this._data ? this._data[key] || {} : {};
+
+        return `
             <div class="mb-8 p-6 bg-surfaceContainer rounded-xl">
                 <h3 class="text-lg font-semibold mb-4 capitalize">${key} Settings</h3>
                 <div class="space-y-4">
@@ -76,9 +90,10 @@ export class SettingsView extends HTMLElement {
                 </div>
             </div>
           `;
-      }).join('');
+      })
+      .join("");
 
-      this.innerHTML = `
+    this.innerHTML = `
         <div class="max-w-3xl mx-auto py-8 px-4">
             <h2 class="text-2xl font-bold mb-6">Settings</h2>
             <form id="settings-form" onsubmit="return false;">
@@ -92,17 +107,24 @@ export class SettingsView extends HTMLElement {
       `;
   }
 
-  renderFields(sectionKey: string, properties: any, data: any): string {
-      return Object.keys(properties).map(propKey => {
-          const prop = properties[propKey];
-          const value = data[propKey];
-          const fullKey = `${sectionKey}.${propKey}`;
-          
-          if (prop.enum) {
-              const options = prop.enum.map((opt: string) => 
-                  `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
-              ).join('');
-              return `
+  renderFields(
+    sectionKey: string,
+    properties: Record<string, SchemaProperty>,
+    data: Record<string, unknown>,
+  ): string {
+    return Object.entries(properties)
+      .map(([propKey, prop]) => {
+        const value = data[propKey];
+        const fullKey = `${sectionKey}.${propKey}`;
+
+        if (prop.enum) {
+          const options = prop.enum
+            .map(
+              (opt: string) =>
+                `<option value="${opt}" ${value === opt ? "selected" : ""}>${opt}</option>`,
+            )
+            .join("");
+          return `
                 <div class="flex flex-col gap-1.5">
                     <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
                     <select name="${fullKey}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all">
@@ -110,34 +132,35 @@ export class SettingsView extends HTMLElement {
                     </select>
                 </div>
               `;
-          }
-          
-          if (prop.type === 'number') {
-               return `
+        }
+
+        if (prop.type === "number") {
+          return `
                 <div class="flex flex-col gap-1.5">
                     <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
                     <input type="number" name="${fullKey}" value="${value}" step="0.1" min="${prop.minimum}" max="${prop.maximum}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
                 </div>
               `;
-          }
+        }
 
-          return `
+        return `
             <div class="flex flex-col gap-1.5">
                 <label class="text-sm font-medium text-textPrimary">${prop.title || propKey}</label>
-                <input type="text" name="${fullKey}" value="${value || ''}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                <input type="text" name="${fullKey}" value="${value || ""}" class="px-3 py-2 bg-surfaceContainerHighest rounded-lg text-sm text-textPrimary focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
             </div>
           `;
-      }).join('');
+      })
+      .join("");
   }
 
   save() {
-      // Collect form data and PUT to API
-      debugLog("Saving settings...");
-      // Implementation pending API integration
+    // Collect form data and PUT to API
+    debugLog("Saving settings...");
+    // Implementation pending API integration
   }
-  
+
   reset() {
-      this.loadSettings();
+    void this.loadSettings();
   }
 }
 

@@ -84,6 +84,7 @@ export class ThemeSwitcher extends HTMLElement {
         class="theme-toggle-btn p-2 rounded-xl hover:bg-surface transition-colors"
         aria-label="${label}"
         title="${label}"
+        aria-live="polite"
       >
         ${isDark ? this.getSunIcon() : this.getMoonIcon()}
       </button>

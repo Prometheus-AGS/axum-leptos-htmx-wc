@@ -1,30 +1,30 @@
 /**
  * PGlite Conversation Store
- * 
+ *
  * Client-side PostgreSQL database for conversation storage with full event persistence.
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import { MIGRATIONS } from './migrations';
-import { debugLog } from '../utils/logging';
+import { PGlite } from "@electric-sql/pglite";
 import type {
-  Conversation,
-  Message,
-  ThinkingBlock,
-  ReasoningBlock,
-  ToolCall,
-  ToolResult,
   Citation,
-  ConversationTurn,
+  Conversation,
   ConversationHistory,
   ConversationHistoryItem,
   ConversationSearchResult,
-} from '../types/database';
-import { generateUuid } from '../utils/uuid';
+  ConversationTurn,
+  Message,
+  ReasoningBlock,
+  ThinkingBlock,
+  ToolCall,
+  ToolResult,
+} from "../types/database";
+import { debugLog } from "../utils/logging";
+import { generateUuid } from "../utils/uuid";
+import { MIGRATIONS } from "./migrations";
 
 export type PgliteStatus = {
   status: "idle" | "initializing" | "ready" | "error";
-  error?: string;
+  error: string | null;
   migrationsApplied: number;
   migrationsTotal: number;
   updatedAt: number;
@@ -36,6 +36,7 @@ export class PGliteConversationStore {
   private initPromise: Promise<void> | null = null;
   private status: PgliteStatus = {
     status: "idle",
+    error: null,
     migrationsApplied: 0,
     migrationsTotal: MIGRATIONS.length,
     updatedAt: Date.now(),
@@ -50,21 +51,21 @@ export class PGliteConversationStore {
     }
 
     this.initPromise = (async () => {
-      this.updateStatus({ status: "initializing", error: undefined });
-      debugLog('[PGlite] Initializing database...');
-      
+      this.updateStatus({ status: "initializing", error: null });
+      debugLog("[PGlite] Initializing database...");
+
       // Initialize PGlite with IndexedDB persistence
       // The WASM files should be served from /static/ by the Rust server
-      this.db = new PGlite('idb://chat-conversations');
-      
+      this.db = new PGlite("idb://chat-conversations");
+
       // Run migrations
       await this.runMigrations();
-      
+
       // Migrate from localStorage if needed
       await this.migrateFromLocalStorage();
-      
-      this.updateStatus({ status: "ready", error: undefined });
-      debugLog('[PGlite] Database initialized successfully');
+
+      this.updateStatus({ status: "ready", error: null });
+      debugLog("[PGlite] Database initialized successfully");
     })();
 
     try {
@@ -82,7 +83,7 @@ export class PGliteConversationStore {
    * Run database migrations
    */
   private async runMigrations(): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     // First, ensure schema_migrations table exists
     try {
@@ -93,7 +94,10 @@ export class PGliteConversationStore {
         );
       `);
     } catch (error) {
-      console.error('[PGlite] Failed to create schema_migrations table:', error);
+      console.error(
+        "[PGlite] Failed to create schema_migrations table:",
+        error,
+      );
       throw error;
     }
 
@@ -104,16 +108,22 @@ export class PGliteConversationStore {
         // Check if migration already applied
         const result = await this.db.query(
           `SELECT version FROM schema_migrations WHERE version = $1`,
-          [migration.version]
+          [migration.version],
         );
 
         if (result.rows.length === 0) {
-          debugLog(`[PGlite] Applying migration ${migration.version}: ${migration.name}`);
+          debugLog(
+            `[PGlite] Applying migration ${migration.version}: ${migration.name}`,
+          );
           await this.db.exec(migration.up);
-          debugLog(`[PGlite] Migration ${migration.version} applied successfully`);
+          debugLog(
+            `[PGlite] Migration ${migration.version} applied successfully`,
+          );
           appliedTotal += 1;
         } else {
-          debugLog(`[PGlite] Migration ${migration.version} already applied, skipping`);
+          debugLog(
+            `[PGlite] Migration ${migration.version} already applied, skipping`,
+          );
           appliedTotal += 1;
         }
       } catch (error) {
@@ -129,21 +139,21 @@ export class PGliteConversationStore {
    * Migrate data from localStorage to PGlite
    */
   private async migrateFromLocalStorage(): Promise<void> {
-    const migrated = localStorage.getItem('migrated_to_pglite');
+    const migrated = localStorage.getItem("migrated_to_pglite");
     if (migrated) {
-      debugLog('[PGlite] Already migrated from localStorage');
+      debugLog("[PGlite] Already migrated from localStorage");
       return;
     }
 
-    const oldData = localStorage.getItem('chat_conversations');
+    const oldData = localStorage.getItem("chat_conversations");
     if (!oldData) {
-      localStorage.setItem('migrated_to_pglite', 'true');
-      debugLog('[PGlite] No localStorage data to migrate');
+      localStorage.setItem("migrated_to_pglite", "true");
+      debugLog("[PGlite] No localStorage data to migrate");
       return;
     }
 
-    debugLog('[PGlite] Migrating from localStorage...');
-    
+    debugLog("[PGlite] Migrating from localStorage...");
+
     try {
       const conversations = JSON.parse(oldData) as Array<{
         id: string;
@@ -161,43 +171,46 @@ export class PGliteConversationStore {
 
       for (const conv of conversations) {
         // Insert conversation
-        await this.db!.query(`
+        if (this.db) {
+          await this.db.query(
+            `
           INSERT INTO conversations (id, title, created_at, updated_at, server_session_id, message_count)
           VALUES ($1, $2, to_timestamp($3 / 1000.0), to_timestamp($4 / 1000.0), $5, $6)
-        `, [
-          conv.id,
-          conv.title,
-          conv.createdAt,
-          conv.updatedAt,
-          conv.sessionId || null,
-          conv.messages.length
-        ]);
+        `,
+            [
+              conv.id,
+              conv.title,
+              conv.createdAt,
+              conv.updatedAt,
+              conv.sessionId || null,
+              conv.messages.length,
+            ],
+          );
 
-        // Insert messages
-        for (let i = 0; i < conv.messages.length; i++) {
-          const msg = conv.messages[i];
-          if (!msg) continue;
-          await this.db!.query(`
+          // Insert messages
+          for (let i = 0; i < conv.messages.length; i++) {
+            const msg = conv.messages[i];
+            if (!msg) continue;
+            await this.db.query(
+              `
             INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0), $6)
-          `, [
-            msg.id,
-            conv.id,
-            msg.role,
-            msg.content,
-            msg.timestamp,
-            i
-          ]);
+          `,
+              [msg.id, conv.id, msg.role, msg.content, msg.timestamp, i],
+            );
+          }
         }
       }
 
       // Remove old localStorage data
-      localStorage.removeItem('chat_conversations');
-      localStorage.setItem('migrated_to_pglite', 'true');
-      
-      debugLog(`[PGlite] Migrated ${conversations.length} conversations from localStorage`);
+      localStorage.removeItem("chat_conversations");
+      localStorage.setItem("migrated_to_pglite", "true");
+
+      debugLog(
+        `[PGlite] Migrated ${conversations.length} conversations from localStorage`,
+      );
     } catch (error) {
-      console.error('[PGlite] Migration from localStorage failed:', error);
+      console.error("[PGlite] Migration from localStorage failed:", error);
       // Don't throw - allow app to continue with empty database
     }
   }
@@ -206,19 +219,22 @@ export class PGliteConversationStore {
    * Create a new conversation
    */
   async createConversation(sessionId?: string): Promise<Conversation> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     const id = generateUuid();
     const now = new Date().toISOString();
 
-    await this.db.query(`
+    await this.db.query(
+      `
       INSERT INTO conversations (id, title, created_at, updated_at, server_session_id, message_count)
       VALUES ($1, $2, $3, $4, $5, 0)
-    `, [id, 'New Conversation', now, now, sessionId || null]);
+    `,
+      [id, "New Conversation", now, now, sessionId || null],
+    );
 
     return {
       id,
-      title: 'New Conversation',
+      title: "New Conversation",
       created_at: now,
       updated_at: now,
       is_pinned: false,
@@ -232,18 +248,23 @@ export class PGliteConversationStore {
    * Add a single message to the conversation
    */
   async addMessage(message: Message): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     if (message.sequence_order === undefined) {
-        // Fallback if no sequence order provided (expensive but safe)
-        const result = await this.db.query(`
+      // Fallback if no sequence order provided (expensive but safe)
+      const result = await this.db.query(
+        `
             SELECT COALESCE(MAX(sequence_order), 0) as max_seq 
             FROM messages WHERE conversation_id = $1
-        `, [message.conversation_id]);
-        message.sequence_order = (result.rows[0] as any).max_seq + 1;
+        `,
+        [message.conversation_id],
+      );
+      const rows = result.rows as Array<{ max_seq: number }>;
+      message.sequence_order = (rows[0]?.max_seq ?? 0) + 1;
     }
 
-    await this.db.query(`
+    await this.db.query(
+      `
       INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order, metadata)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (id) DO UPDATE SET
@@ -251,190 +272,222 @@ export class PGliteConversationStore {
         metadata = EXCLUDED.metadata,
         sequence_order = EXCLUDED.sequence_order,
         created_at = EXCLUDED.created_at
-    `, [
-      message.id,
-      message.conversation_id,
-      message.role,
-      message.content,
-      message.created_at,
-      message.sequence_order,
-      JSON.stringify(message.metadata)
-    ]);
+    `,
+      [
+        message.id,
+        message.conversation_id,
+        message.role,
+        message.content,
+        message.created_at,
+        message.sequence_order,
+        JSON.stringify(message.metadata),
+      ],
+    );
 
-    await this.db.query(`
+    await this.db.query(
+      `
       UPDATE conversations 
       SET updated_at = NOW(), 
           message_count = (SELECT COUNT(*) FROM messages WHERE conversation_id = $1)
       WHERE id = $1
-    `, [message.conversation_id]);
+    `,
+      [message.conversation_id],
+    );
   }
 
   /**
    * Save a complete conversation turn with all chunks
    */
-  async saveConversationTurn(conversationId: string, turn: ConversationTurn): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+  async saveConversationTurn(
+    conversationId: string,
+    turn: ConversationTurn,
+  ): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
 
     try {
       // Start transaction
-      await this.db.exec('BEGIN');
+      await this.db.exec("BEGIN");
 
       // Save user message
       if (turn.userMessage) {
-        await this.db.query(`
+        await this.db.query(
+          `
           INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order, metadata)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (id) DO UPDATE SET
             content = EXCLUDED.content,
             metadata = EXCLUDED.metadata
-        `, [
-          turn.userMessage.id,
-          conversationId,
-          turn.userMessage.role,
-          turn.userMessage.content,
-          turn.userMessage.created_at,
-          turn.userMessage.sequence_order ?? this.sequenceCounter++,
-          JSON.stringify(turn.userMessage.metadata)
-        ]);
+        `,
+          [
+            turn.userMessage.id,
+            conversationId,
+            turn.userMessage.role,
+            turn.userMessage.content,
+            turn.userMessage.created_at,
+            turn.userMessage.sequence_order ?? this.sequenceCounter++,
+            JSON.stringify(turn.userMessage.metadata),
+          ],
+        );
       }
 
       // Save assistant message
       if (turn.assistantMessage) {
         const msgId = turn.assistantMessage.id;
-        await this.db.query(`
+        await this.db.query(
+          `
           INSERT INTO messages (id, conversation_id, role, content, created_at, sequence_order, metadata)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (id) DO UPDATE SET
             content = EXCLUDED.content,
             metadata = EXCLUDED.metadata
-        `, [
-          msgId,
-          conversationId,
-          turn.assistantMessage.role,
-          turn.assistantMessage.content,
-          turn.assistantMessage.created_at,
-          turn.assistantMessage.sequence_order ?? this.sequenceCounter++,
-          JSON.stringify(turn.assistantMessage.metadata)
-        ]);
+        `,
+          [
+            msgId,
+            conversationId,
+            turn.assistantMessage.role,
+            turn.assistantMessage.content,
+            turn.assistantMessage.created_at,
+            turn.assistantMessage.sequence_order ?? this.sequenceCounter++,
+            JSON.stringify(turn.assistantMessage.metadata),
+          ],
+        );
 
         // Save thinking blocks
         for (const thinking of turn.thinkingBlocks) {
-          await this.db.query(`
+          await this.db.query(
+            `
             INSERT INTO thinking_blocks (id, conversation_id, message_id, content, is_complete, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO UPDATE SET
                 content = EXCLUDED.content,
                 is_complete = EXCLUDED.is_complete
-          `, [
-            thinking.id,
-            conversationId,
-            msgId,
-            thinking.content,
-            thinking.is_complete,
-            thinking.created_at,
-            (thinking as any).sequence_order ?? this.sequenceCounter++
-          ]);
+          `,
+            [
+              thinking.id,
+              conversationId,
+              msgId,
+              thinking.content,
+              thinking.is_complete,
+              thinking.created_at,
+              thinking.sequence_order ?? this.sequenceCounter++,
+            ],
+          );
         }
 
         // Save reasoning blocks
         for (const reasoning of turn.reasoningBlocks) {
-          await this.db.query(`
+          await this.db.query(
+            `
             INSERT INTO reasoning_blocks (id, conversation_id, message_id, content, is_complete, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO UPDATE SET
                 content = EXCLUDED.content,
                 is_complete = EXCLUDED.is_complete
-          `, [
-            reasoning.id,
-            conversationId,
-            msgId,
-            reasoning.content,
-            reasoning.is_complete,
-            reasoning.created_at,
-            (reasoning as any).sequence_order ?? this.sequenceCounter++
-          ]);
+          `,
+            [
+              reasoning.id,
+              conversationId,
+              msgId,
+              reasoning.content,
+              reasoning.is_complete,
+              reasoning.created_at,
+              reasoning.sequence_order ?? this.sequenceCounter++,
+            ],
+          );
         }
 
         // Save tool calls
         for (const toolCall of turn.toolCalls) {
-          await this.db.query(`
+          await this.db.query(
+            `
             INSERT INTO tool_calls (id, conversation_id, message_id, call_index, tool_name, arguments, status, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (id) DO UPDATE SET
                 arguments = EXCLUDED.arguments,
                 status = EXCLUDED.status
-          `, [
-            toolCall.id,
-            conversationId,
-            msgId,
-            toolCall.call_index,
-            toolCall.tool_name,
-            JSON.stringify(toolCall.arguments),
-            toolCall.status,
-            toolCall.created_at,
-            (toolCall as any).sequence_order ?? this.sequenceCounter++
-          ]);
+          `,
+            [
+              toolCall.id,
+              conversationId,
+              msgId,
+              toolCall.call_index,
+              toolCall.tool_name,
+              JSON.stringify(toolCall.arguments),
+              toolCall.status,
+              toolCall.created_at,
+              toolCall.sequence_order ?? this.sequenceCounter++,
+            ],
+          );
         }
 
         // Save tool results
         for (const result of turn.toolResults) {
-          await this.db.query(`
+          await this.db.query(
+            `
             INSERT INTO tool_results (id, conversation_id, tool_call_id, tool_name, content, success, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO NOTHING
-          `, [
-            result.id,
-            conversationId,
-            result.tool_call_id,
-            result.tool_name,
-            result.content,
-            result.success,
-            result.created_at,
-            (result as any).sequence_order ?? this.sequenceCounter++
-          ]);
+          `,
+            [
+              result.id,
+              conversationId,
+              result.tool_call_id,
+              result.tool_name,
+              result.content,
+              result.success,
+              result.created_at,
+              result.sequence_order ?? this.sequenceCounter++,
+            ],
+          );
         }
 
         // Save citations
         for (const citation of turn.citations) {
-          await this.db.query(`
+          await this.db.query(
+            `
             INSERT INTO citations (id, conversation_id, message_id, url, title, citation_index, created_at, sequence_order)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO NOTHING
-          `, [
-            citation.id,
-            conversationId,
-            msgId,
-            citation.url,
-            citation.title,
-            citation.citation_index,
-            citation.created_at,
-            (citation as any).sequence_order ?? this.sequenceCounter++
-          ]);
+          `,
+            [
+              citation.id,
+              conversationId,
+              msgId,
+              citation.url,
+              citation.title,
+              citation.citation_index,
+              citation.created_at,
+              citation.sequence_order ?? this.sequenceCounter++,
+            ],
+          );
         }
       }
 
       // Update conversation metadata
-      await this.db.query(`
+      await this.db.query(
+        `
         UPDATE conversations 
         SET updated_at = NOW(), 
             message_count = (SELECT COUNT(*) FROM messages WHERE conversation_id = $1)
       WHERE id = $1
-      `, [conversationId]);
+      `,
+        [conversationId],
+      );
 
       // Commit transaction
-      await this.db.exec('COMMIT');
+      await this.db.exec("COMMIT");
 
-      debugLog('[PGlite] Saved conversation turn:', {
+      debugLog("[PGlite] Saved conversation turn:", {
         conversationId,
         thinking: turn.thinkingBlocks.length,
         reasoning: turn.reasoningBlocks.length,
         toolCalls: turn.toolCalls.length,
         toolResults: turn.toolResults.length,
-        citations: turn.citations.length
+        citations: turn.citations.length,
       });
     } catch (error) {
-      await this.db.exec('ROLLBACK');
-      console.error('[PGlite] Failed to save conversation turn:', error);
+      await this.db.exec("ROLLBACK");
+      console.error("[PGlite] Failed to save conversation turn:", error);
       throw error;
     }
   }
@@ -443,45 +496,85 @@ export class PGliteConversationStore {
    * Load complete conversation with all chunks in order
    */
   async loadConversation(conversationId: string): Promise<ConversationHistory> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     // Load all data in parallel
-    const [messages, thinking, reasoning, toolCalls, toolResults, citations] = await Promise.all([
-      this.db.query(`SELECT * FROM messages WHERE conversation_id = $1 ORDER BY sequence_order`, [conversationId]),
-      this.db.query(`SELECT * FROM thinking_blocks WHERE conversation_id = $1 ORDER BY sequence_order`, [conversationId]),
-      this.db.query(`SELECT * FROM reasoning_blocks WHERE conversation_id = $1 ORDER BY sequence_order`, [conversationId]),
-      this.db.query(`SELECT * FROM tool_calls WHERE conversation_id = $1 ORDER BY sequence_order`, [conversationId]),
-      this.db.query(`SELECT * FROM tool_results WHERE conversation_id = $1 ORDER BY sequence_order`, [conversationId]),
-      this.db.query(`SELECT * FROM citations WHERE conversation_id = $1 ORDER BY sequence_order`, [conversationId])
-    ]);
+    const [messages, thinking, reasoning, toolCalls, toolResults, citations] =
+      await Promise.all([
+        this.db.query(
+          `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY sequence_order`,
+          [conversationId],
+        ),
+        this.db.query(
+          `SELECT * FROM thinking_blocks WHERE conversation_id = $1 ORDER BY sequence_order`,
+          [conversationId],
+        ),
+        this.db.query(
+          `SELECT * FROM reasoning_blocks WHERE conversation_id = $1 ORDER BY sequence_order`,
+          [conversationId],
+        ),
+        this.db.query(
+          `SELECT * FROM tool_calls WHERE conversation_id = $1 ORDER BY sequence_order`,
+          [conversationId],
+        ),
+        this.db.query(
+          `SELECT * FROM tool_results WHERE conversation_id = $1 ORDER BY sequence_order`,
+          [conversationId],
+        ),
+        this.db.query(
+          `SELECT * FROM citations WHERE conversation_id = $1 ORDER BY sequence_order`,
+          [conversationId],
+        ),
+      ]);
 
     // Combine all events and sort by sequence_order
     const allEvents: ConversationHistoryItem[] = [
-      ...(messages.rows as any[]).map((m: Message) => ({ type: 'message' as const, data: m })),
-      ...(thinking.rows as any[]).map((t: ThinkingBlock) => ({ type: 'thinking' as const, data: t })),
-      ...(reasoning.rows as any[]).map((r: ReasoningBlock) => ({ type: 'reasoning' as const, data: r })),
-      ...(toolCalls.rows as any[]).map((tc: ToolCall) => ({ type: 'tool_call' as const, data: tc })),
-      ...(toolResults.rows as any[]).map((tr: ToolResult) => ({ type: 'tool_result' as const, data: tr })),
-      ...(citations.rows as any[]).map((c: Citation) => ({ type: 'citation' as const, data: c }))
+      ...(messages.rows as Message[]).map((m) => ({
+        type: "message" as const,
+        data: m,
+      })),
+      ...(thinking.rows as ThinkingBlock[]).map((t) => ({
+        type: "thinking" as const,
+        data: t,
+      })),
+      ...(reasoning.rows as ReasoningBlock[]).map((r) => ({
+        type: "reasoning" as const,
+        data: r,
+      })),
+      ...(toolCalls.rows as ToolCall[]).map((tc) => ({
+        type: "tool_call" as const,
+        data: tc,
+      })),
+      ...(toolResults.rows as ToolResult[]).map((tr) => ({
+        type: "tool_result" as const,
+        data: tr,
+      })),
+      ...(citations.rows as Citation[]).map((c) => ({
+        type: "citation" as const,
+        data: c,
+      })),
     ].sort((a, b) => {
-      const aOrder = 'sequence_order' in a.data ? a.data.sequence_order : 0;
-      const bOrder = 'sequence_order' in b.data ? b.data.sequence_order : 0;
+      const aOrder = a.data.sequence_order ?? 0;
+      const bOrder = b.data.sequence_order ?? 0;
       return aOrder - bOrder;
     });
 
     return {
       conversationId,
-      items: allEvents
+      items: allEvents,
     };
   }
 
   /**
    * Search conversations by text
    */
-  async searchConversations(query: string): Promise<ConversationSearchResult[]> {
-    if (!this.db) throw new Error('Database not initialized');
+  async searchConversations(
+    query: string,
+  ): Promise<ConversationSearchResult[]> {
+    if (!this.db) throw new Error("Database not initialized");
 
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT DISTINCT
         c.id,
         c.title,
@@ -495,7 +588,9 @@ export class PGliteConversationStore {
         OR to_tsvector('english', m.content) @@ plainto_tsquery('english', $1)
       ORDER BY c.is_pinned DESC, c.updated_at DESC
       LIMIT 20
-    `, [query]);
+    `,
+      [query],
+    );
 
     return result.rows as ConversationSearchResult[];
   }
@@ -504,14 +599,17 @@ export class PGliteConversationStore {
    * List all conversations
    */
   async listConversations(limit = 50): Promise<ConversationSearchResult[]> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT id, title, updated_at, message_count, is_pinned
       FROM conversations
       ORDER BY is_pinned DESC, updated_at DESC
       LIMIT $1
-    `, [limit]);
+    `,
+      [limit],
+    );
 
     return result.rows as ConversationSearchResult[];
   }
@@ -520,59 +618,70 @@ export class PGliteConversationStore {
    * Update conversation title
    */
   async updateTitle(conversationId: string, title: string): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
-    await this.db.query(`
+    await this.db.query(
+      `
       UPDATE conversations 
       SET title = $1, updated_at = NOW()
       WHERE id = $2
-    `, [title, conversationId]);
+    `,
+      [title, conversationId],
+    );
   }
 
   /**
    * Toggle conversation pin status
    */
   async togglePin(conversationId: string): Promise<boolean> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE conversations 
       SET is_pinned = NOT is_pinned, updated_at = NOW()
       WHERE id = $1
       RETURNING is_pinned
-    `, [conversationId]);
-
-    return (result.rows[0] as any)?.is_pinned ?? false;
+    `,
+      [conversationId],
+    );
+    const rows = result.rows as Array<{ is_pinned: boolean }>;
+    return rows[0]?.is_pinned ?? false;
   }
 
   /**
    * Delete conversation
    */
   async deleteConversation(conversationId: string): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
-    await this.db.query(`DELETE FROM conversations WHERE id = $1`, [conversationId]);
-    debugLog('[PGlite] Deleted conversation:', conversationId);
+    await this.db.query(`DELETE FROM conversations WHERE id = $1`, [
+      conversationId,
+    ]);
+    debugLog("[PGlite] Deleted conversation:", conversationId);
   }
 
   /**
    * Get conversation by ID
    */
   async getConversation(conversationId: string): Promise<Conversation | null> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT * FROM conversations WHERE id = $1
-    `, [conversationId]);
+    `,
+      [conversationId],
+    );
 
-    return result.rows[0] as Conversation || null;
+    return (result.rows[0] as Conversation) || null;
   }
 
   /**
    * Clear all data (for testing/debugging)
    */
   async clearAll(): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     await this.db.exec(`
       DELETE FROM citations;
@@ -584,7 +693,7 @@ export class PGliteConversationStore {
       DELETE FROM conversations;
     `);
 
-    debugLog('[PGlite] Cleared all data');
+    debugLog("[PGlite] Cleared all data");
   }
 
   getStatus(): PgliteStatus {
@@ -602,7 +711,7 @@ export class PGliteConversationStore {
       window.dispatchEvent(
         new CustomEvent("pglite-status", {
           detail: { ...this.status },
-        })
+        }),
       );
     }
   }

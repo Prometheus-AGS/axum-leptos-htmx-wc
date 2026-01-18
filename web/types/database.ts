@@ -99,13 +99,13 @@ export interface ConversationHistory {
   items: ConversationHistoryItem[];
 }
 
-export type ConversationHistoryItem = 
-  | { type: 'message'; data: Message }
-  | { type: 'thinking'; data: ThinkingBlock }
-  | { type: 'reasoning'; data: ReasoningBlock }
-  | { type: 'tool_call'; data: ToolCall }
-  | { type: 'tool_result'; data: ToolResult }
-  | { type: 'citation'; data: Citation };
+export type ConversationHistoryItem =
+  | { type: "message"; data: Message }
+  | { type: "thinking"; data: ThinkingBlock }
+  | { type: "reasoning"; data: ReasoningBlock }
+  | { type: "tool_call"; data: ToolCall }
+  | { type: "tool_result"; data: ToolResult }
+  | { type: "citation"; data: Citation };
 
 /**
  * Search result for conversation list

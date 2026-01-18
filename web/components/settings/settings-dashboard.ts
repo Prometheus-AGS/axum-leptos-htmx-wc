@@ -1,5 +1,5 @@
-import { SettingsSidebar } from "./settings-sidebar.ts";
 import { SettingsPane } from "./settings-pane.ts";
+import { SettingsSidebar } from "./settings-sidebar.ts";
 
 export class SettingsDashboard extends HTMLElement {
   private sidebar: SettingsSidebar;
@@ -9,32 +9,33 @@ export class SettingsDashboard extends HTMLElement {
     super();
     this.sidebar = new SettingsSidebar();
     this.pane = new SettingsPane();
-    
+
     // Wire up events
-    this.addEventListener('settings-type-selected', (e: any) => {
-        this.pane.loadType(e.detail.typeId, e.detail.displayMode);
+    this.addEventListener("settings-type-selected", (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      this.pane.loadType(detail.typeId, detail.displayMode);
     });
   }
 
   connectedCallback() {
-      this.render();
+    this.render();
   }
 
   render() {
-      this.classList.add('flex', 'h-full', 'bg-surface');
-      this.innerHTML = ``;
-      
-      // Sidebar Container (Pane 1)
-      const sidebarContainer = document.createElement('div');
-      sidebarContainer.className = "w-64 bg-surfaceContainer flex flex-col";
-      sidebarContainer.appendChild(this.sidebar);
-      this.appendChild(sidebarContainer);
+    this.classList.add("flex", "h-full", "bg-surface");
+    this.innerHTML = ``;
 
-      // Main Content (Pane 2 & 3 handled by SettingsPane)
-      const contentContainer = document.createElement('div');
-      contentContainer.className = "flex-1 flex overflow-hidden";
-      contentContainer.appendChild(this.pane);
-      this.appendChild(contentContainer);
+    // Sidebar Container (Pane 1)
+    const sidebarContainer = document.createElement("div");
+    sidebarContainer.className = "w-64 bg-surfaceContainer flex flex-col";
+    sidebarContainer.appendChild(this.sidebar);
+    this.appendChild(sidebarContainer);
+
+    // Main Content (Pane 2 & 3 handled by SettingsPane)
+    const contentContainer = document.createElement("div");
+    contentContainer.className = "flex-1 flex overflow-hidden";
+    contentContainer.appendChild(this.pane);
+    this.appendChild(contentContainer);
   }
 }
 
