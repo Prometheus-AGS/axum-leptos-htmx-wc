@@ -8,6 +8,7 @@ use crate::uar::domain::{
     runs::{Run, RunStatus},
 };
 use crate::uar::runtime::context::manager::ContextManager;
+use crate::uar::runtime::matching::{ClassifierConfig, IntentClassifier, create_classifier};
 use crate::uar::runtime::skills::SkillRegistry;
 use futures::StreamExt;
 use std::{
@@ -16,8 +17,8 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{Mutex, RwLock, broadcast};
-use uuid::Uuid;
 use tracing::instrument;
+use uuid::Uuid;
 
 const EVENT_HISTORY_LIMIT: usize = 512;
 
@@ -64,7 +65,7 @@ impl RunEventEmitter {
 
 type ActiveRunMap = HashMap<String, RunStreamState>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RunManager {
     // Map run_id -> (Run metadata, broadcast sender)
     active_runs: Arc<RwLock<ActiveRunMap>>,
@@ -75,8 +76,22 @@ pub struct RunManager {
     vector_matcher: Arc<crate::uar::runtime::matching::VectorMatcher>,
     tag_matcher: Arc<crate::uar::runtime::matching::TagMatcher>,
     context_manager: Arc<ContextManager>,
+    /// Intent classifier for skill matching
+    intent_classifier: Arc<dyn IntentClassifier>,
+    /// Classifier configuration
+    classifier_config: ClassifierConfig,
     // Persistence layer (optional)
     pub persistence: Option<Arc<dyn crate::uar::persistence::PersistenceLayer>>,
+}
+
+impl std::fmt::Debug for RunManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunManager")
+            .field("active_runs_count", &"<locked>")
+            .field("settings", &self.settings)
+            .field("classifier_config", &self.classifier_config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl RunManager {
@@ -88,6 +103,28 @@ impl RunManager {
         vector_matcher: Arc<crate::uar::runtime::matching::VectorMatcher>,
         persistence: Option<Arc<dyn crate::uar::persistence::PersistenceLayer>>,
     ) -> Self {
+        Self::with_classifier_config(
+            settings,
+            global_mcp,
+            sessions,
+            skills,
+            vector_matcher,
+            persistence,
+            ClassifierConfig::default(),
+        )
+        .await
+    }
+
+    /// Creates a new RunManager with a custom classifier configuration.
+    pub async fn with_classifier_config(
+        settings: LlmSettings,
+        global_mcp: Arc<McpRegistry>,
+        sessions: SessionStore,
+        skills: Arc<RwLock<SkillRegistry>>,
+        vector_matcher: Arc<crate::uar::runtime::matching::VectorMatcher>,
+        persistence: Option<Arc<dyn crate::uar::persistence::PersistenceLayer>>,
+        classifier_config: ClassifierConfig,
+    ) -> Self {
         // Initialize vector matcher if not already (caller should ideally do this)
         if let Err(e) = vector_matcher.initialize().await {
             tracing::error!("Failed to initialize VectorMatcher: {:?}", e);
@@ -95,6 +132,25 @@ impl RunManager {
 
         let tag_matcher = Arc::new(crate::uar::runtime::matching::TagMatcher::new());
         let context_manager = Arc::new(ContextManager::new(ContextConfig::default()));
+
+        // Create intent classifier based on config
+        let intent_classifier: Arc<dyn IntentClassifier> =
+            Arc::from(create_classifier(&classifier_config));
+
+        // Build the classifier index from existing skills
+        {
+            let skills_registry = skills.read().await;
+            if let Err(e) = intent_classifier.rebuild_index(&skills_registry).await {
+                tracing::error!("Failed to build intent classifier index: {:?}", e);
+            }
+        }
+
+        tracing::info!(
+            backend = ?classifier_config.backend,
+            topk = classifier_config.topk,
+            accept_threshold = classifier_config.accept_threshold,
+            "Intent classifier initialized"
+        );
 
         Self {
             active_runs: Arc::new(RwLock::new(HashMap::new())),
@@ -105,6 +161,8 @@ impl RunManager {
             vector_matcher,
             tag_matcher,
             context_manager,
+            intent_classifier,
+            classifier_config,
             persistence,
         }
     }
@@ -224,44 +282,87 @@ impl RunManager {
             }
         }
 
-        // SKILL INJECTION: Composite Matcher (Tag -> Vector -> LLM Selection in future)
+        // SKILL INJECTION: Intent Classification Pipeline
         let skills_registry = self.skills.read().await;
-        // Ensure skills are indexed for vector matching
-        // Ideal optimization: Index on separate background task or when skills loaded.
-        // For now, we index if needed on query (handled internally by VectorMatcher, but cache validity depends on it).
-        // Since we share the matcher, we should be careful.
-        // VectorMatcher::match_skills calls index_skills if cache empty.
 
-        let mut matched_skills = HashMap::new();
+        // Use the configured intent classifier
+        let classification_result = self
+            .intent_classifier
+            .classify(&input, &[], &skills_registry)
+            .await;
 
-        // 1. Tag Matching (High Confidence)
-        if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
-            self.tag_matcher.as_ref(),
-            &input,
-            &skills_registry,
-        )
-        .await
-        {
-            for m in matches {
-                matched_skills.insert(m.skill_id.clone(), m.skill);
+        let matched_skills: Vec<_> = match classification_result {
+            Ok(result) => {
+                // Log classification scores for debugging/tuning
+                tracing::debug!(
+                    scores = ?result.scores.iter().map(|s| (&s.label, s.score)).collect::<Vec<_>>(),
+                    out_of_scope = result.out_of_scope,
+                    "Intent classification complete"
+                );
+
+                // Apply thresholds from config
+                if result.should_accept(
+                    self.classifier_config.accept_threshold,
+                    self.classifier_config.margin_threshold,
+                ) {
+                    // Return skills that have associated skill data
+                    result
+                        .scores
+                        .into_iter()
+                        .filter_map(|score| score.skill)
+                        .collect()
+                } else if result.out_of_scope {
+                    tracing::debug!("Query appears out-of-scope, no skills matched");
+                    Vec::new()
+                } else {
+                    // Below threshold but not out-of-scope - still include top matches
+                    // but log a warning for potential tuning
+                    tracing::debug!(
+                        top_score = ?result.scores.first().map(|s| s.score),
+                        threshold = self.classifier_config.accept_threshold,
+                        "Classification below threshold, including top matches anyway"
+                    );
+                    result
+                        .scores
+                        .into_iter()
+                        .filter_map(|score| score.skill)
+                        .collect()
+                }
             }
-        }
+            Err(e) => {
+                tracing::error!("Intent classification failed: {:?}", e);
+                // Fallback to legacy tag+vector matching
+                let mut fallback_skills = HashMap::new();
 
-        // 2. Vector Matching (Medium Confidence)
-        if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
-            self.vector_matcher.as_ref(),
-            &input,
-            &skills_registry,
-        )
-        .await
-        {
-            for m in matches {
-                // Don't overwrite explicit tag matches if they exist, but here we just dedup by ID
-                matched_skills.entry(m.skill_id.clone()).or_insert(m.skill);
+                if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
+                    self.tag_matcher.as_ref(),
+                    &input,
+                    &skills_registry,
+                )
+                .await
+                {
+                    for m in matches {
+                        fallback_skills.insert(m.skill_id.clone(), m.skill);
+                    }
+                }
+
+                if let Ok(matches) = crate::uar::domain::matching::SkillMatcher::match_skills(
+                    self.vector_matcher.as_ref(),
+                    &input,
+                    &skills_registry,
+                )
+                .await
+                {
+                    for m in matches {
+                        fallback_skills.entry(m.skill_id.clone()).or_insert(m.skill);
+                    }
+                }
+
+                fallback_skills.into_values().collect()
             }
-        }
+        };
 
-        let sorted_skills: Vec<_> = matched_skills.values().collect();
+        let sorted_skills: Vec<_> = matched_skills.iter().collect();
         // Collect registries to merge (starting with global)
         let mut registries_to_merge = Vec::new();
 

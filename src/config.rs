@@ -1,4 +1,5 @@
 use crate::llm::{LlmProtocol, LlmSettings, Provider};
+use crate::uar::runtime::matching::ClassifierConfig;
 use clap::Parser;
 use config::{Config, Environment};
 use serde::Deserialize;
@@ -51,6 +52,9 @@ pub struct AppConfig {
     pub vision: VisionConfig,
     #[serde(default)]
     pub knowledge_bases: KnowledgeBasesConfig,
+    /// Intent classifier configuration for skill matching
+    #[serde(default)]
+    pub intent_classifier: ClassifierConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
